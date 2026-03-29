@@ -259,11 +259,11 @@ defmodule HexPort.RepoTest do
 
     test "read operations return sensible defaults" do
       assert Repo.Port.get(User, 1) == nil
-      assert Repo.Port.get!(User, 1) == nil
+      assert_raise Ecto.NoResultsError, fn -> Repo.Port.get!(User, 1) end
       assert Repo.Port.get_by(User, name: "Alice") == nil
-      assert Repo.Port.get_by!(User, name: "Alice") == nil
+      assert_raise Ecto.NoResultsError, fn -> Repo.Port.get_by!(User, name: "Alice") end
       assert Repo.Port.one(User) == nil
-      assert Repo.Port.one!(User) == nil
+      assert_raise Ecto.NoResultsError, fn -> Repo.Port.one!(User) end
       assert Repo.Port.all(User) == []
       assert Repo.Port.exists?(User) == false
       assert Repo.Port.aggregate(User, :count, :id) == nil

@@ -65,19 +65,19 @@ if Code.ensure_loaded?(Ecto) do
     def get(_queryable, _id), do: nil
 
     @impl true
-    def get!(_queryable, _id), do: nil
+    def get!(_queryable, _id), do: raise(Ecto.NoResultsError, queryable: "test")
 
     @impl true
     def get_by(_queryable, _clauses), do: nil
 
     @impl true
-    def get_by!(_queryable, _clauses), do: nil
+    def get_by!(_queryable, _clauses), do: raise(Ecto.NoResultsError, queryable: "test")
 
     @impl true
     def one(_queryable), do: nil
 
     @impl true
-    def one!(_queryable), do: nil
+    def one!(_queryable), do: raise(Ecto.NoResultsError, queryable: "test")
 
     @impl true
     def all(_queryable), do: []
