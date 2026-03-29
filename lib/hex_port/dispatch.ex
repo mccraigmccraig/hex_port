@@ -23,8 +23,10 @@ defmodule HexPort.Dispatch do
   @spec call(atom() | nil, module(), atom(), [term()]) :: term()
   def call(otp_app, contract, operation, args) do
     case resolve_test_handler(contract) do
-      {:ok, handler} ->
-        invoke_handler(handler, operation, args)
+      {:ok, owner_pid, handler} ->
+        result = invoke_handler(handler, owner_pid, operation, args)
+        maybe_log(owner_pid, contract, operation, args, result)
+        result
 
       :none ->
         invoke_from_config(otp_app, contract, operation, args)
@@ -52,15 +54,15 @@ defmodule HexPort.Dispatch do
         callers = [self() | Process.get(:"$callers", [])]
 
         case NimbleOwnership.fetch_owner(@ownership_server, callers, contract) do
-          {:ok, _owner} ->
-            case NimbleOwnership.get_owned(@ownership_server, get_owner(callers, contract)) do
-              %{^contract => handler_meta} -> {:ok, handler_meta}
+          {:ok, owner_pid} ->
+            case NimbleOwnership.get_owned(@ownership_server, owner_pid) do
+              %{^contract => handler_meta} -> {:ok, owner_pid, handler_meta}
               _ -> :none
             end
 
-          {:shared_owner, _owner} ->
-            case NimbleOwnership.get_owned(@ownership_server, get_shared_owner()) do
-              %{^contract => handler_meta} -> {:ok, handler_meta}
+          {:shared_owner, owner_pid} ->
+            case NimbleOwnership.get_owned(@ownership_server, owner_pid) do
+              %{^contract => handler_meta} -> {:ok, owner_pid, handler_meta}
               _ -> :none
             end
 
@@ -70,38 +72,49 @@ defmodule HexPort.Dispatch do
     end
   end
 
-  defp get_owner(callers, contract) do
-    case NimbleOwnership.fetch_owner(@ownership_server, callers, contract) do
-      {:ok, owner} -> owner
-      {:shared_owner, owner} -> owner
-      :error -> self()
-    end
-  end
-
-  defp get_shared_owner do
-    # In shared mode, we need the shared owner — for now this is a placeholder
-    self()
-  end
-
   # -- Handler invocation --
 
-  defp invoke_handler(%{type: :module, impl: impl}, operation, args) do
+  defp invoke_handler(%{type: :module, impl: impl}, _owner_pid, operation, args) do
     apply(impl, operation, args)
   end
 
-  defp invoke_handler(%{type: :fn, fun: fun}, operation, args) do
+  defp invoke_handler(%{type: :fn, fun: fun}, _owner_pid, operation, args) do
     fun.(operation, args)
   end
 
-  defp invoke_handler(%{type: :stateful, fun: fun, state_key: state_key}, operation, args) do
-    # Atomically read state, call handler, update state
+  defp invoke_handler(
+         %{type: :stateful, fun: fun, state_key: state_key},
+         owner_pid,
+         operation,
+         args
+       ) do
+    # Atomically read state, call handler, update state.
+    # Must use owner_pid so allowed child processes can update state.
     {:ok, result} =
-      NimbleOwnership.get_and_update(@ownership_server, self(), state_key, fn state ->
+      NimbleOwnership.get_and_update(@ownership_server, owner_pid, state_key, fn state ->
         {result, new_state} = fun.(operation, args, state)
         {result, new_state}
       end)
 
     result
+  end
+
+  # -- Dispatch logging --
+
+  defp maybe_log(owner_pid, contract, operation, args, result) do
+    log_key = Module.concat(HexPort.Log, contract)
+
+    # Only log if the owner has logging enabled (owns the log key).
+    # get_owned returns all keys owned by this pid — check if log_key is present.
+    case NimbleOwnership.get_owned(@ownership_server, owner_pid) do
+      %{^log_key => _} ->
+        NimbleOwnership.get_and_update(@ownership_server, owner_pid, log_key, fn log ->
+          {:ok, [{contract, operation, args, result} | log]}
+        end)
+
+      _ ->
+        :ok
+    end
   end
 
   # -- Config resolution --
