@@ -301,8 +301,11 @@ end
 #### Fallback function for non-PK reads
 
 For operations the state cannot answer, supply a `fallback_fn`. It receives
-`(operation, args)` and returns the result. If it raises `FunctionClauseError`
-(no matching clause), dispatch falls through to a clear error:
+`(operation, args, state)` and returns the result. The `state` argument is
+the clean store map (without internal keys), so the fallback can compose
+canned data with records inserted during the test. If it raises
+`FunctionClauseError` (no matching clause), dispatch falls through to a
+clear error:
 
 ```elixir
 setup do
@@ -311,10 +314,10 @@ setup do
   state = HexPort.Repo.InMemory.new(
     seed: [alice],
     fallback_fn: fn
-      :get_by, [User, [email: "alice@example.com"]] -> alice
-      :all, [User] -> [alice]
-      :exists?, [User] -> true
-      :aggregate, [User, :count, :id] -> 1
+      :get_by, [User, [email: "alice@example.com"]], _state -> alice
+      :all, [User], state -> Map.get(state, User, %{}) |> Map.values()
+      :exists?, [User], _state -> true
+      :aggregate, [User, :count, :id], _state -> 1
     end
   )
 
@@ -354,7 +357,7 @@ add a fallback clause:
 
         HexPort.Repo.InMemory.new(
           fallback_fn: fn
-            :get_by, [User, [name: "Bob"]] -> # your result here
+            :get_by, [User, [name: "Bob"]], _state -> # your result here
           end
         )
 ```

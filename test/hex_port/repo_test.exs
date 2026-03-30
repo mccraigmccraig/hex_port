@@ -631,14 +631,14 @@ defmodule HexPort.RepoTest do
     end
 
     test "stores fallback_fn via :fallback_fn option" do
-      fallback = fn :all, [User] -> [] end
+      fallback = fn :all, [User], _state -> [] end
       state = Repo.InMemory.new(fallback_fn: fallback)
       assert %{__fallback_fn__: ^fallback} = state
     end
 
     test "combines seed and fallback_fn" do
       alice = %User{id: 1, name: "Alice"}
-      fallback = fn :all, [User] -> [alice] end
+      fallback = fn :all, [User], _state -> [alice] end
       state = Repo.InMemory.new(seed: [alice], fallback_fn: fallback)
       assert %{User => %{1 => ^alice}, __fallback_fn__: ^fallback} = state
     end
@@ -738,7 +738,7 @@ defmodule HexPort.RepoTest do
       state =
         Repo.InMemory.new(
           seed: [%User{id: 1, name: "Alice"}],
-          fallback_fn: fn :get, [User, 99] -> bob end
+          fallback_fn: fn :get, [User, 99], _state -> bob end
         )
 
       HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
@@ -751,7 +751,7 @@ defmodule HexPort.RepoTest do
 
     test "get raises when fallback doesn't match" do
       state =
-        Repo.InMemory.new(fallback_fn: fn :get, [User, 42] -> nil end)
+        Repo.InMemory.new(fallback_fn: fn :get, [User, 42], _state -> nil end)
 
       HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
 
@@ -776,7 +776,7 @@ defmodule HexPort.RepoTest do
       state =
         Repo.InMemory.new(
           seed: [%User{id: 1, name: "Alice"}],
-          fallback_fn: fn :get!, [User, 99] -> bob end
+          fallback_fn: fn :get!, [User, 99], _state -> bob end
         )
 
       HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
@@ -794,10 +794,10 @@ defmodule HexPort.RepoTest do
         Repo.InMemory.new(
           seed: [alice],
           fallback_fn: fn
-            :get_by, [User, [name: "Alice"]] -> alice
-            :get_by, [User, [name: "Alice", email: "alice@example.com"]] -> alice
-            :get_by, [User, %{name: "Alice"}] -> alice
-            :get_by, [User, [name: "Nobody"]] -> nil
+            :get_by, [User, [name: "Alice"]], _state -> alice
+            :get_by, [User, [name: "Alice", email: "alice@example.com"]], _state -> alice
+            :get_by, [User, %{name: "Alice"}], _state -> alice
+            :get_by, [User, [name: "Nobody"]], _state -> nil
           end
         )
 
@@ -828,7 +828,7 @@ defmodule HexPort.RepoTest do
       bob = %User{id: 2, name: "Bob"}
 
       state =
-        Repo.InMemory.new(fallback_fn: fn :get_by!, [User, [name: "Bob"]] -> bob end)
+        Repo.InMemory.new(fallback_fn: fn :get_by!, [User, [name: "Bob"]], _state -> bob end)
 
       HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
       assert %User{name: "Bob"} = Repo.Port.get_by!(User, name: "Bob")
@@ -838,7 +838,7 @@ defmodule HexPort.RepoTest do
       alice = %User{id: 1, name: "Alice"}
 
       state =
-        Repo.InMemory.new(fallback_fn: fn :one, [User] -> alice end)
+        Repo.InMemory.new(fallback_fn: fn :one, [User], _state -> alice end)
 
       HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
       assert %User{name: "Alice"} = Repo.Port.one(User)
@@ -860,7 +860,7 @@ defmodule HexPort.RepoTest do
       alice = %User{id: 1, name: "Alice"}
 
       state =
-        Repo.InMemory.new(fallback_fn: fn :one!, [User] -> alice end)
+        Repo.InMemory.new(fallback_fn: fn :one!, [User], _state -> alice end)
 
       HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
       assert %User{name: "Alice"} = Repo.Port.one!(User)
@@ -870,7 +870,7 @@ defmodule HexPort.RepoTest do
       users = [%User{id: 1, name: "Alice"}, %User{id: 2, name: "Bob"}]
 
       state =
-        Repo.InMemory.new(fallback_fn: fn :all, [User] -> users end)
+        Repo.InMemory.new(fallback_fn: fn :all, [User], _state -> users end)
 
       HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
 
@@ -895,7 +895,7 @@ defmodule HexPort.RepoTest do
       state =
         Repo.InMemory.new(
           fallback_fn: fn
-            :exists?, [User] -> true
+            :exists?, [User], _state -> true
           end
         )
 
@@ -921,10 +921,10 @@ defmodule HexPort.RepoTest do
       state =
         Repo.InMemory.new(
           fallback_fn: fn
-            :aggregate, [User, :count, :id] -> 3
-            :aggregate, [User, :sum, :age] -> 55
-            :aggregate, [User, :min, :age] -> 25
-            :aggregate, [User, :max, :age] -> 30
+            :aggregate, [User, :count, :id], _state -> 3
+            :aggregate, [User, :sum, :age], _state -> 55
+            :aggregate, [User, :min, :age], _state -> 25
+            :aggregate, [User, :max, :age], _state -> 30
           end
         )
 
@@ -952,7 +952,7 @@ defmodule HexPort.RepoTest do
   describe "InMemory: bulk operations (require fallback)" do
     test "delete_all dispatches to fallback" do
       state =
-        Repo.InMemory.new(fallback_fn: fn :delete_all, [User, []] -> {2, nil} end)
+        Repo.InMemory.new(fallback_fn: fn :delete_all, [User, []], _state -> {2, nil} end)
 
       HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
       assert {2, nil} = Repo.Port.delete_all(User, [])
@@ -973,7 +973,7 @@ defmodule HexPort.RepoTest do
     test "update_all dispatches to fallback" do
       state =
         Repo.InMemory.new(
-          fallback_fn: fn :update_all, [User, [set: [name: "bulk"]], []] -> {3, nil} end
+          fallback_fn: fn :update_all, [User, [set: [name: "bulk"]], []], _state -> {3, nil} end
         )
 
       HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
@@ -1223,7 +1223,7 @@ defmodule HexPort.RepoTest do
       HexPort.Testing.set_stateful_handler(
         Repo,
         &Repo.InMemory.dispatch/3,
-        Repo.InMemory.new(fallback_fn: fn :all, [User] -> users end)
+        Repo.InMemory.new(fallback_fn: fn :all, [User], _state -> users end)
       )
 
       HexPort.Testing.enable_log(Repo)
