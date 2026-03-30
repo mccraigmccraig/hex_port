@@ -437,12 +437,12 @@ defmodule HexPort.RepoTest do
   # -------------------------------------------------------------------
 
   describe "InMemory: seed/1" do
-    test "converts list of structs to state map" do
+    test "converts list of structs to nested state map" do
       alice = %User{id: 1, name: "Alice"}
       bob = %User{id: 2, name: "Bob"}
       store = Repo.InMemory.seed([alice, bob])
 
-      assert %{{User, 1} => ^alice, {User, 2} => ^bob} = store
+      assert %{User => %{1 => ^alice, 2 => ^bob}} = store
     end
 
     test "handles multiple schema types" do
@@ -450,11 +450,36 @@ defmodule HexPort.RepoTest do
       post = %Post{id: 1, title: "Hello"}
       store = Repo.InMemory.seed([user, post])
 
-      assert %{{User, 1} => ^user, {Post, 1} => ^post} = store
+      assert %{User => %{1 => ^user}, Post => %{1 => ^post}} = store
     end
 
     test "empty list returns empty map" do
       assert %{} = Repo.InMemory.seed([])
+    end
+  end
+
+  describe "InMemory: new/1" do
+    test "returns empty state with no options" do
+      assert %{} = Repo.InMemory.new()
+    end
+
+    test "seeds records via :seed option" do
+      alice = %User{id: 1, name: "Alice"}
+      state = Repo.InMemory.new(seed: [alice])
+      assert %{User => %{1 => ^alice}} = state
+    end
+
+    test "stores fallback_fn via :fallback_fn option" do
+      fallback = fn :all, [User] -> [] end
+      state = Repo.InMemory.new(fallback_fn: fallback)
+      assert %{__fallback_fn__: ^fallback} = state
+    end
+
+    test "combines seed and fallback_fn" do
+      alice = %User{id: 1, name: "Alice"}
+      fallback = fn :all, [User] -> [alice] end
+      state = Repo.InMemory.new(seed: [alice], fallback_fn: fallback)
+      assert %{User => %{1 => ^alice}, __fallback_fn__: ^fallback} = state
     end
   end
 
@@ -463,7 +488,7 @@ defmodule HexPort.RepoTest do
       HexPort.Testing.set_stateful_handler(
         Repo,
         &Repo.InMemory.dispatch/3,
-        %{}
+        Repo.InMemory.new()
       )
 
       :ok
@@ -485,7 +510,7 @@ defmodule HexPort.RepoTest do
     end
 
     test "insert auto-id increments based on existing records" do
-      initial = Repo.InMemory.seed([%User{id: 5, name: "Existing"}])
+      initial = Repo.InMemory.new(seed: [%User{id: 5, name: "Existing"}])
 
       HexPort.Testing.set_stateful_handler(
         Repo,
@@ -507,20 +532,25 @@ defmodule HexPort.RepoTest do
       assert {:ok, %User{id: 1, email: "new@example.com"}} = Repo.Port.update(cs)
     end
 
-    test "delete removes record from store" do
+    test "delete removes record from store and get returns nil for missing PK" do
       {:ok, alice} = Repo.Port.insert(User.changeset(%User{id: 1}, %{name: "Alice"}))
       assert {:ok, ^alice} = Repo.Port.delete(alice)
-      assert Repo.Port.get(User, 1) == nil
+      # get with missing PK and no fallback raises
+      assert_raise ArgumentError, ~r/InMemory cannot service :get/, fn ->
+        Repo.Port.get(User, 1)
+      end
     end
   end
 
-  describe "InMemory: read operations" do
+  describe "InMemory: PK read operations (3-stage)" do
     setup do
       initial =
-        Repo.InMemory.seed([
-          %User{id: 1, name: "Alice", email: "alice@example.com"},
-          %User{id: 2, name: "Bob", email: "bob@example.com"}
-        ])
+        Repo.InMemory.new(
+          seed: [
+            %User{id: 1, name: "Alice", email: "alice@example.com"},
+            %User{id: 2, name: "Bob", email: "bob@example.com"}
+          ]
+        )
 
       HexPort.Testing.set_stateful_handler(
         Repo,
@@ -531,158 +561,285 @@ defmodule HexPort.RepoTest do
       :ok
     end
 
-    test "get returns record when found" do
+    test "get returns record from state when found" do
       assert %User{id: 1, name: "Alice"} = Repo.Port.get(User, 1)
     end
 
-    test "get returns nil when not found" do
-      assert Repo.Port.get(User, 999) == nil
+    test "get raises when not found in state and no fallback" do
+      assert_raise ArgumentError, ~r/InMemory cannot service :get/, fn ->
+        Repo.Port.get(User, 999)
+      end
     end
 
-    test "get! returns record when found" do
+    test "get falls through to fallback when not found in state" do
+      bob = %User{id: 99, name: "Fallback Bob"}
+
+      state =
+        Repo.InMemory.new(
+          seed: [%User{id: 1, name: "Alice"}],
+          fallback_fn: fn :get, [User, 99] -> bob end
+        )
+
+      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
+
+      # Found in state
+      assert %User{id: 1, name: "Alice"} = Repo.Port.get(User, 1)
+      # Falls through to fallback
+      assert ^bob = Repo.Port.get(User, 99)
+    end
+
+    test "get raises when fallback doesn't match" do
+      state =
+        Repo.InMemory.new(fallback_fn: fn :get, [User, 42] -> nil end)
+
+      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
+
+      assert_raise ArgumentError, ~r/InMemory cannot service :get/, fn ->
+        Repo.Port.get(User, 999)
+      end
+    end
+
+    test "get! returns record from state when found" do
       assert %User{id: 1, name: "Alice"} = Repo.Port.get!(User, 1)
     end
 
-    test "get! returns nil when not found" do
-      assert Repo.Port.get!(User, 999) == nil
+    test "get! raises when not found in state and no fallback" do
+      assert_raise ArgumentError, ~r/InMemory cannot service :get!/, fn ->
+        Repo.Port.get!(User, 999)
+      end
     end
 
-    test "get_by finds record matching keyword clauses" do
-      assert %User{name: "Bob"} = Repo.Port.get_by(User, name: "Bob")
-    end
+    test "get! falls through to fallback when not found in state" do
+      bob = %User{id: 99, name: "Fallback Bob"}
 
-    test "get_by returns nil when no match" do
-      assert Repo.Port.get_by(User, name: "Nobody") == nil
-    end
+      state =
+        Repo.InMemory.new(
+          seed: [%User{id: 1, name: "Alice"}],
+          fallback_fn: fn :get!, [User, 99] -> bob end
+        )
 
-    test "get_by matches multiple clauses" do
+      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
+
+      assert %User{id: 1, name: "Alice"} = Repo.Port.get!(User, 1)
+      assert ^bob = Repo.Port.get!(User, 99)
+    end
+  end
+
+  describe "InMemory: non-PK read operations (2-stage)" do
+    test "get_by requires fallback" do
+      alice = %User{id: 1, name: "Alice", email: "alice@example.com"}
+
+      state =
+        Repo.InMemory.new(
+          seed: [alice],
+          fallback_fn: fn
+            :get_by, [User, [name: "Alice"]] -> alice
+            :get_by, [User, [name: "Alice", email: "alice@example.com"]] -> alice
+            :get_by, [User, %{name: "Alice"}] -> alice
+            :get_by, [User, [name: "Nobody"]] -> nil
+          end
+        )
+
+      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
+
+      assert %User{name: "Alice"} = Repo.Port.get_by(User, name: "Alice")
+
       assert %User{name: "Alice"} =
                Repo.Port.get_by(User, name: "Alice", email: "alice@example.com")
-    end
 
-    test "get_by accepts map clauses" do
       assert %User{name: "Alice"} = Repo.Port.get_by(User, %{name: "Alice"})
+      assert nil == Repo.Port.get_by(User, name: "Nobody")
     end
 
-    test "get_by! finds record matching clauses" do
+    test "get_by raises without fallback" do
+      HexPort.Testing.set_stateful_handler(
+        Repo,
+        &Repo.InMemory.dispatch/3,
+        Repo.InMemory.new()
+      )
+
+      assert_raise ArgumentError, ~r/InMemory cannot service :get_by/, fn ->
+        Repo.Port.get_by(User, name: "Alice")
+      end
+    end
+
+    test "get_by! requires fallback" do
+      bob = %User{id: 2, name: "Bob"}
+
+      state =
+        Repo.InMemory.new(fallback_fn: fn :get_by!, [User, [name: "Bob"]] -> bob end)
+
+      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
       assert %User{name: "Bob"} = Repo.Port.get_by!(User, name: "Bob")
     end
 
-    test "one returns a record when schema has records" do
-      assert %User{} = Repo.Port.one(User)
+    test "one requires fallback" do
+      alice = %User{id: 1, name: "Alice"}
+
+      state =
+        Repo.InMemory.new(fallback_fn: fn :one, [User] -> alice end)
+
+      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
+      assert %User{name: "Alice"} = Repo.Port.one(User)
     end
 
-    test "one returns nil when no records" do
-      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, %{})
-      assert Repo.Port.one(User) == nil
+    test "one raises without fallback" do
+      HexPort.Testing.set_stateful_handler(
+        Repo,
+        &Repo.InMemory.dispatch/3,
+        Repo.InMemory.new()
+      )
+
+      assert_raise ArgumentError, ~r/InMemory cannot service :one/, fn ->
+        Repo.Port.one(User)
+      end
     end
 
-    test "one! returns a record when found" do
-      assert %User{} = Repo.Port.one!(User)
+    test "one! requires fallback" do
+      alice = %User{id: 1, name: "Alice"}
+
+      state =
+        Repo.InMemory.new(fallback_fn: fn :one!, [User] -> alice end)
+
+      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
+      assert %User{name: "Alice"} = Repo.Port.one!(User)
     end
 
-    test "all returns all records of a schema" do
+    test "all requires fallback" do
+      users = [%User{id: 1, name: "Alice"}, %User{id: 2, name: "Bob"}]
+
+      state =
+        Repo.InMemory.new(fallback_fn: fn :all, [User] -> users end)
+
+      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
+
       result = Repo.Port.all(User)
       assert length(result) == 2
       assert Enum.all?(result, &match?(%User{}, &1))
     end
 
-    test "all returns empty list when no records" do
-      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, %{})
-      assert Repo.Port.all(User) == []
+    test "all raises without fallback" do
+      HexPort.Testing.set_stateful_handler(
+        Repo,
+        &Repo.InMemory.dispatch/3,
+        Repo.InMemory.new()
+      )
+
+      assert_raise ArgumentError, ~r/InMemory cannot service :all/, fn ->
+        Repo.Port.all(User)
+      end
     end
 
-    test "exists? returns true when records exist" do
+    test "exists? requires fallback" do
+      state =
+        Repo.InMemory.new(
+          fallback_fn: fn
+            :exists?, [User] -> true
+          end
+        )
+
+      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
       assert Repo.Port.exists?(User) == true
     end
 
-    test "exists? returns false when no records" do
-      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, %{})
-      assert Repo.Port.exists?(User) == false
+    test "exists? raises without fallback" do
+      HexPort.Testing.set_stateful_handler(
+        Repo,
+        &Repo.InMemory.dispatch/3,
+        Repo.InMemory.new()
+      )
+
+      assert_raise ArgumentError, ~r/InMemory cannot service :exists\?/, fn ->
+        Repo.Port.exists?(User)
+      end
     end
   end
 
-  describe "InMemory: aggregate" do
-    test "count returns number of records" do
-      initial =
-        Repo.InMemory.seed([
-          %User{id: 1, name: "Alice"},
-          %User{id: 2, name: "Bob"},
-          %User{id: 3, name: "Charlie"}
-        ])
+  describe "InMemory: aggregate (requires fallback)" do
+    test "aggregate dispatches to fallback" do
+      state =
+        Repo.InMemory.new(
+          fallback_fn: fn
+            :aggregate, [User, :count, :id] -> 3
+            :aggregate, [User, :sum, :age] -> 55
+            :aggregate, [User, :min, :age] -> 25
+            :aggregate, [User, :max, :age] -> 30
+          end
+        )
 
-      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, initial)
+      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
+
       assert 3 = Repo.Port.aggregate(User, :count, :id)
-    end
-
-    test "count returns 0 for empty" do
-      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, %{})
-      assert 0 = Repo.Port.aggregate(User, :count, :id)
-    end
-
-    test "sum aggregates field values" do
-      initial =
-        Repo.InMemory.seed([
-          %User{id: 1, name: "Alice", age: 30},
-          %User{id: 2, name: "Bob", age: 25}
-        ])
-
-      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, initial)
       assert 55 = Repo.Port.aggregate(User, :sum, :age)
-    end
-
-    test "min returns minimum value" do
-      initial =
-        Repo.InMemory.seed([
-          %User{id: 1, name: "Alice", age: 30},
-          %User{id: 2, name: "Bob", age: 25}
-        ])
-
-      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, initial)
       assert 25 = Repo.Port.aggregate(User, :min, :age)
-    end
-
-    test "max returns maximum value" do
-      initial =
-        Repo.InMemory.seed([
-          %User{id: 1, name: "Alice", age: 30},
-          %User{id: 2, name: "Bob", age: 25}
-        ])
-
-      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, initial)
       assert 30 = Repo.Port.aggregate(User, :max, :age)
     end
+
+    test "aggregate raises without fallback" do
+      HexPort.Testing.set_stateful_handler(
+        Repo,
+        &Repo.InMemory.dispatch/3,
+        Repo.InMemory.new()
+      )
+
+      assert_raise ArgumentError, ~r/InMemory cannot service :aggregate/, fn ->
+        Repo.Port.aggregate(User, :count, :id)
+      end
+    end
   end
 
-  describe "InMemory: bulk operations" do
-    test "delete_all removes all records of the given schema" do
-      initial =
-        Repo.InMemory.seed([
-          %User{id: 1, name: "Alice"},
-          %User{id: 2, name: "Bob"},
-          %Post{id: 1, title: "Hello"}
-        ])
+  describe "InMemory: bulk operations (require fallback)" do
+    test "delete_all dispatches to fallback" do
+      state =
+        Repo.InMemory.new(fallback_fn: fn :delete_all, [User, []] -> {2, nil} end)
 
-      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, initial)
-
+      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
       assert {2, nil} = Repo.Port.delete_all(User, [])
-
-      # Post remains, users deleted
-      assert Repo.Port.all(Post) == [%Post{id: 1, title: "Hello"}]
-      assert Repo.Port.all(User) == []
     end
 
-    test "update_all returns {0, nil} (not supported)" do
-      initial = Repo.InMemory.seed([%User{id: 1, name: "Alice"}])
-      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, initial)
+    test "delete_all raises without fallback" do
+      HexPort.Testing.set_stateful_handler(
+        Repo,
+        &Repo.InMemory.dispatch/3,
+        Repo.InMemory.new()
+      )
 
-      assert {0, nil} = Repo.Port.update_all(User, [set: [name: "bulk"]], [])
+      assert_raise ArgumentError, ~r/InMemory cannot service :delete_all/, fn ->
+        Repo.Port.delete_all(User, [])
+      end
+    end
+
+    test "update_all dispatches to fallback" do
+      state =
+        Repo.InMemory.new(
+          fallback_fn: fn :update_all, [User, [set: [name: "bulk"]], []] -> {3, nil} end
+        )
+
+      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
+      assert {3, nil} = Repo.Port.update_all(User, [set: [name: "bulk"]], [])
+    end
+
+    test "update_all raises without fallback" do
+      HexPort.Testing.set_stateful_handler(
+        Repo,
+        &Repo.InMemory.dispatch/3,
+        Repo.InMemory.new()
+      )
+
+      assert_raise ArgumentError, ~r/InMemory cannot service :update_all/, fn ->
+        Repo.Port.update_all(User, [set: [name: "bulk"]], [])
+      end
     end
   end
 
   describe "InMemory: transact" do
     setup do
-      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, %{})
+      HexPort.Testing.set_stateful_handler(
+        Repo,
+        &Repo.InMemory.dispatch/3,
+        Repo.InMemory.new()
+      )
+
       :ok
     end
 
@@ -794,14 +951,19 @@ defmodule HexPort.RepoTest do
 
       {:ok, %{user: user}} = Repo.Port.transact(multi, [])
 
-      # Verify the record is accessible outside the Multi
+      # Verify the record is accessible via PK read outside the Multi
       assert user == Repo.Port.get(User, user.id)
     end
   end
 
-  describe "InMemory: read-after-write consistency" do
+  describe "InMemory: read-after-write consistency (PK reads)" do
     setup do
-      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, %{})
+      HexPort.Testing.set_stateful_handler(
+        Repo,
+        &Repo.InMemory.dispatch/3,
+        Repo.InMemory.new()
+      )
+
       :ok
     end
 
@@ -813,30 +975,14 @@ defmodule HexPort.RepoTest do
       assert user == found
     end
 
-    test "insert then get_by returns the same record" do
-      cs = User.changeset(%{name: "Alice"})
-      {:ok, user} = Repo.Port.insert(cs)
-
-      found = Repo.Port.get_by(User, name: "Alice")
-      assert user == found
-    end
-
-    test "insert then all includes the record" do
-      Repo.Port.insert(User.changeset(%{name: "Alice"}))
-      Repo.Port.insert(User.changeset(%{name: "Bob"}))
-
-      result = Repo.Port.all(User)
-      assert length(result) == 2
-      names = Enum.map(result, & &1.name) |> Enum.sort()
-      assert names == ["Alice", "Bob"]
-    end
-
-    test "insert then delete then get returns nil" do
+    test "insert then delete then get raises (no fallback)" do
       cs = User.changeset(%{name: "Alice"})
       {:ok, user} = Repo.Port.insert(cs)
       Repo.Port.delete(user)
 
-      assert Repo.Port.get(User, user.id) == nil
+      assert_raise ArgumentError, ~r/InMemory cannot service :get/, fn ->
+        Repo.Port.get(User, user.id)
+      end
     end
 
     test "insert, update, then get returns updated record" do
@@ -847,90 +993,85 @@ defmodule HexPort.RepoTest do
       assert updated == found
       assert %User{name: "Alicia"} = found
     end
-
-    test "insert affects exists? and aggregate" do
-      assert Repo.Port.exists?(User) == false
-      assert 0 = Repo.Port.aggregate(User, :count, :id)
-
-      Repo.Port.insert(User.changeset(%{name: "Alice"}))
-
-      assert Repo.Port.exists?(User) == true
-      assert 1 = Repo.Port.aggregate(User, :count, :id)
-    end
   end
 
   describe "InMemory: multiple schema types" do
-    setup do
-      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, %{})
-      :ok
-    end
+    test "different schemas are stored independently (PK reads)" do
+      HexPort.Testing.set_stateful_handler(
+        Repo,
+        &Repo.InMemory.dispatch/3,
+        Repo.InMemory.new()
+      )
 
-    test "different schemas are independent" do
-      {:ok, _user} = Repo.Port.insert(User.changeset(%{name: "Alice"}))
-      {:ok, _post} = Repo.Port.insert(Post.changeset(%{title: "Hello"}))
+      {:ok, user} = Repo.Port.insert(User.changeset(%{name: "Alice"}))
+      {:ok, post} = Repo.Port.insert(Post.changeset(%{title: "Hello"}))
 
-      users = Repo.Port.all(User)
-      posts = Repo.Port.all(Post)
-
-      assert length(users) == 1
-      assert length(posts) == 1
-      assert [%User{name: "Alice"}] = users
-      assert [%Post{title: "Hello"}] = posts
-    end
-
-    test "delete_all only affects target schema" do
-      initial =
-        Repo.InMemory.seed([
-          %User{id: 1, name: "Alice"},
-          %Post{id: 1, title: "Hello"}
-        ])
-
-      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, initial)
-
-      assert {1, nil} = Repo.Port.delete_all(User, [])
-      assert Repo.Port.all(Post) == [%Post{id: 1, title: "Hello"}]
+      assert ^user = Repo.Port.get(User, user.id)
+      assert ^post = Repo.Port.get(Post, post.id)
     end
   end
 
   describe "InMemory: seeded state" do
-    test "seeded records are available immediately" do
+    test "seeded records are available via PK read" do
       alice = %User{id: 1, name: "Alice"}
       bob = %User{id: 2, name: "Bob"}
-      initial = Repo.InMemory.seed([alice, bob])
+      state = Repo.InMemory.new(seed: [alice, bob])
 
-      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, initial)
+      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
 
       assert ^alice = Repo.Port.get(User, 1)
       assert ^bob = Repo.Port.get(User, 2)
     end
 
-    test "can add to seeded state" do
-      initial = Repo.InMemory.seed([%User{id: 1, name: "Alice"}])
-      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, initial)
+    test "can add to seeded state and read back by PK" do
+      state = Repo.InMemory.new(seed: [%User{id: 1, name: "Alice"}])
+      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
 
-      Repo.Port.insert(User.changeset(%{name: "Bob"}))
-      assert length(Repo.Port.all(User)) == 2
+      {:ok, bob} = Repo.Port.insert(User.changeset(%{name: "Bob"}))
+      assert ^bob = Repo.Port.get(User, bob.id)
+      assert %User{name: "Alice"} = Repo.Port.get(User, 1)
     end
   end
 
   describe "InMemory: dispatch logging" do
-    test "logs all operations" do
-      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, %{})
+    test "logs write and PK read operations" do
+      HexPort.Testing.set_stateful_handler(
+        Repo,
+        &Repo.InMemory.dispatch/3,
+        Repo.InMemory.new()
+      )
+
       HexPort.Testing.enable_log(Repo)
 
       cs = User.changeset(%{name: "Alice"})
       {:ok, user} = Repo.Port.insert(cs)
       Repo.Port.get(User, user.id)
-      Repo.Port.all(User)
 
       log = HexPort.Testing.get_log(Repo)
-      assert length(log) == 3
+      assert length(log) == 2
 
       assert [
                {Repo, :insert, [^cs], {:ok, %User{}}},
-               {Repo, :get, [User, _], %User{}},
-               {Repo, :all, [User], [%User{}]}
+               {Repo, :get, [User, _], %User{}}
              ] = log
+    end
+
+    test "logs fallback-dispatched operations" do
+      users = [%User{id: 1, name: "Alice"}]
+
+      HexPort.Testing.set_stateful_handler(
+        Repo,
+        &Repo.InMemory.dispatch/3,
+        Repo.InMemory.new(fallback_fn: fn :all, [User] -> users end)
+      )
+
+      HexPort.Testing.enable_log(Repo)
+
+      Repo.Port.all(User)
+
+      log = HexPort.Testing.get_log(Repo)
+      assert length(log) == 1
+      assert [{Repo, :all, [User], [%User{id: 1, name: "Alice"}]}] = log
     end
   end
 end

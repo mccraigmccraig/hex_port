@@ -1,18 +1,25 @@
 # Stateful in-memory Repo implementation for tests.
 #
-# Provides read-after-write consistency: insert a record, then get it back
-# within the same test. Built on top of HexPort.Testing.set_stateful_handler.
+# Provides read-after-write consistency for PK-based lookups. Non-PK reads
+# (get_by, all, one, exists?, aggregate, etc.) go through an optional
+# fallback function, or raise if no fallback is registered.
 #
 # ## Usage
 #
 #     HexPort.Testing.set_stateful_handler(
 #       HexPort.Repo,
 #       &HexPort.Repo.InMemory.dispatch/3,
-#       %{}
+#       HexPort.Repo.InMemory.new()
 #     )
 #
-#     # With seeded data
-#     initial = HexPort.Repo.InMemory.seed([%User{id: 1, name: "Alice"}])
+#     # With seeded data and a fallback function
+#     initial = HexPort.Repo.InMemory.new(
+#       seed: [%User{id: 1, name: "Alice"}],
+#       fallback_fn: fn
+#         :all, [User] -> [%User{id: 1, name: "Alice"}]
+#         :get_by, [User, [email: "alice@example.com"]] -> %User{id: 1, name: "Alice"}
+#       end
+#     )
 #     HexPort.Testing.set_stateful_handler(
 #       HexPort.Repo,
 #       &HexPort.Repo.InMemory.dispatch/3,
@@ -25,49 +32,85 @@ if Code.ensure_loaded?(Ecto) do
     Stateful in-memory Repo implementation for tests.
 
     Provides a stateful handler function for `HexPort.Repo` operations.
-    State is a map keyed by `{schema_module, primary_key}`, giving
-    read-after-write consistency within a test.
+    State is a nested map keyed by `schema_module => %{primary_key => struct}`,
+    giving read-after-write consistency for PK-based lookups within a test.
 
     ## State Shape
 
         %{
-          {MyApp.User, 1} => %MyApp.User{id: 1, name: "Alice"},
-          {MyApp.User, 2} => %MyApp.User{id: 2, name: "Bob"}
+          MyApp.User => %{
+            1 => %MyApp.User{id: 1, name: "Alice"},
+            2 => %MyApp.User{id: 2, name: "Bob"}
+          },
+          MyApp.Post => %{
+            1 => %MyApp.Post{id: 1, title: "Hello"}
+          }
         }
+
+    ## 3-Stage Read Dispatch
+
+    The InMemory adapter can only answer authoritatively for operations where
+    the state definitively contains the answer. For PK-based reads (`get`,
+    `get!`), if a record is found in state it is returned. If not found, the
+    adapter cannot know whether the record exists in the _logical_ store —
+    it falls through to the fallback function, or raises.
+
+    For all other reads (`get_by`, `one`, `all`, `exists?`, `aggregate`, etc.)
+    the state is never authoritative — these always go through the fallback
+    function, or raise.
+
+    The dispatch stages are:
+
+    1. **State lookup** (PK reads only) — if the record is in state, return it
+    2. **Fallback function** — an optional user-supplied function that handles
+       operations the state cannot answer. Receives `(operation, args)` and
+       returns the result. If it raises `FunctionClauseError` (no matching
+       clause), falls through to stage 3.
+    3. **Raise** — a clear error explaining that InMemory cannot service the
+       operation, suggesting the fallback function as the escape hatch.
 
     ## Usage
 
-        # In test setup:
+        # Basic — PK reads only, no fallback:
         HexPort.Testing.set_stateful_handler(
           HexPort.Repo,
           &HexPort.Repo.InMemory.dispatch/3,
-          %{}
+          HexPort.Repo.InMemory.new()
+        )
+
+        # With seed data and fallback:
+        state = HexPort.Repo.InMemory.new(
+          seed: [%User{id: 1, name: "Alice"}],
+          fallback_fn: fn
+            :all, [User] -> [%User{id: 1, name: "Alice"}]
+            :get_by, [User, [email: "alice@example.com"]] -> %User{id: 1}
+          end
+        )
+        HexPort.Testing.set_stateful_handler(
+          HexPort.Repo,
+          &HexPort.Repo.InMemory.dispatch/3,
+          state
         )
 
     ## Seeding Initial State
 
-    Use `seed/1` to convert a list of structs into the state map:
+    Use `new/1` with the `:seed` option, or `seed/1` to convert a list of
+    structs into the nested state map:
 
-        initial = HexPort.Repo.InMemory.seed([
+        HexPort.Repo.InMemory.new(seed: [
           %User{id: 1, name: "Alice"},
           %User{id: 2, name: "Bob"}
         ])
-
-        HexPort.Testing.set_stateful_handler(
-          HexPort.Repo,
-          &HexPort.Repo.InMemory.dispatch/3,
-          initial
-        )
 
     ## Differences from Repo.Test
 
     `Repo.Test` is stateless — writes apply changesets and return `{:ok, struct}`
     but nothing is stored. Reads always return defaults (`nil`, `[]`, `false`).
 
-    `Repo.InMemory` is stateful — writes store records in the state map, and
-    subsequent reads can find them. Use `Repo.InMemory` when your test needs
-    read-after-write consistency (e.g. insert then get). Use `Repo.Test` when
-    you only need fire-and-forget writes.
+    `Repo.InMemory` is stateful — writes store records in state, and subsequent
+    PK-based reads can find them. Non-PK reads require a fallback function.
+    Use `Repo.InMemory` when your test needs read-after-write consistency.
+    Use `Repo.Test` when you only need fire-and-forget writes.
 
     ## Auto-incrementing IDs
 
@@ -77,20 +120,60 @@ if Code.ensure_loaded?(Ecto) do
 
     ## Supported Operations
 
-    All `HexPort.Repo` operations are supported:
-
-    - **Writes:** `insert`, `update`, `delete`
-    - **Reads:** `get`, `get!`, `get_by`, `get_by!`, `one`, `one!`, `all`,
-      `exists?`, `aggregate`
-    - **Bulk:** `update_all`, `delete_all` (basic implementations — `update_all`
-      returns `{0, nil}` since queryable parsing is not supported; `delete_all`
-      removes all records of the given schema)
+    - **Writes (authoritative):** `insert`, `update`, `delete` — always handled
+      by the state
+    - **PK reads (3-stage):** `get`, `get!` — check state first, then fallback,
+      then error
+    - **Non-PK reads (2-stage):** `get_by`, `get_by!`, `one`, `one!`, `all`,
+      `exists?`, `aggregate` — fallback or error
+    - **Bulk (2-stage):** `update_all`, `delete_all` — fallback or error
+    - **Transactions:** `transact` — delegates to sub-operations
     """
 
-    @type store :: %{{module(), term()} => struct()}
+    @type store :: %{optional(module()) => %{optional(term()) => struct()}}
+
+    @fallback_fn_key :__fallback_fn__
 
     @doc """
-    Convert a list of structs into the state map for seeding.
+    Create a new InMemory state map.
+
+    ## Options
+
+      * `:seed` - a list of structs to pre-populate the store
+      * `:fallback_fn` - a 2-arity function `(operation, args) -> result` that
+        handles operations the state cannot answer authoritatively. If the
+        function raises `FunctionClauseError`, dispatch falls through to an
+        error.
+
+    ## Examples
+
+        # Empty state, no fallback
+        HexPort.Repo.InMemory.new()
+
+        # Seeded with fallback
+        HexPort.Repo.InMemory.new(
+          seed: [%User{id: 1, name: "Alice"}],
+          fallback_fn: fn
+            :all, [User] -> [%User{id: 1, name: "Alice"}]
+          end
+        )
+    """
+    @spec new(keyword()) :: store()
+    def new(opts \\ []) do
+      seed_records = Keyword.get(opts, :seed, [])
+      fallback_fn = Keyword.get(opts, :fallback_fn, nil)
+
+      store = seed(seed_records)
+
+      if fallback_fn do
+        Map.put(store, @fallback_fn_key, fallback_fn)
+      else
+        store
+      end
+    end
+
+    @doc """
+    Convert a list of structs into the nested state map for seeding.
 
     ## Example
 
@@ -98,15 +181,15 @@ if Code.ensure_loaded?(Ecto) do
           %User{id: 1, name: "Alice"},
           %User{id: 2, name: "Bob"}
         ])
-        #=> %{{User, 1} => %User{id: 1, name: "Alice"},
-        #     {User, 2} => %User{id: 2, name: "Bob"}}
+        #=> %{User => %{1 => %User{id: 1, name: "Alice"},
+        #               2 => %User{id: 2, name: "Bob"}}}
     """
     @spec seed(list(struct())) :: store()
     def seed(records) when is_list(records) do
-      Map.new(records, fn record ->
+      Enum.reduce(records, %{}, fn record, store ->
         schema = record.__struct__
         id = get_primary_key(record)
-        {{schema, id}, record}
+        put_record(store, schema, id, record)
       end)
     end
 
@@ -115,11 +198,16 @@ if Code.ensure_loaded?(Ecto) do
 
     Handles all `HexPort.Repo` operations. The function signature is
     `(operation, args, store) -> {result, new_store}`.
+
+    Write operations are handled directly by the state. PK-based reads check
+    the state first, then fall through to the fallback function. All other
+    reads go directly to the fallback function. If no fallback is registered
+    or the fallback doesn't handle the operation, an error is raised.
     """
     @spec dispatch(atom(), list(), store()) :: {term(), store()}
 
     # -----------------------------------------------------------------
-    # Write operations
+    # Write operations — always authoritative
     # -----------------------------------------------------------------
 
     def dispatch(:insert, [changeset], store) do
@@ -137,132 +225,78 @@ if Code.ensure_loaded?(Ecto) do
           {id, record}
         end
 
-      {{:ok, record}, Map.put(store, {schema, id}, record)}
+      {{:ok, record}, put_record(store, schema, id, record)}
     end
 
     def dispatch(:update, [changeset], store) do
       record = safe_apply_changes(changeset)
       schema = record.__struct__
       id = get_primary_key(record)
-      {{:ok, record}, Map.put(store, {schema, id}, record)}
+      {{:ok, record}, put_record(store, schema, id, record)}
     end
 
     def dispatch(:delete, [record], store) do
       schema = record.__struct__
       id = get_primary_key(record)
-      {{:ok, record}, Map.delete(store, {schema, id})}
+      {{:ok, record}, delete_record(store, schema, id)}
     end
 
     # -----------------------------------------------------------------
-    # Bulk operations
+    # PK reads — 3-stage: state -> fallback -> error
     # -----------------------------------------------------------------
 
-    def dispatch(:update_all, [_queryable, _updates, _opts], store) do
-      # Queryable parsing is out of scope — return {0, nil}
-      {{0, nil}, store}
+    def dispatch(:get, [queryable, id] = args, store) do
+      schema = extract_schema(queryable)
+
+      case get_record(store, schema, id) do
+        nil -> try_fallback(store, :get, args)
+        record -> {record, store}
+      end
     end
 
-    def dispatch(:delete_all, [queryable, _opts], store) do
+    def dispatch(:get!, [queryable, id] = args, store) do
       schema = extract_schema(queryable)
-      {deleted, remaining} = Map.split_with(store, fn {{s, _id}, _v} -> s == schema end)
-      count = map_size(deleted)
-      {{count, nil}, Map.new(remaining)}
+
+      case get_record(store, schema, id) do
+        nil -> try_fallback(store, :get!, args)
+        record -> {record, store}
+      end
     end
 
     # -----------------------------------------------------------------
-    # Read operations
+    # Non-PK reads — 2-stage: fallback -> error
     # -----------------------------------------------------------------
 
-    def dispatch(:get, [queryable, id], store) do
-      schema = extract_schema(queryable)
-      {Map.get(store, {schema, id}), store}
-    end
+    def dispatch(:get_by, args, store),
+      do: dispatch_via_fallback(:get_by, args, store)
 
-    def dispatch(:get!, [queryable, id], store) do
-      schema = extract_schema(queryable)
-      {Map.get(store, {schema, id}), store}
-    end
+    def dispatch(:get_by!, args, store),
+      do: dispatch_via_fallback(:get_by!, args, store)
 
-    def dispatch(:get_by, [queryable, clauses], store) do
-      schema = extract_schema(queryable)
-      clauses_list = to_keyword(clauses)
-      result = find_by_clauses(store, schema, clauses_list)
-      {result, store}
-    end
+    def dispatch(:one, args, store),
+      do: dispatch_via_fallback(:one, args, store)
 
-    def dispatch(:get_by!, [queryable, clauses], store) do
-      schema = extract_schema(queryable)
-      clauses_list = to_keyword(clauses)
-      result = find_by_clauses(store, schema, clauses_list)
-      {result, store}
-    end
+    def dispatch(:one!, args, store),
+      do: dispatch_via_fallback(:one!, args, store)
 
-    def dispatch(:one, [queryable], store) do
-      schema = extract_schema(queryable)
+    def dispatch(:all, args, store),
+      do: dispatch_via_fallback(:all, args, store)
 
-      result =
-        store
-        |> records_for_schema(schema)
-        |> List.first()
+    def dispatch(:exists?, args, store),
+      do: dispatch_via_fallback(:exists?, args, store)
 
-      {result, store}
-    end
+    def dispatch(:aggregate, args, store),
+      do: dispatch_via_fallback(:aggregate, args, store)
 
-    def dispatch(:one!, [queryable], store) do
-      schema = extract_schema(queryable)
+    # -----------------------------------------------------------------
+    # Bulk operations — 2-stage: fallback -> error
+    # -----------------------------------------------------------------
 
-      result =
-        store
-        |> records_for_schema(schema)
-        |> List.first()
+    def dispatch(:update_all, args, store),
+      do: dispatch_via_fallback(:update_all, args, store)
 
-      {result, store}
-    end
-
-    def dispatch(:all, [queryable], store) do
-      schema = extract_schema(queryable)
-      {records_for_schema(store, schema), store}
-    end
-
-    def dispatch(:exists?, [queryable], store) do
-      schema = extract_schema(queryable)
-      exists = Enum.any?(store, fn {{s, _id}, _v} -> s == schema end)
-      {exists, store}
-    end
-
-    def dispatch(:aggregate, [queryable, aggregate, field], store) do
-      schema = extract_schema(queryable)
-      records = records_for_schema(store, schema)
-
-      result =
-        case aggregate do
-          :count ->
-            length(records)
-
-          :sum ->
-            records |> Enum.map(&Map.get(&1, field, 0)) |> Enum.sum()
-
-          :avg ->
-            values = Enum.map(records, &Map.get(&1, field, 0))
-
-            if values == [] do
-              nil
-            else
-              Enum.sum(values) / length(values)
-            end
-
-          :min ->
-            records |> Enum.map(&Map.get(&1, field)) |> Enum.min(fn -> nil end)
-
-          :max ->
-            records |> Enum.map(&Map.get(&1, field)) |> Enum.max(fn -> nil end)
-
-          _ ->
-            nil
-        end
-
-      {result, store}
-    end
+    def dispatch(:delete_all, args, store),
+      do: dispatch_via_fallback(:delete_all, args, store)
 
     # -----------------------------------------------------------------
     # Transaction Operations
@@ -288,7 +322,83 @@ if Code.ensure_loaded?(Ecto) do
     end
 
     # -----------------------------------------------------------------
-    # Helpers
+    # Fallback dispatch
+    #
+    # Because dispatch/3 runs inside NimbleOwnership.get_and_update
+    # (a GenServer call), we must not raise here — that would crash
+    # the ownership server. Instead, we use {:defer, fn -> raise ... end}
+    # to move the raise outside the lock.
+    # -----------------------------------------------------------------
+
+    defp dispatch_via_fallback(operation, args, store) do
+      try_fallback(store, operation, args)
+    end
+
+    defp try_fallback(store, operation, args) do
+      case Map.get(store, @fallback_fn_key) do
+        nil ->
+          defer_raise_no_fallback(operation, args, store)
+
+        fallback_fn when is_function(fallback_fn, 2) ->
+          try do
+            {fallback_fn.(operation, args), store}
+          rescue
+            FunctionClauseError -> defer_raise_no_fallback(operation, args, store)
+          end
+      end
+    end
+
+    defp defer_raise_no_fallback(operation, args, store) do
+      {{:defer,
+        fn ->
+          raise ArgumentError, """
+          HexPort.Repo.InMemory cannot service :#{operation} with args #{inspect(args)}.
+
+          The InMemory adapter can only answer authoritatively for:
+            - Write operations (insert, update, delete)
+            - PK-based reads (get, get!) when the record exists in state
+
+          For all other operations, register a fallback function:
+
+              HexPort.Repo.InMemory.new(
+                fallback_fn: fn
+                  :#{operation}, #{inspect(args)} -> # your result here
+                end
+              )
+          """
+        end}, store}
+    end
+
+    # -----------------------------------------------------------------
+    # State access helpers
+    # -----------------------------------------------------------------
+
+    defp get_record(store, schema, id) do
+      store
+      |> Map.get(schema, %{})
+      |> Map.get(id)
+    end
+
+    defp put_record(store, schema, id, record) do
+      schema_map = Map.get(store, schema, %{})
+      Map.put(store, schema, Map.put(schema_map, id, record))
+    end
+
+    defp delete_record(store, schema, id) do
+      case Map.get(store, schema) do
+        nil -> store
+        schema_map -> Map.put(store, schema, Map.delete(schema_map, id))
+      end
+    end
+
+    defp records_for_schema(store, schema) do
+      store
+      |> Map.get(schema, %{})
+      |> Map.values()
+    end
+
+    # -----------------------------------------------------------------
+    # Other helpers
     # -----------------------------------------------------------------
 
     defp safe_apply_changes(%Ecto.Changeset{} = changeset) do
@@ -335,8 +445,8 @@ if Code.ensure_loaded?(Ecto) do
     defp next_id(store, schema) do
       existing_ids =
         store
-        |> Enum.filter(fn {{s, _id}, _v} -> s == schema end)
-        |> Enum.map(fn {{_s, id}, _v} -> id end)
+        |> records_for_schema(schema)
+        |> Enum.map(&get_primary_key/1)
         |> Enum.filter(&is_integer/1)
 
       case existing_ids do
@@ -344,24 +454,5 @@ if Code.ensure_loaded?(Ecto) do
         ids -> Enum.max(ids) + 1
       end
     end
-
-    defp records_for_schema(store, schema) do
-      store
-      |> Enum.filter(fn {{s, _id}, _v} -> s == schema end)
-      |> Enum.map(fn {_key, record} -> record end)
-    end
-
-    defp find_by_clauses(store, schema, clauses) do
-      store
-      |> records_for_schema(schema)
-      |> Enum.find(fn record ->
-        Enum.all?(clauses, fn {field, value} ->
-          Map.get(record, field) == value
-        end)
-      end)
-    end
-
-    defp to_keyword(clauses) when is_map(clauses), do: Map.to_list(clauses)
-    defp to_keyword(clauses) when is_list(clauses), do: clauses
   end
 end
