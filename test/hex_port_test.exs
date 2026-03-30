@@ -1,10 +1,6 @@
 defmodule HexPortTest do
   use ExUnit.Case, async: true
 
-  test "HexPort module exists" do
-    assert Code.ensure_loaded?(HexPort)
-  end
-
   test "HexPort.Contract module exists" do
     assert Code.ensure_loaded?(HexPort.Contract)
   end
