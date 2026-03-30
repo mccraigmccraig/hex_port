@@ -278,9 +278,9 @@ defmodule HexPort.RepoTest do
   # Repo.Test Tests
   # -------------------------------------------------------------------
 
-  describe "Repo.Test stateless impl" do
+  describe "Repo.Test: write operations" do
     setup do
-      HexPort.Testing.set_handler(Repo, Repo.Test)
+      HexPort.Testing.set_fn_handler(Repo, Repo.Test.new())
       :ok
     end
 
@@ -299,21 +299,165 @@ defmodule HexPort.RepoTest do
       assert {:ok, ^record} = Repo.Port.delete(record)
     end
 
-    test "read operations return sensible defaults" do
-      assert Repo.Port.get(User, 1) == nil
-      assert_raise Ecto.NoResultsError, fn -> Repo.Port.get!(User, 1) end
-      assert Repo.Port.get_by(User, name: "Alice") == nil
-      assert_raise Ecto.NoResultsError, fn -> Repo.Port.get_by!(User, name: "Alice") end
-      assert Repo.Port.one(User) == nil
-      assert_raise Ecto.NoResultsError, fn -> Repo.Port.one!(User) end
-      assert Repo.Port.all(User) == []
-      assert Repo.Port.exists?(User) == false
-      assert Repo.Port.aggregate(User, :count, :id) == nil
+    test "insert! unwraps the result" do
+      cs = User.changeset(%{name: "Alice"})
+      assert %User{name: "Alice"} = Repo.Port.insert!(cs)
+    end
+  end
+
+  describe "Repo.Test: read operations raise without fallback" do
+    setup do
+      HexPort.Testing.set_fn_handler(Repo, Repo.Test.new())
+      :ok
     end
 
-    test "bulk operations return {0, nil}" do
-      assert {0, nil} = Repo.Port.update_all(User, [set: [name: "bulk"]], [])
-      assert {0, nil} = Repo.Port.delete_all(User, [])
+    test "get raises without fallback" do
+      assert_raise ArgumentError, ~r/Repo.Test cannot service :get/, fn ->
+        Repo.Port.get(User, 1)
+      end
+    end
+
+    test "get! raises without fallback" do
+      assert_raise ArgumentError, ~r/Repo.Test cannot service :get!/, fn ->
+        Repo.Port.get!(User, 1)
+      end
+    end
+
+    test "get_by raises without fallback" do
+      assert_raise ArgumentError, ~r/Repo.Test cannot service :get_by/, fn ->
+        Repo.Port.get_by(User, name: "Alice")
+      end
+    end
+
+    test "get_by! raises without fallback" do
+      assert_raise ArgumentError, ~r/Repo.Test cannot service :get_by!/, fn ->
+        Repo.Port.get_by!(User, name: "Alice")
+      end
+    end
+
+    test "one raises without fallback" do
+      assert_raise ArgumentError, ~r/Repo.Test cannot service :one/, fn ->
+        Repo.Port.one(User)
+      end
+    end
+
+    test "one! raises without fallback" do
+      assert_raise ArgumentError, ~r/Repo.Test cannot service :one!/, fn ->
+        Repo.Port.one!(User)
+      end
+    end
+
+    test "all raises without fallback" do
+      assert_raise ArgumentError, ~r/Repo.Test cannot service :all/, fn ->
+        Repo.Port.all(User)
+      end
+    end
+
+    test "exists? raises without fallback" do
+      assert_raise ArgumentError, ~r/Repo.Test cannot service :exists\?/, fn ->
+        Repo.Port.exists?(User)
+      end
+    end
+
+    test "aggregate raises without fallback" do
+      assert_raise ArgumentError, ~r/Repo.Test cannot service :aggregate/, fn ->
+        Repo.Port.aggregate(User, :count, :id)
+      end
+    end
+
+    test "update_all raises without fallback" do
+      assert_raise ArgumentError, ~r/Repo.Test cannot service :update_all/, fn ->
+        Repo.Port.update_all(User, [set: [name: "bulk"]], [])
+      end
+    end
+
+    test "delete_all raises without fallback" do
+      assert_raise ArgumentError, ~r/Repo.Test cannot service :delete_all/, fn ->
+        Repo.Port.delete_all(User, [])
+      end
+    end
+  end
+
+  describe "Repo.Test: read operations with fallback" do
+    test "get dispatches to fallback" do
+      alice = %User{id: 1, name: "Alice"}
+
+      handler =
+        Repo.Test.new(
+          fallback_fn: fn
+            :get, [User, 1] -> alice
+            :get, [User, _] -> nil
+          end
+        )
+
+      HexPort.Testing.set_fn_handler(Repo, handler)
+
+      assert ^alice = Repo.Port.get(User, 1)
+      assert nil == Repo.Port.get(User, 999)
+    end
+
+    test "get! dispatches to fallback" do
+      alice = %User{id: 1, name: "Alice"}
+
+      handler =
+        Repo.Test.new(fallback_fn: fn :get!, [User, 1] -> alice end)
+
+      HexPort.Testing.set_fn_handler(Repo, handler)
+      assert ^alice = Repo.Port.get!(User, 1)
+    end
+
+    test "get_by dispatches to fallback" do
+      alice = %User{id: 1, name: "Alice"}
+
+      handler =
+        Repo.Test.new(fallback_fn: fn :get_by, [User, [name: "Alice"]] -> alice end)
+
+      HexPort.Testing.set_fn_handler(Repo, handler)
+      assert ^alice = Repo.Port.get_by(User, name: "Alice")
+    end
+
+    test "all dispatches to fallback" do
+      users = [%User{id: 1, name: "Alice"}, %User{id: 2, name: "Bob"}]
+
+      handler =
+        Repo.Test.new(fallback_fn: fn :all, [User] -> users end)
+
+      HexPort.Testing.set_fn_handler(Repo, handler)
+      assert ^users = Repo.Port.all(User)
+    end
+
+    test "exists? dispatches to fallback" do
+      handler =
+        Repo.Test.new(fallback_fn: fn :exists?, [User] -> true end)
+
+      HexPort.Testing.set_fn_handler(Repo, handler)
+      assert Repo.Port.exists?(User) == true
+    end
+
+    test "aggregate dispatches to fallback" do
+      handler =
+        Repo.Test.new(fallback_fn: fn :aggregate, [User, :count, :id] -> 42 end)
+
+      HexPort.Testing.set_fn_handler(Repo, handler)
+      assert 42 = Repo.Port.aggregate(User, :count, :id)
+    end
+
+    test "fallback raises on unmatched clause" do
+      handler =
+        Repo.Test.new(fallback_fn: fn :get, [User, 1] -> nil end)
+
+      HexPort.Testing.set_fn_handler(Repo, handler)
+
+      assert_raise ArgumentError, ~r/Repo.Test cannot service :get/, fn ->
+        Repo.Port.get(User, 999)
+      end
+    end
+  end
+
+  describe "Repo.Test: transact" do
+    setup do
+      HexPort.Testing.set_fn_handler(Repo, Repo.Test.new())
+      :ok
     end
 
     test "transact with 0-arity fun calls the function" do
@@ -416,19 +560,36 @@ defmodule HexPort.RepoTest do
       assert {:ok, %{user: %User{name: "Alice"}, greeting: "Hello, Alice!"}} =
                Repo.Port.transact(multi, [])
     end
+  end
 
-    test "with logging enabled, all dispatches are recorded" do
+  describe "Repo.Test: dispatch logging" do
+    test "logs write operations" do
+      HexPort.Testing.set_fn_handler(Repo, Repo.Test.new())
       HexPort.Testing.enable_log(Repo)
       cs = User.changeset(%{name: "Alice"})
 
       Repo.Port.insert(cs)
+
+      log = HexPort.Testing.get_log(Repo)
+      assert length(log) == 1
+      assert [{Repo, :insert, [^cs], {:ok, %User{name: "Alice"}}}] = log
+    end
+
+    test "logs fallback-dispatched operations" do
+      alice = %User{id: 1, name: "Alice"}
+
+      HexPort.Testing.set_fn_handler(
+        Repo,
+        Repo.Test.new(fallback_fn: fn :get, [User, 1] -> alice end)
+      )
+
+      HexPort.Testing.enable_log(Repo)
+
       Repo.Port.get(User, 1)
 
       log = HexPort.Testing.get_log(Repo)
-      assert length(log) == 2
-
-      assert [{Repo, :insert, [^cs], {:ok, %User{name: "Alice"}}}, {Repo, :get, [User, 1], nil}] =
-               log
+      assert length(log) == 1
+      assert [{Repo, :get, [User, 1], ^alice}] = log
     end
   end
 

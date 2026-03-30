@@ -221,8 +221,38 @@ Three implementations are provided:
 | Module | Purpose |
 |--------|---------|
 | `HexPort.Repo.Ecto` | Delegates to your real `Ecto.Repo` |
-| `HexPort.Repo.Test` | Stateless defaults (applies changesets, returns structs) |
+| `HexPort.Repo.Test` | Stateless — writes apply changesets, reads use fallback or error |
 | `HexPort.Repo.InMemory` | Stateful store with 3-stage read dispatch and fallback |
+
+### Test adapter
+
+`Repo.Test` is a stateless test double. Write operations apply changesets
+and return `{:ok, struct}`, but nothing is stored. All read operations go
+through an optional fallback function, or raise a clear error — the same
+"fail when consistency cannot be proven" approach used by `Repo.InMemory`.
+
+`Repo.Test.new/1` returns a 2-arity function handler for use with
+`set_fn_handler`:
+
+```elixir
+# Writes only — reads will raise:
+HexPort.Testing.set_fn_handler(HexPort.Repo, HexPort.Repo.Test.new())
+
+# With fallback for reads:
+HexPort.Testing.set_fn_handler(
+  HexPort.Repo,
+  HexPort.Repo.Test.new(
+    fallback_fn: fn
+      :get, [User, 1] -> %User{id: 1, name: "Alice"}
+      :all, [User] -> [%User{id: 1, name: "Alice"}]
+      :exists?, [User] -> true
+    end
+  )
+)
+```
+
+Use `Repo.Test` when you only need fire-and-forget writes. For stateful
+read-after-write consistency, see `Repo.InMemory`.
 
 ### InMemory adapter
 
@@ -367,9 +397,8 @@ or the underlying Ecto Repo module in the Ecto adapter.
 
 Supported Multi operations: `insert`, `update`, `delete`, `run`, `put`,
 `error`, `inspect`, `merge`, `insert_all`, `update_all`, `delete_all`.
-Bulk operations (`insert_all`, `update_all`, `delete_all`) return `{0, nil}`
-in the Test adapter. In InMemory, bulk operations go through the fallback
-function or raise (see [InMemory adapter](#inmemory-adapter)).
+Bulk operations (`insert_all`, `update_all`, `delete_all`) go through the
+fallback function or raise in both the Test and InMemory adapters.
 
 No `transact!` bang variant is generated (consistent with Ecto, which does
 not define `Repo.transact!` either).
