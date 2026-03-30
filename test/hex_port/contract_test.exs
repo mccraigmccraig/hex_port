@@ -376,6 +376,35 @@ defmodule HexPort.ContractTest do
     end
   end
 
+  # ── Idempotency ───────────────────────────────────────────
+
+  describe "idempotency" do
+    test "use HexPort.Contract twice in the same module compiles and works correctly" do
+      modules =
+        Code.compile_string("""
+        defmodule HexPort.Test.DoubleUse do
+          use HexPort.Contract
+          use HexPort.Contract
+
+          defport hello(name :: String.t()) :: String.t()
+          defport ping() :: :pong
+        end
+        """)
+
+      # Should produce the contract module and its Behaviour submodule
+      mod_names = Enum.map(modules, fn {mod, _} -> mod end)
+      assert HexPort.Test.DoubleUse in mod_names
+      assert HexPort.Test.DoubleUse.Behaviour in mod_names
+
+      # Operations are correct (not duplicated)
+      ops = HexPort.Test.DoubleUse.__port_operations__()
+      assert length(ops) == 2
+      op_names = Enum.map(ops, & &1.name)
+      assert :hello in op_names
+      assert :ping in op_names
+    end
+  end
+
   # ── Compile errors ────────────────────────────────────────
 
   describe "compile errors" do

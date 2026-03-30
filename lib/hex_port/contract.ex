@@ -41,9 +41,18 @@ defmodule HexPort.Contract do
   @doc false
   defmacro __using__(_opts) do
     quote do
+      # import is always safe to repeat and must be at module scope
+      # (imports inside blocks like `unless` are scoped to that block)
       import HexPort.Contract, only: [defport: 1, defport: 2]
-      Module.register_attribute(__MODULE__, :port_operations, accumulate: true)
-      @before_compile HexPort.Contract
+
+      # Guard the non-idempotent parts: registering the accumulator attribute
+      # and the @before_compile hook. This makes `use HexPort.Contract`
+      # idempotent, so a module can both `use HexPort.Contract` directly and
+      # `use Skuld.Effects.Port.Contract` (which calls it internally).
+      unless Module.has_attribute?(__MODULE__, :port_operations) do
+        Module.register_attribute(__MODULE__, :port_operations, accumulate: true)
+        @before_compile HexPort.Contract
+      end
     end
   end
 
