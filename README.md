@@ -31,7 +31,7 @@ giving you full async test isolation with zero global state.
 | Behaviour generation | Standard `@behaviour` + `@callback` — Mox-compatible |
 | Separate dispatch facades | `HexPort.Port` generates dispatch with configurable `otp_app` |
 | Async-safe test doubles | Process-scoped handlers via NimbleOwnership |
-| Stateful test handlers | In-memory state with read-after-write consistency |
+| Stateful test handlers | In-memory state with PK read-after-write and fallback dispatch |
 | Dispatch logging | Record every call that crosses a port boundary |
 | Built-in Repo contract | 15-operation Ecto Repo port with test + in-memory impls |
 
@@ -150,12 +150,11 @@ end)
 
 ### Stateful handlers
 
-Maintain state across calls for read-after-write consistency:
+Maintain state across calls with atomic updates:
 
 ```elixir
 HexPort.Testing.set_stateful_handler(
   MyApp.Todos,
-  %{todos: []},  # initial state
   fn
     :create_todo!, [params], state ->
       todo = struct!(Todo, params)
@@ -163,9 +162,13 @@ HexPort.Testing.set_stateful_handler(
 
     :list_todos, [_tenant], state ->
       {state.todos, state}
-  end
+  end,
+  %{todos: []}   # initial state
 )
 ```
+
+See the [InMemory adapter](#inmemory-adapter) section below for the built-in
+stateful Repo implementation with its 3-stage dispatch model.
 
 ### Dispatch logging
 
@@ -219,7 +222,112 @@ Three implementations are provided:
 |--------|---------|
 | `HexPort.Repo.Ecto` | Delegates to your real `Ecto.Repo` |
 | `HexPort.Repo.Test` | Stateless defaults (applies changesets, returns structs) |
-| `HexPort.Repo.InMemory` | Stateful in-memory store with auto-increment IDs |
+| `HexPort.Repo.InMemory` | Stateful store with 3-stage read dispatch and fallback |
+
+### InMemory adapter
+
+`Repo.InMemory` is a stateful test double that models a consistent store.
+It stores records in a nested map (`Schema => %{pk => record}`) and uses a
+3-stage dispatch model for reads that reflects what the store can and cannot
+answer authoritatively.
+
+**The key insight:** the InMemory store only contains records that have been
+explicitly inserted during the test. It is _not_ a complete model of the
+logical store. When a record is not found in state, InMemory cannot know
+whether it exists in the logical store — so it must not silently return
+`nil` or `[]`. Instead, it falls through to a user-supplied fallback
+function, or raises a clear error.
+
+#### Operation categories
+
+| Category | Operations | Behaviour |
+|----------|-----------|-----------|
+| **Writes** | `insert`, `update`, `delete` | Always handled by state |
+| **PK reads** | `get`, `get!` | Check state first — if found, return it. If not, fallback or error |
+| **Non-PK reads** | `get_by`, `get_by!`, `one`, `one!`, `all`, `exists?`, `aggregate` | Always fallback or error |
+| **Bulk** | `update_all`, `delete_all` | Always fallback or error |
+| **Transactions** | `transact` | Delegates to sub-operations |
+
+#### Basic usage — writes and PK reads
+
+If your test only needs writes and PK-based lookups, no fallback is needed:
+
+```elixir
+setup do
+  HexPort.Testing.set_stateful_handler(
+    HexPort.Repo,
+    &HexPort.Repo.InMemory.dispatch/3,
+    HexPort.Repo.InMemory.new()
+  )
+  :ok
+end
+
+test "insert then get by PK" do
+  {:ok, user} = MyApp.Repo.Port.insert(User.changeset(%{name: "Alice"}))
+  assert ^user = MyApp.Repo.Port.get(User, user.id)
+end
+```
+
+#### Fallback function for non-PK reads
+
+For operations the state cannot answer, supply a `fallback_fn`. It receives
+`(operation, args)` and returns the result. If it raises `FunctionClauseError`
+(no matching clause), dispatch falls through to a clear error:
+
+```elixir
+setup do
+  alice = %User{id: 1, name: "Alice", email: "alice@example.com"}
+
+  state = HexPort.Repo.InMemory.new(
+    seed: [alice],
+    fallback_fn: fn
+      :get_by, [User, [email: "alice@example.com"]] -> alice
+      :all, [User] -> [alice]
+      :exists?, [User] -> true
+      :aggregate, [User, :count, :id] -> 1
+    end
+  )
+
+  HexPort.Testing.set_stateful_handler(
+    HexPort.Repo,
+    &HexPort.Repo.InMemory.dispatch/3,
+    state
+  )
+  :ok
+end
+
+test "PK read comes from state, non-PK reads use fallback" do
+  # PK read — served from state
+  assert %User{name: "Alice"} = MyApp.Repo.Port.get(User, 1)
+
+  # Non-PK reads — served by fallback
+  assert %User{name: "Alice"} = MyApp.Repo.Port.get_by(User, email: "alice@example.com")
+  assert [%User{}] = MyApp.Repo.Port.all(User)
+  assert MyApp.Repo.Port.exists?(User) == true
+end
+```
+
+#### Error on unhandled operations
+
+If an operation is not handled by the state (for PK reads) or the fallback
+function, InMemory raises `ArgumentError` with a message suggesting how to
+add a fallback clause:
+
+```
+** (ArgumentError) HexPort.Repo.InMemory cannot service :get_by with args [User, [name: "Bob"]].
+
+    The InMemory adapter can only answer authoritatively for:
+      - Write operations (insert, update, delete)
+      - PK-based reads (get, get!) when the record exists in state
+
+    For all other operations, register a fallback function:
+
+        HexPort.Repo.InMemory.new(
+          fallback_fn: fn
+            :get_by, [User, [name: "Bob"]] -> # your result here
+          end
+        )
+```
 
 ### Transactions with `transact`
 
@@ -260,7 +368,8 @@ or the underlying Ecto Repo module in the Ecto adapter.
 Supported Multi operations: `insert`, `update`, `delete`, `run`, `put`,
 `error`, `inspect`, `merge`, `insert_all`, `update_all`, `delete_all`.
 Bulk operations (`insert_all`, `update_all`, `delete_all`) return `{0, nil}`
-in Test and InMemory adapters.
+in the Test adapter. In InMemory, bulk operations go through the fallback
+function or raise (see [InMemory adapter](#inmemory-adapter)).
 
 No `transact!` bang variant is generated (consistent with Ecto, which does
 not define `Repo.transact!` either).
