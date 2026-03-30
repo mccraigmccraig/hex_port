@@ -31,7 +31,7 @@ giving you full async test isolation with zero global state.
 | Async-safe test doubles | Process-scoped handlers via NimbleOwnership |
 | Stateful test handlers | In-memory state with read-after-write consistency |
 | Dispatch logging | Record every call that crosses a port boundary |
-| Built-in Repo contract | 14-operation Ecto Repo port with test + in-memory impls |
+| Built-in Repo contract | 15-operation Ecto Repo port with test + in-memory impls |
 
 ## Two entry points
 
@@ -198,9 +198,10 @@ HexPort.Testing.allow(MyApp.Todos, self(), some_pid)
 
 ## Built-in Repo contract
 
-HexPort includes a ready-made 14-operation Ecto Repo contract covering
+HexPort includes a ready-made 15-operation Ecto Repo contract covering
 `insert`, `update`, `delete`, `update_all`, `delete_all`, `get`, `get!`,
-`get_by`, `get_by!`, `one`, `one!`, `all`, `exists?`, and `aggregate`.
+`get_by`, `get_by!`, `one`, `one!`, `all`, `exists?`, `aggregate`, and
+`transact`.
 
 ```elixir
 # HexPort.Repo defines the contract (no otp_app)
@@ -217,6 +218,76 @@ Three implementations are provided:
 | `HexPort.Repo.Ecto` | Delegates to your real `Ecto.Repo` |
 | `HexPort.Repo.Test` | Stateless defaults (applies changesets, returns structs) |
 | `HexPort.Repo.InMemory` | Stateful in-memory store with auto-increment IDs |
+
+### Transactions with `transact`
+
+`transact/2` mirrors `Ecto.Repo.transact/2` — it accepts either a function
+or an `Ecto.Multi` as the first argument.
+
+**With a function:**
+
+```elixir
+MyApp.Repo.Port.transact(fn ->
+  {:ok, user} = MyApp.Repo.Port.insert(user_changeset)
+  {:ok, profile} = MyApp.Repo.Port.insert(profile_changeset(user))
+  {:ok, {user, profile}}
+end, [])
+```
+
+The function must return `{:ok, result}` or `{:error, reason}`.
+
+**With an `Ecto.Multi`:**
+
+```elixir
+Ecto.Multi.new()
+|> Ecto.Multi.insert(:user, user_changeset)
+|> Ecto.Multi.run(:profile, fn repo, %{user: user} ->
+  repo.insert(profile_changeset(user))
+end)
+|> MyApp.Repo.Port.transact([])
+```
+
+On success, returns `{:ok, changes}` where `changes` is a map of operation
+names to results. On failure, returns `{:error, failed_op, failed_value,
+changes_so_far}`.
+
+Multi `:run` callbacks receive the Port facade as the `repo` argument in
+Test and InMemory adapters (so `repo.insert(cs)` dispatches correctly),
+or the underlying Ecto Repo module in the Ecto adapter.
+
+Supported Multi operations: `insert`, `update`, `delete`, `run`, `put`,
+`error`, `inspect`, `merge`, `insert_all`, `update_all`, `delete_all`.
+Bulk operations (`insert_all`, `update_all`, `delete_all`) return `{0, nil}`
+in Test and InMemory adapters.
+
+No `transact!` bang variant is generated (consistent with Ecto, which does
+not define `Repo.transact!` either).
+
+### Concurrency limitations of `transact` in test adapters
+
+The **Ecto adapter** provides real database transactions with full ACID
+isolation — this is the production path and works correctly under
+concurrent access.
+
+The **Test** and **InMemory** adapters do **not** provide true transaction
+isolation. In the Test adapter, `transact` simply calls the function (or
+steps through the Multi) without any locking. In the InMemory adapter,
+`transact` uses `{:defer, fn}` to avoid NimbleOwnership deadlocks — the
+function runs outside the lock, and each sub-operation acquires the lock
+individually.
+
+This means:
+
+- There is no rollback on error — side effects from earlier operations in
+  a function-based transact are not undone (Multi-based transact in test
+  adapters also does not roll back successful operations on failure).
+- Concurrent writes to the InMemory store within a transaction are not
+  isolated from each other.
+
+This is acceptable for test-only adapters where transactions are typically
+exercised in serial, single-process tests. If your tests require true
+transaction isolation, use the Ecto adapter with a real database and
+Ecto's sandbox.
 
 ## Dispatch resolution
 
