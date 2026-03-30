@@ -65,6 +65,7 @@ defmodule HexPort.RepoTest do
       assert :all in callback_names
       assert :exists? in callback_names
       assert :aggregate in callback_names
+      assert :transact in callback_names
     end
 
     test "Port facade (defined via use HexPort.Port) has all operations" do
@@ -75,6 +76,7 @@ defmodule HexPort.RepoTest do
       assert function_exported?(Repo.Port, :delete, 1)
       assert function_exported?(Repo.Port, :get, 2)
       assert function_exported?(Repo.Port, :all, 1)
+      assert function_exported?(Repo.Port, :transact, 2)
     end
 
     test "Port facade has bang variants for write operations" do
@@ -95,10 +97,10 @@ defmodule HexPort.RepoTest do
       assert :one! in ops
     end
 
-    test "__port_operations__ lists all 14 operations" do
+    test "__port_operations__ lists all 15 operations" do
       ops = Repo.__port_operations__()
 
-      assert length(ops) == 14
+      assert length(ops) == 15
 
       op_names = Enum.map(ops, & &1.name) |> Enum.sort()
 
@@ -115,6 +117,7 @@ defmodule HexPort.RepoTest do
                :insert,
                :one,
                :one!,
+               :transact,
                :update,
                :update_all
              ]
@@ -140,6 +143,9 @@ defmodule HexPort.RepoTest do
     def all(_q), do: [%User{id: 1}, %User{id: 2}]
     def exists?(_q), do: true
     def aggregate(_q, _agg, _f), do: 42
+
+    def transact(fun, _opts) when is_function(fun, 0), do: fun.()
+    def transact(fun, _opts) when is_function(fun, 1), do: fun.(__MODULE__)
   end
 
   defmodule TestRepoPort do
@@ -230,6 +236,16 @@ defmodule HexPort.RepoTest do
         Repo.Port.insert!(User.changeset(%{name: "bad"}))
       end
     end
+
+    test "transact with 0-arity fun delegates to mock Repo" do
+      result = Repo.Port.transact(fn -> {:ok, :committed} end, [])
+      assert {:ok, :committed} = result
+    end
+
+    test "transact with 1-arity fun delegates to mock Repo (receives repo module)" do
+      result = Repo.Port.transact(fn repo -> {:ok, repo} end, [])
+      assert {:ok, MockRepo} = result
+    end
   end
 
   # -------------------------------------------------------------------
@@ -272,6 +288,18 @@ defmodule HexPort.RepoTest do
     test "bulk operations return {0, nil}" do
       assert {0, nil} = Repo.Port.update_all(User, [set: [name: "bulk"]], [])
       assert {0, nil} = Repo.Port.delete_all(User, [])
+    end
+
+    test "transact with 0-arity fun calls the function" do
+      assert {:ok, :done} = Repo.Port.transact(fn -> {:ok, :done} end, [])
+    end
+
+    test "transact with 1-arity fun passes nil" do
+      assert {:ok, nil} = Repo.Port.transact(fn repo -> {:ok, repo} end, [])
+    end
+
+    test "transact propagates error tuples" do
+      assert {:error, :rollback} = Repo.Port.transact(fn -> {:error, :rollback} end, [])
     end
 
     test "with logging enabled, all dispatches are recorded" do
@@ -534,6 +562,40 @@ defmodule HexPort.RepoTest do
       HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, initial)
 
       assert {0, nil} = Repo.Port.update_all(User, [set: [name: "bulk"]], [])
+    end
+  end
+
+  describe "InMemory: transact" do
+    setup do
+      HexPort.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, %{})
+      :ok
+    end
+
+    test "transact with 0-arity fun calls function and returns result" do
+      assert {:ok, :committed} = Repo.Port.transact(fn -> {:ok, :committed} end, [])
+    end
+
+    test "transact with 1-arity fun passes nil and returns result" do
+      assert {:ok, nil} = Repo.Port.transact(fn repo -> {:ok, repo} end, [])
+    end
+
+    test "transact propagates error tuples" do
+      assert {:error, :rollback} = Repo.Port.transact(fn -> {:error, :rollback} end, [])
+    end
+
+    test "transact with insert gives read-after-write within transaction" do
+      result =
+        Repo.Port.transact(
+          fn ->
+            {:ok, user} = Repo.Port.insert(User.changeset(%{name: "Alice"}))
+            found = Repo.Port.get(User, user.id)
+            {:ok, {user, found}}
+          end,
+          []
+        )
+
+      assert {:ok, {%User{name: "Alice"} = user, %User{name: "Alice"} = found}} = result
+      assert user == found
     end
   end
 

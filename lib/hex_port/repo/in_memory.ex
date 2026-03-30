@@ -265,6 +265,23 @@ if Code.ensure_loaded?(Ecto) do
     end
 
     # -----------------------------------------------------------------
+    # Transaction Operations
+    # -----------------------------------------------------------------
+
+    # transact uses {:defer, deferred_fn} to run the user's function
+    # outside the NimbleOwnership lock. Sub-operations (insert, get, etc.)
+    # each acquire the lock individually. This avoids GenServer reentrancy
+    # deadlock at the cost of not providing true transaction isolation —
+    # acceptable for a test-only in-memory adapter.
+    def dispatch(:transact, [fun, _opts], _store) when is_function(fun, 0) do
+      {:defer, fun}
+    end
+
+    def dispatch(:transact, [fun, _opts], _store) when is_function(fun, 1) do
+      {:defer, fn -> fun.(nil) end}
+    end
+
+    # -----------------------------------------------------------------
     # Helpers
     # -----------------------------------------------------------------
 

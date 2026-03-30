@@ -136,5 +136,34 @@ if Code.ensure_loaded?(Ecto) do
     @doc "Calculate an aggregate over the given field."
     defport aggregate(queryable :: Ecto.Queryable.t(), aggregate :: atom(), field :: atom()) ::
               term()
+
+    # -----------------------------------------------------------------
+    # Transaction Operations
+    # -----------------------------------------------------------------
+
+    @doc """
+    Run a function inside a database transaction.
+
+    Mirrors `Ecto.Repo.transact/2`. The function may be 0-arity or 1-arity:
+
+    - **0-arity:** `fn -> {:ok, result} | {:error, reason} end`
+    - **1-arity:** `fn repo -> {:ok, result} | {:error, reason} end` — where
+      `repo` is the underlying Ecto Repo module (in the Ecto adapter) or a
+      placeholder in test/in-memory adapters.
+
+    The function **must** return `{:ok, result}` or `{:error, reason}`.
+    On `{:ok, result}`, the transaction is committed and `{:ok, result}` is returned.
+    On `{:error, reason}`, the transaction is rolled back and `{:error, reason}` is returned.
+
+    ## Example
+
+        Repo.Port.transact(fn ->
+          {:ok, user} = Repo.Port.insert(user_changeset)
+          {:ok, profile} = Repo.Port.insert(profile_changeset(user))
+          {:ok, {user, profile}}
+        end)
+    """
+    defport transact(fun :: (-> {:ok, term()} | {:error, term()}), opts :: keyword()) ::
+              {:ok, term()} | {:error, term()}
   end
 end

@@ -89,6 +89,14 @@ if Code.ensure_loaded?(Ecto) do
     def aggregate(_queryable, _aggregate_fn, _field), do: nil
 
     # -----------------------------------------------------------------
+    # Transaction Operations
+    # -----------------------------------------------------------------
+
+    @impl true
+    def transact(fun, _opts) when is_function(fun, 0), do: fun.()
+    def transact(fun, _opts) when is_function(fun, 1), do: fun.(nil)
+
+    # -----------------------------------------------------------------
     # Helpers
     # -----------------------------------------------------------------
 

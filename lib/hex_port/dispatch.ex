@@ -91,13 +91,26 @@ defmodule HexPort.Dispatch do
        ) do
     # Atomically read state, call handler, update state.
     # Must use owner_pid so allowed child processes can update state.
+    #
+    # If the handler returns {:defer, deferred_fn}, we skip the state update
+    # and call deferred_fn outside the lock. This supports operations like
+    # `transact` whose body re-enters the dispatch system (which would
+    # otherwise deadlock on the NimbleOwnership GenServer).
     {:ok, result} =
       NimbleOwnership.get_and_update(@ownership_server, owner_pid, state_key, fn state ->
-        {result, new_state} = fun.(operation, args, state)
-        {result, new_state}
+        case fun.(operation, args, state) do
+          {:defer, deferred_fn} when is_function(deferred_fn, 0) ->
+            {{:defer, deferred_fn}, state}
+
+          {result, new_state} ->
+            {result, new_state}
+        end
       end)
 
-    result
+    case result do
+      {:defer, deferred_fn} -> deferred_fn.()
+      result -> result
+    end
   end
 
   # -- Dispatch logging --
