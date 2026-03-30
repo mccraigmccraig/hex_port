@@ -31,3 +31,7 @@ end
 defmodule HexPort.Test.MultiParam.Port do
   use HexPort.Port, contract: HexPort.Test.MultiParam, otp_app: :hex_port
 end
+
+defmodule HexPort.Test.AliasedTypes.Port do
+  use HexPort.Port, contract: HexPort.Test.AliasedTypes, otp_app: :hex_port
+end

@@ -423,6 +423,64 @@ defmodule HexPort.ContractTest do
     end
   end
 
+  # ── Type alias expansion ──────────────────────────────────
+
+  describe "type alias expansion" do
+    test "param_types in __port_operations__ contain fully-qualified module names" do
+      ops = HexPort.Test.AliasedTypes.__port_operations__()
+      op_map = Map.new(ops, fn op -> {op.name, op} end)
+
+      # list_widgets has param type Widget.t() — should be expanded to
+      # HexPort.Test.Deep.Nested.Widget.t()
+      [filter_type] = op_map[:list_widgets].param_types
+
+      # The type AST should reference the fully-qualified module,
+      # not the aliased short name. Convert to string for assertion.
+      type_string = Macro.to_string(filter_type)
+      assert type_string =~ "HexPort.Test.Deep.Nested.Widget"
+      refute type_string =~ ~r/(?<!\.)Widget\.t/
+    end
+
+    test "return_type in __port_operations__ contains fully-qualified module names" do
+      ops = HexPort.Test.AliasedTypes.__port_operations__()
+      op_map = Map.new(ops, fn op -> {op.name, op} end)
+
+      # get_widget returns {:ok, Widget.t()} | {:error, term()}
+      return_string = Macro.to_string(op_map[:get_widget].return_type)
+      assert return_string =~ "HexPort.Test.Deep.Nested.Widget"
+      refute return_string =~ ~r/(?<!\.)Widget\.t/
+
+      # list_widgets returns [Widget.t()]
+      list_return_string = Macro.to_string(op_map[:list_widgets].return_type)
+      assert list_return_string =~ "HexPort.Test.Deep.Nested.Widget"
+    end
+
+    test "Port module with aliased types compiles and has correct specs" do
+      {:ok, specs} = Code.Typespec.fetch_specs(HexPort.Test.AliasedTypes.Port)
+      spec_names = Enum.map(specs, fn {name_arity, _} -> name_arity end)
+
+      assert {:get_widget, 1} in spec_names
+      assert {:list_widgets, 1} in spec_names
+      assert {:get_widget!, 1} in spec_names
+    end
+
+    test "Port facade with aliased types dispatches correctly" do
+      HexPort.Testing.set_fn_handler(HexPort.Test.AliasedTypes, fn
+        :get_widget, [id] -> {:ok, %HexPort.Test.Deep.Nested.Widget{id: id, label: "test"}}
+        :list_widgets, [_filter] -> []
+      end)
+
+      assert {:ok, %HexPort.Test.Deep.Nested.Widget{id: "w1"}} =
+               HexPort.Test.AliasedTypes.Port.get_widget("w1")
+
+      assert [] =
+               HexPort.Test.AliasedTypes.Port.list_widgets(%HexPort.Test.Deep.Nested.Widget{
+                 id: "f",
+                 label: "filter"
+               })
+    end
+  end
+
   # ── @spec generation ──────────────────────────────────────
 
   describe "@spec generation" do

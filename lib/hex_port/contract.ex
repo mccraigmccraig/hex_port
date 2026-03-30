@@ -84,7 +84,11 @@ defmodule HexPort.Contract do
     {name, params} = parse_call(call_ast, caller)
 
     param_names = Enum.map(params, &elem(&1, 0))
-    param_types = Enum.map(params, &elem(&1, 1))
+
+    param_types =
+      Enum.map(params, fn {_name, type_ast} -> expand_type_aliases(type_ast, caller) end)
+
+    return_type_ast = expand_type_aliases(return_type_ast, caller)
 
     bang_mode =
       case bang_opt do
@@ -189,6 +193,25 @@ defmodule HexPort.Contract do
       description: "invalid defport call syntax. Got: #{Macro.to_string(other)}",
       file: caller.file,
       line: caller.line
+  end
+
+  # -- Type alias expansion --
+  #
+  # Walk a type AST and expand any {:__aliases__, _, _} nodes using the
+  # caller's alias environment.  This ensures that __port_operations__/0
+  # always stores fully-qualified module names, so @spec annotations
+  # generated in Port modules (which lack the contract's aliases) resolve
+  # correctly for dialyzer.
+
+  @doc false
+  def expand_type_aliases(ast, caller_env) do
+    Macro.prewalk(ast, fn
+      {:__aliases__, _meta, _segments} = node ->
+        Macro.expand(node, caller_env)
+
+      other ->
+        other
+    end)
   end
 
   # -- Code Generation: Behaviour callbacks --

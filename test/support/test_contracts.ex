@@ -81,3 +81,25 @@ defmodule HexPort.Test.MultiParam do
   defport find(tenant :: String.t(), type :: atom(), id :: String.t()) ::
             {:ok, map()} | {:error, term()}
 end
+
+# -- Module used as an aliased type in contracts --
+
+defmodule HexPort.Test.Deep.Nested.Widget do
+  @type t :: %__MODULE__{id: String.t(), label: String.t()}
+  defstruct [:id, :label]
+end
+
+# -- Contract that uses aliased types --
+# Verifies that defport expands aliases to fully-qualified names
+# so generated @spec annotations resolve in Port modules.
+
+defmodule HexPort.Test.AliasedTypes do
+  use HexPort.Contract
+
+  alias HexPort.Test.Deep.Nested.Widget
+
+  defport get_widget(id :: String.t()) ::
+            {:ok, Widget.t()} | {:error, term()}
+
+  defport list_widgets(filter :: Widget.t()) :: [Widget.t()]
+end
