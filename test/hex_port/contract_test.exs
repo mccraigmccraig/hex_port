@@ -83,12 +83,12 @@ defmodule HexPort.ContractTest do
       assert {:ok, "1.0.0"} = HexPort.Test.ZeroArg.Port.get_version()
     end
 
-    test "Port module has @moduledoc" do
+    test "Facade module has @moduledoc" do
       {:docs_v1, _anno, _lang, _format, module_doc, _meta, _docs} =
         Code.fetch_docs(HexPort.Test.Greeter.Port)
 
       assert %{"en" => doc} = module_doc
-      assert doc =~ "Port facade"
+      assert doc =~ "Dispatch facade"
       assert doc =~ "HexPort.Test.Greeter"
     end
 

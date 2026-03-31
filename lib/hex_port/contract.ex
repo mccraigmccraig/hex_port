@@ -11,7 +11,7 @@ defmodule HexPort.Contract do
 
   Contracts are purely static interface definitions. They do **not**
   generate a dispatch facade (`.Port` module) — that is the concern of
-  `HexPort.Port`, which the consuming application uses separately to
+  `HexPort.Facade`, which the consuming application uses separately to
   bind a contract to an OTP application's config.
 
   ## Usage
@@ -37,13 +37,13 @@ defmodule HexPort.Contract do
 
   Compatible with `Mox.defmock(Mock, for: MyApp.Todos)`.
 
-  To generate a dispatch facade, use `HexPort.Port` in a separate module:
+  To generate a dispatch facade, use `HexPort.Facade` in a separate module:
 
-      defmodule MyApp.Todos.Port do
-        use HexPort.Port, contract: MyApp.Todos, otp_app: :my_app
+      defmodule MyApp.Todos do
+        use HexPort.Facade, contract: MyApp.Todos.Contract, otp_app: :my_app
       end
 
-  See `HexPort.Port` for dispatch configuration and `HexPort` for an overview.
+  See `HexPort.Facade` for dispatch configuration and `HexPort` for an overview.
   """
 
   @doc false

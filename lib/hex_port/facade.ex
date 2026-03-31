@@ -1,18 +1,18 @@
-defmodule HexPort.Port do
+defmodule HexPort.Facade do
   @moduledoc """
   Generates a dispatch facade for a `HexPort.Contract`.
 
-  `use HexPort.Port` reads the contract's `__port_operations__/0` metadata
+  `use HexPort.Facade` reads the contract's `__port_operations__/0` metadata
   and generates facade functions, bang variants, and key helpers that
   dispatch via `HexPort.Dispatch`.
 
   ## Usage
 
-      defmodule MyApp.Todos.Port do
-        use HexPort.Port, contract: MyApp.Todos, otp_app: :my_app
+      defmodule MyApp.Todos do
+        use HexPort.Facade, contract: MyApp.Todos.Contract, otp_app: :my_app
       end
 
-  This generates (inside `MyApp.Todos.Port`):
+  This generates:
 
     * Facade functions for each port operation — dispatch via config or test handler
     * Bang variants (when applicable) — unwrap `{:ok, v}` or raise on error
@@ -28,7 +28,7 @@ defmodule HexPort.Port do
   ## Configuration
 
       # config/config.exs
-      config :my_app, MyApp.Todos, impl: MyApp.Todos.Ecto
+      config :my_app, MyApp.Todos.Contract, impl: MyApp.Todos.Ecto
 
   ## Testing
 
@@ -37,7 +37,7 @@ defmodule HexPort.Port do
 
       # test/my_test.exs
       setup do
-        HexPort.Testing.set_fn_handler(MyApp.Todos, fn
+        HexPort.Testing.set_fn_handler(MyApp.Todos.Contract, fn
           :get_todo, [_tenant, id] -> {:ok, %Todo{id: id}}
           :list_todos, [_tenant] -> []
         end)
@@ -45,7 +45,7 @@ defmodule HexPort.Port do
       end
 
       test "gets a todo" do
-        assert {:ok, %Todo{}} = MyApp.Todos.Port.get_todo("t1", "todo-1")
+        assert {:ok, %Todo{}} = MyApp.Todos.get_todo("t1", "todo-1")
       end
   """
 
@@ -60,7 +60,7 @@ defmodule HexPort.Port do
       require unquote(contract)
       @hex_port_contract unquote(contract)
       @hex_port_otp_app unquote(otp_app)
-      @before_compile {HexPort.Port, :__before_compile__}
+      @before_compile {HexPort.Facade, :__before_compile__}
     end
   end
 
@@ -101,7 +101,7 @@ defmodule HexPort.Port do
 
     quote do
       @moduledoc """
-      Port facade for `#{inspect(unquote(contract))}`.
+      Dispatch facade for `#{inspect(unquote(contract))}`.
 
       Dispatches calls to the configured implementation via
       `HexPort.Dispatch`. In production, resolves from application

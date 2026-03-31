@@ -143,7 +143,7 @@ defmodule HexPort.Dispatch do
     No implementation configured for #{inspect(contract)}.
 
     Either:
-      1. Create a Port module with `use HexPort.Port, contract: #{inspect(contract)}, otp_app: :my_app`
+      1. Create a facade module with `use HexPort.Facade, contract: #{inspect(contract)}, otp_app: :my_app`
          and configure:
            config :my_app, #{inspect(contract)}, impl: MyImpl
 

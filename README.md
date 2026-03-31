@@ -29,7 +29,7 @@ giving you full async test isolation with zero global state.
 |---------|-------------|
 | Typed contracts | `defport` declarations with full typespecs |
 | Behaviour generation | Standard `@behaviour` + `@callback` — Mox-compatible |
-| Separate dispatch facades | `HexPort.Port` generates dispatch with configurable `otp_app` |
+| Separate dispatch facades | `HexPort.Facade` generates dispatch with configurable `otp_app` |
 | Async-safe test doubles | Process-scoped handlers via NimbleOwnership |
 | Stateful test handlers | In-memory state with PK read-after-write and fallback dispatch |
 | Dispatch logging | Record every call that crosses a port boundary |
@@ -44,20 +44,21 @@ HexPort has two macros for two separate concerns:
   `X.__port_operations__/0` (introspection). The contract module *is*
   the behaviour. No `otp_app`, no dispatch facade.
 
-- **`use HexPort.Port, contract: X, otp_app: :my_app`** — generates the dispatch
+- **`use HexPort.Facade, contract: X, otp_app: :my_app`** — generates the dispatch
   facade. Reads `X.__port_operations__/0` at compile time and creates facade
   functions, bang variants, and key helpers. The consuming application controls
   which `otp_app` to use.
 
 This separation means library-provided contracts (like `HexPort.Repo`) don't
-hardcode an `otp_app` — the consuming application decides how dispatch works.
+hardcode an `otp_app` — the consuming application creates a facade module
+that binds the contract to its own config.
 
 ## Quick example
 
 ### Define a contract
 
 ```elixir
-defmodule MyApp.Todos do
+defmodule MyApp.Todos.Contract do
   use HexPort.Contract
 
   defport get_todo(tenant_id :: String.t(), id :: String.t()) ::
@@ -69,15 +70,16 @@ defmodule MyApp.Todos do
 end
 ```
 
-This generates `@callback` declarations on `MyApp.Todos` (making it a
-behaviour) and `MyApp.Todos.__port_operations__/0` for introspection.
+This generates `@callback` declarations on `MyApp.Todos.Contract` (making
+it a behaviour) and `MyApp.Todos.Contract.__port_operations__/0` for
+introspection.
 
 ### Generate a dispatch facade
 
 ```elixir
 # In a separate file (contract must compile first)
-defmodule MyApp.Todos.Port do
-  use HexPort.Port, contract: MyApp.Todos, otp_app: :my_app
+defmodule MyApp.Todos do
+  use HexPort.Facade, contract: MyApp.Todos.Contract, otp_app: :my_app
 end
 ```
 
@@ -88,7 +90,7 @@ that dispatch via `HexPort.Dispatch`.
 
 ```elixir
 defmodule MyApp.Todos.Ecto do
-  @behaviour MyApp.Todos
+  @behaviour MyApp.Todos.Contract
 
   @impl true
   def get_todo(tenant_id, id) do
@@ -106,7 +108,7 @@ end
 
 ```elixir
 # config/config.exs
-config :my_app, MyApp.Todos, impl: MyApp.Todos.Ecto
+config :my_app, MyApp.Todos.Contract, impl: MyApp.Todos.Ecto
 ```
 
 ### Test with process-scoped handlers
@@ -120,7 +122,7 @@ defmodule MyApp.TodosTest do
   use ExUnit.Case, async: true
 
   setup do
-    HexPort.Testing.set_fn_handler(MyApp.Todos, fn
+    HexPort.Testing.set_fn_handler(MyApp.Todos.Contract, fn
       :get_todo, [_tenant, id] -> {:ok, %Todo{id: id, title: "Test"}}
       :list_todos, [_tenant] -> [%Todo{id: "1", title: "Test"}]
       :create_todo!, [params] -> struct!(Todo, params)
@@ -129,7 +131,7 @@ defmodule MyApp.TodosTest do
   end
 
   test "gets a todo" do
-    assert {:ok, %Todo{id: "42"}} = MyApp.Todos.Port.get_todo("t1", "42")
+    assert {:ok, %Todo{id: "42"}} = MyApp.Todos.get_todo("t1", "42")
   end
 end
 ```
@@ -141,7 +143,7 @@ end
 Map operations to return values with a simple function:
 
 ```elixir
-HexPort.Testing.set_fn_handler(MyApp.Todos, fn
+HexPort.Testing.set_fn_handler(MyApp.Todos.Contract, fn
   :get_todo, [_, id] -> {:ok, %Todo{id: id}}
   :list_todos, [_] -> []
 end)
@@ -175,18 +177,18 @@ Record and inspect every call that crosses a port boundary:
 
 ```elixir
 setup do
-  HexPort.Testing.enable_log(MyApp.Todos)
-  HexPort.Testing.set_fn_handler(MyApp.Todos, fn
+  HexPort.Testing.enable_log(MyApp.Todos.Contract)
+  HexPort.Testing.set_fn_handler(MyApp.Todos.Contract, fn
     :get_todo, [_, id] -> {:ok, %Todo{id: id}}
   end)
   :ok
 end
 
 test "logs dispatch calls" do
-  MyApp.Todos.Port.get_todo("t1", "42")
+  MyApp.Todos.get_todo("t1", "42")
 
   assert [{:get_todo, ["t1", "42"], {:ok, %Todo{id: "42"}}}] =
-    HexPort.Testing.get_log(MyApp.Todos)
+    HexPort.Testing.get_log(MyApp.Todos.Contract)
 end
 ```
 
@@ -197,7 +199,7 @@ tests run in full isolation. `Task.async` children automatically inherit
 their parent's handlers.
 
 ```elixir
-HexPort.Testing.allow(MyApp.Todos, self(), some_pid)
+HexPort.Testing.allow(MyApp.Todos.Contract, self(), some_pid)
 ```
 
 ## Built-in Repo contract
@@ -209,9 +211,9 @@ HexPort includes a ready-made 15-operation Ecto Repo contract covering
 
 ```elixir
 # HexPort.Repo defines the contract (no otp_app)
-# Your app creates its own Port module:
-defmodule MyApp.Repo.Port do
-  use HexPort.Port, contract: HexPort.Repo, otp_app: :my_app
+# Your app creates its own facade module:
+defmodule MyApp.Repo do
+  use HexPort.Facade, contract: HexPort.Repo, otp_app: :my_app
 end
 ```
 
@@ -292,8 +294,8 @@ setup do
 end
 
 test "insert then get by PK" do
-  {:ok, user} = MyApp.Repo.Port.insert(User.changeset(%{name: "Alice"}))
-  assert ^user = MyApp.Repo.Port.get(User, user.id)
+  {:ok, user} = MyApp.Repo.insert(User.changeset(%{name: "Alice"}))
+  assert ^user = MyApp.Repo.get(User, user.id)
 end
 ```
 
@@ -330,12 +332,12 @@ end
 
 test "PK read comes from state, non-PK reads use fallback" do
   # PK read — served from state
-  assert %User{name: "Alice"} = MyApp.Repo.Port.get(User, 1)
+  assert %User{name: "Alice"} = MyApp.Repo.get(User, 1)
 
   # Non-PK reads — served by fallback
-  assert %User{name: "Alice"} = MyApp.Repo.Port.get_by(User, email: "alice@example.com")
-  assert [%User{}] = MyApp.Repo.Port.all(User)
-  assert MyApp.Repo.Port.exists?(User) == true
+  assert %User{name: "Alice"} = MyApp.Repo.get_by(User, email: "alice@example.com")
+  assert [%User{}] = MyApp.Repo.all(User)
+  assert MyApp.Repo.exists?(User) == true
 end
 ```
 
@@ -369,9 +371,9 @@ or an `Ecto.Multi` as the first argument.
 **With a function:**
 
 ```elixir
-MyApp.Repo.Port.transact(fn ->
-  {:ok, user} = MyApp.Repo.Port.insert(user_changeset)
-  {:ok, profile} = MyApp.Repo.Port.insert(profile_changeset(user))
+MyApp.Repo.transact(fn ->
+  {:ok, user} = MyApp.Repo.insert(user_changeset)
+  {:ok, profile} = MyApp.Repo.insert(profile_changeset(user))
   {:ok, {user, profile}}
 end, [])
 ```
@@ -386,7 +388,7 @@ Ecto.Multi.new()
 |> Ecto.Multi.run(:profile, fn repo, %{user: user} ->
   repo.insert(profile_changeset(user))
 end)
-|> MyApp.Repo.Port.transact([])
+|> MyApp.Repo.transact([])
 ```
 
 On success, returns `{:ok, changes}` where `changes` is a map of operation

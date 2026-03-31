@@ -68,7 +68,7 @@ defmodule HexPort.RepoTest do
       assert :transact in callback_names
     end
 
-    test "Port facade (defined via use HexPort.Port) has all operations" do
+    test "Facade (defined via use HexPort.Facade) has all operations" do
       {:module, _} = Code.ensure_loaded(Repo.Port)
 
       assert function_exported?(Repo.Port, :insert, 1)
