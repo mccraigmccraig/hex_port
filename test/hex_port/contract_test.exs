@@ -393,7 +393,7 @@ defmodule HexPort.ContractTest do
   # ── Combined contract + facade ────────────────────────────
 
   describe "combined contract and facade on same module" do
-    test "compiles and works correctly" do
+    test "explicit contract: __MODULE__ compiles and works" do
       modules =
         Code.compile_string("""
         defmodule HexPort.Test.Combined do
@@ -422,11 +422,34 @@ defmodule HexPort.ContractTest do
       assert function_exported?(HexPort.Test.Combined, :ping, 0)
     end
 
+    test "omitting contract: defaults to __MODULE__ and implies use HexPort.Contract" do
+      Code.compile_string("""
+      defmodule HexPort.Test.CombinedImplicit do
+        use HexPort.Facade, otp_app: :hex_port_test
+
+        defport greet(name :: String.t()) :: String.t()
+        defport ping() :: :pong
+      end
+      """)
+
+      # Has callbacks (Contract was implicitly used)
+      callbacks = HexPort.Test.CombinedImplicit.behaviour_info(:callbacks)
+      assert {:greet, 1} in callbacks
+      assert {:ping, 0} in callbacks
+
+      # Has __port_operations__
+      ops = HexPort.Test.CombinedImplicit.__port_operations__()
+      assert length(ops) == 2
+
+      # Facade functions exist
+      assert function_exported?(HexPort.Test.CombinedImplicit, :greet, 1)
+      assert function_exported?(HexPort.Test.CombinedImplicit, :ping, 0)
+    end
+
     test "facade dispatches correctly via test handler" do
       Code.compile_string("""
       defmodule HexPort.Test.CombinedDispatch do
-        use HexPort.Contract
-        use HexPort.Facade, contract: HexPort.Test.CombinedDispatch, otp_app: :hex_port_test
+        use HexPort.Facade, otp_app: :hex_port_test
 
         defport greet(name :: String.t()) :: String.t()
       end

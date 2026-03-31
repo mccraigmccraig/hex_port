@@ -2,33 +2,46 @@ defmodule HexPort.Facade do
   @moduledoc """
   Generates a dispatch facade for a `HexPort.Contract`.
 
-  `use HexPort.Facade` reads the contract's `__port_operations__/0` metadata
+  `use HexPort.Facade` reads a contract's `__port_operations__/0` metadata
   and generates facade functions, bang variants, and key helpers that
   dispatch via `HexPort.Dispatch`.
 
-  ## Usage
+  ## Combined contract + facade (simplest)
+
+  When `:contract` is omitted, it defaults to `__MODULE__` and
+  `use HexPort.Contract` is issued implicitly. This gives a single-module
+  contract + facade:
+
+      defmodule MyApp.Todos do
+        use HexPort.Facade, otp_app: :my_app
+
+        defport get_todo(id :: String.t()) :: {:ok, Todo.t()} | {:error, term()}
+        defport list_todos() :: [Todo.t()]
+      end
+
+  `MyApp.Todos` is both the contract (has `@callback`s, `__port_operations__/0`)
+  and the dispatch facade.
+
+  ## Separate contract and facade
+
+  For cases where you want the contract in a different module:
 
       defmodule MyApp.Todos do
         use HexPort.Facade, contract: MyApp.Todos.Contract, otp_app: :my_app
       end
 
-  This generates:
-
-    * Facade functions for each port operation — dispatch via config or test handler
-    * Bang variants (when applicable) — unwrap `{:ok, v}` or raise on error
-    * Key helpers — build canonical keys for test stub matching
-
   ## Options
 
-    * `:contract` (required) — the contract module that defines the port operations
-      via `use HexPort.Contract` and `defport` declarations.
+    * `:contract` — the contract module that defines port operations via
+      `use HexPort.Contract` and `defport` declarations. Defaults to
+      `__MODULE__` (combined contract + facade).
     * `:otp_app` (required) — the OTP application name for config-based dispatch.
       Implementations are resolved from `Application.get_env(otp_app, contract)[:impl]`.
 
   ## Configuration
 
       # config/config.exs
-      config :my_app, MyApp.Todos.Contract, impl: MyApp.Todos.Ecto
+      config :my_app, MyApp.Todos, impl: MyApp.Todos.Ecto
 
   ## Testing
 
@@ -37,29 +50,35 @@ defmodule HexPort.Facade do
 
       # test/my_test.exs
       setup do
-        HexPort.Testing.set_fn_handler(MyApp.Todos.Contract, fn
-          :get_todo, [_tenant, id] -> {:ok, %Todo{id: id}}
-          :list_todos, [_tenant] -> []
+        HexPort.Testing.set_fn_handler(MyApp.Todos, fn
+          :get_todo, [id] -> {:ok, %Todo{id: id}}
+          :list_todos, [] -> []
         end)
         :ok
       end
 
       test "gets a todo" do
-        assert {:ok, %Todo{}} = MyApp.Todos.get_todo("t1", "todo-1")
+        assert {:ok, %Todo{}} = MyApp.Todos.get_todo("42")
       end
   """
 
   @doc false
   defmacro __using__(opts) do
-    contract = Keyword.fetch!(opts, :contract) |> Macro.expand(__CALLER__)
-    otp_app = Keyword.fetch!(opts, :otp_app)
+    contract =
+      case Keyword.get(opts, :contract) do
+        nil -> __CALLER__.module
+        c -> Macro.expand(c, __CALLER__)
+      end
 
-    # Check at macro expansion time whether the contract references
-    # the calling module. If so, skip `require` (can't require self).
+    otp_app = Keyword.fetch!(opts, :otp_app)
     self_ref? = contract == __CALLER__.module
 
     if self_ref? do
       quote do
+        # When the contract is this module, implicitly use HexPort.Contract
+        # if it hasn't been used already (idempotent, so safe either way).
+        use HexPort.Contract
+
         @hex_port_contract unquote(contract)
         @hex_port_otp_app unquote(otp_app)
         @before_compile {HexPort.Facade, :__before_compile__}
