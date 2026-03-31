@@ -155,7 +155,7 @@ Maintain state across calls with atomic updates:
 
 ```elixir
 HexPort.Testing.set_stateful_handler(
-  MyApp.Todos,
+  MyApp.Todos.Contract,
   fn
     :create_todo!, [params], state ->
       todo = struct!(Todo, params)
