@@ -17,7 +17,39 @@ defmodule HexPort.MixProject do
       homepage_url: "https://github.com/mccraigmccraig/hex_port",
       docs: [
         main: "readme",
-        extras: ["README.md"]
+        extras: [
+          "README.md",
+          "docs/getting-started.md",
+          "docs/testing.md",
+          "docs/repo.md"
+        ],
+        groups_for_extras: [
+          Introduction: [
+            "README.md",
+            "docs/getting-started.md"
+          ],
+          Guides: [
+            "docs/testing.md",
+            "docs/repo.md"
+          ]
+        ],
+        groups_for_modules: [
+          Core: [
+            HexPort.Contract,
+            HexPort.Facade,
+            HexPort.Dispatch
+          ],
+          Testing: [
+            HexPort.Testing
+          ],
+          Repo: [
+            HexPort.Repo.Contract,
+            HexPort.Repo.Ecto,
+            HexPort.Repo.Test,
+            HexPort.Repo.InMemory,
+            HexPort.Repo.MultiStepper
+          ]
+        ]
       ]
     ]
   end
@@ -54,7 +86,7 @@ defmodule HexPort.MixProject do
   defp package do
     [
       name: "hex_port",
-      files: ~w(lib .formatter.exs mix.exs README.md LICENSE VERSION),
+      files: ~w(lib docs .formatter.exs mix.exs README.md LICENSE VERSION),
       licenses: ["MIT"],
       links: %{
         "GitHub" => "https://github.com/mccraigmccraig/hex_port"
