@@ -144,10 +144,12 @@ Add `hex_port` to your dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:hex_port, "~> 0.1"}
+    {:hex_port, "~> x.y"}
   ]
 end
 ```
+
+Check [hex.pm/packages/hex_port](https://hex.pm/packages/hex_port) for the latest version.
 
 Ecto is an optional dependency. If you want the built-in Repo contract,
 add Ecto to your own deps.
