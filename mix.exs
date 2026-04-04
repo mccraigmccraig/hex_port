@@ -21,7 +21,9 @@ defmodule HexPort.MixProject do
           "README.md",
           "docs/getting-started.md",
           "docs/testing.md",
-          "docs/repo.md"
+          "docs/repo.md",
+          "docs/migration.md",
+          "CHANGELOG.md"
         ],
         groups_for_extras: [
           Introduction: [
@@ -30,7 +32,11 @@ defmodule HexPort.MixProject do
           ],
           Guides: [
             "docs/testing.md",
-            "docs/repo.md"
+            "docs/repo.md",
+            "docs/migration.md"
+          ],
+          About: [
+            "CHANGELOG.md"
           ]
         ],
         groups_for_modules: [
@@ -85,7 +91,7 @@ defmodule HexPort.MixProject do
   defp package do
     [
       name: "hex_port",
-      files: ~w(lib docs .formatter.exs mix.exs README.md LICENSE VERSION),
+      files: ~w(lib docs .formatter.exs mix.exs README.md CHANGELOG.md LICENSE VERSION),
       licenses: ["MIT"],
       links: %{
         "GitHub" => "https://github.com/mccraigmccraig/hex_port"
