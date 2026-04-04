@@ -2,7 +2,7 @@
 
 [< Testing](testing.md) | [Up: README](../README.md)
 
-HexPort ships a ready-made 15-operation Ecto Repo contract with three
+HexPort ships a ready-made 16-operation Ecto Repo contract with three
 implementations: one for production and two test doubles. The test
 doubles — especially the stateful in-memory adapter — let you test
 Ecto-heavy domain logic without a database, at speeds suitable for
@@ -15,7 +15,7 @@ property-based testing.
 | Category | Operations |
 |----------|-----------|
 | **Writes** | `insert/1`, `update/1`, `delete/1` |
-| **Bulk** | `update_all/3`, `delete_all/2` |
+| **Bulk** | `insert_all/3`, `update_all/3`, `delete_all/2` |
 | **PK reads** | `get/2`, `get!/2` |
 | **Non-PK reads** | `get_by/2`, `get_by!/2`, `one/1`, `one!/1`, `all/1`, `exists?/1`, `aggregate/3` |
 | **Transactions** | `transact/2` |
@@ -117,7 +117,7 @@ function, or raises a clear error.
 | **Writes** | `insert`, `update`, `delete` | Always handled by state |
 | **PK reads** | `get`, `get!` | Check state first. If found, return it. If not, fallback or error. |
 | **Non-PK reads** | `get_by`, `one`, `all`, `exists?`, `aggregate`, ... | Always fallback or error |
-| **Bulk** | `update_all`, `delete_all` | Always fallback or error |
+| **Bulk** | `insert_all`, `update_all`, `delete_all` | Always fallback or error |
 | **Transactions** | `transact` | Delegates to sub-operations |
 
 #### Basic usage — writes and PK reads
@@ -143,6 +143,17 @@ end
 
 `insert` applies the changeset, auto-assigns an integer ID if the
 primary key is nil, and stores the record. `get` finds it by PK.
+
+Both test adapters validate changesets before applying them — if
+`changeset.valid?` is `false`, the operation returns
+`{:error, changeset}` without modifying the store, matching real
+Ecto Repo behaviour.
+
+Schemas with `timestamps()` get their `inserted_at`/`updated_at`
+fields auto-populated on insert, and `updated_at` refreshed on
+update. This uses Ecto's `__schema__(:autogenerate)` metadata, so
+custom field names and timestamp types are handled automatically.
+Explicitly set timestamps are preserved.
 
 #### Seed data
 

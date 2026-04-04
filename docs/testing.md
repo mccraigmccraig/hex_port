@@ -131,6 +131,31 @@ exist yet at setup time:
 HexPort.Testing.allow(MyApp.Todos, self(), fn -> GenServer.whereis(MyWorker) end)
 ```
 
+### Global mode
+
+For integration-style tests involving supervision trees, named
+GenServers, Broadway pipelines, or Oban workers — where individual
+process pids are not easily accessible — you can switch to global
+mode:
+
+```elixir
+setup do
+  HexPort.Testing.set_mode_to_global()
+  HexPort.Testing.set_handler(MyApp.Todos, MyApp.Todos.InMemory)
+  on_exit(fn -> HexPort.Testing.set_mode_to_private() end)
+  :ok
+end
+```
+
+In global mode, all handlers registered by the test process are
+visible to every process in the VM without explicit `allow/3` calls.
+
+**Warning:** Global mode is incompatible with `async: true`. When
+active, all tests share the same handlers, so concurrent tests will
+interfere with each other. Only use global mode in tests with
+`async: false`. Call `set_mode_to_private/0` in `on_exit` to restore
+per-process isolation for subsequent tests.
+
 ## Cleanup
 
 Call `reset/0` to clear all handlers, state, and logs for the current
