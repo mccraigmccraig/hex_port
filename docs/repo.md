@@ -141,8 +141,20 @@ test "insert then get by PK" do
 end
 ```
 
-`insert` applies the changeset, auto-assigns an integer ID if the
-primary key is nil, and stores the record. `get` finds it by PK.
+`insert` applies the changeset, autogenerates the primary key if
+nil, and stores the record. `get` finds it by PK.
+
+Primary key autogeneration uses Ecto's schema metadata to handle
+all common PK configurations:
+
+- **`:id` type** (default `schema`) — auto-incremented integer
+- **`:binary_id`** — generates a UUID string
+- **Parameterized types** (`Ecto.UUID`, `Uniq.UUID`, etc.) —
+  calls the type's `autogenerate` callback
+- **`@primary_key false`** — no PK, works without error
+- **`autogenerate: false`** — raises if no PK value is provided
+
+Explicitly set PK values are always preserved.
 
 Both test adapters validate changesets before applying them — if
 `changeset.valid?` is `false`, the operation returns

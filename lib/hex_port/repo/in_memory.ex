@@ -114,11 +114,21 @@ if Code.ensure_loaded?(Ecto) do
     Use `Repo.InMemory` when your test needs read-after-write consistency.
     Use `Repo.Test` when you only need fire-and-forget writes.
 
-    ## Auto-incrementing IDs
+    ## Primary Key Autogeneration
 
-    When inserting a changeset for a record with a `nil` id, `Repo.InMemory`
-    assigns a positive integer id based on the count of existing records of
-    that schema type. This mirrors Ecto's auto-increment behaviour.
+    When inserting a changeset with a `nil` primary key, the adapter
+    autogenerates the PK based on Ecto schema metadata:
+
+    - **`:id` type** (default `schema`) — auto-incremented integer
+      based on existing records of that schema type
+    - **`:binary_id`** — generates a UUID string via `Ecto.UUID`
+    - **Parameterized types** (`Ecto.UUID`, `Uniq.UUID`, etc.) —
+      calls the type's `autogenerate` callback
+    - **`@primary_key false`** — no PK handling needed
+    - **`autogenerate: false`** — raises `ArgumentError` if no PK
+      value is provided
+
+    Explicitly set PK values are always preserved.
 
     ## Supported Operations
 
