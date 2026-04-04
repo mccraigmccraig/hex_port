@@ -50,6 +50,62 @@ defmodule HexPort.Repo.InMemoryTest do
     end
   end
 
+  defmodule BinaryIdUser do
+    use Ecto.Schema
+
+    @primary_key {:id, :binary_id, autogenerate: true}
+    schema "binary_id_users" do
+      field(:name, :string)
+    end
+
+    def changeset(user \\ %__MODULE__{}, attrs) do
+      user
+      |> Ecto.Changeset.cast(attrs, [:name])
+    end
+  end
+
+  defmodule UuidUser do
+    use Ecto.Schema
+
+    @primary_key {:uuid, Ecto.UUID, autogenerate: true}
+    schema "uuid_users" do
+      field(:name, :string)
+    end
+
+    def changeset(user \\ %__MODULE__{}, attrs) do
+      user
+      |> Ecto.Changeset.cast(attrs, [:name])
+    end
+  end
+
+  defmodule NoAutoIdUser do
+    use Ecto.Schema
+
+    @primary_key {:id, :binary_id, autogenerate: false}
+    schema "no_auto_id_users" do
+      field(:name, :string)
+    end
+
+    def changeset(user \\ %__MODULE__{}, attrs) do
+      user
+      |> Ecto.Changeset.cast(attrs, [:name])
+    end
+  end
+
+  defmodule NoPkEvent do
+    use Ecto.Schema
+
+    @primary_key false
+    schema "events" do
+      field(:name, :string)
+    end
+
+    def changeset(event \\ %__MODULE__{}, attrs) do
+      event
+      |> Ecto.Changeset.cast(attrs, [:name])
+    end
+  end
+
   # -------------------------------------------------------------------
   # Direct dispatch/3 unit tests
   # -------------------------------------------------------------------
@@ -321,6 +377,88 @@ defmodule HexPort.Repo.InMemoryTest do
     test "schemas without timestamps are unaffected by autogeneration" do
       cs = User.changeset(%{name: "Alice"})
       assert {:ok, %User{name: "Alice"}} = Repo.Port.insert(cs)
+    end
+  end
+
+  # -------------------------------------------------------------------
+  # Primary key autogeneration variants
+  # -------------------------------------------------------------------
+
+  describe "PK autogeneration" do
+    setup do
+      HexPort.Testing.set_stateful_handler(
+        Repo.Contract,
+        &Repo.InMemory.dispatch/3,
+        Repo.InMemory.new()
+      )
+
+      :ok
+    end
+
+    test "integer :id PK is auto-incremented" do
+      assert {:ok, %User{id: 1}} = Repo.Port.insert(User.changeset(%{name: "Alice"}))
+      assert {:ok, %User{id: 2}} = Repo.Port.insert(User.changeset(%{name: "Bob"}))
+    end
+
+    test "integer :id PK preserves explicit value" do
+      cs = User.changeset(%User{id: 42}, %{name: "Alice"})
+      assert {:ok, %User{id: 42}} = Repo.Port.insert(cs)
+    end
+
+    test ":binary_id PK is auto-generated as UUID" do
+      cs = BinaryIdUser.changeset(%{name: "Alice"})
+      assert {:ok, user} = Repo.Port.insert(cs)
+      assert is_binary(user.id)
+      # Verify it's a valid UUID format (8-4-4-4-12 hex)
+      assert user.id =~ ~r/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+    end
+
+    test ":binary_id PK preserves explicit value" do
+      explicit_id = Ecto.UUID.generate()
+      cs = BinaryIdUser.changeset(%BinaryIdUser{id: explicit_id}, %{name: "Alice"})
+      assert {:ok, %BinaryIdUser{id: ^explicit_id}} = Repo.Port.insert(cs)
+    end
+
+    test ":binary_id PK is retrievable via get after insert" do
+      {:ok, user} = Repo.Port.insert(BinaryIdUser.changeset(%{name: "Alice"}))
+      assert user == Repo.Port.get(BinaryIdUser, user.id)
+    end
+
+    test "Ecto.UUID PK is auto-generated via autogenerate metadata" do
+      cs = UuidUser.changeset(%{name: "Alice"})
+      assert {:ok, user} = Repo.Port.insert(cs)
+      assert is_binary(user.uuid)
+      assert user.uuid =~ ~r/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+    end
+
+    test "Ecto.UUID PK preserves explicit value" do
+      explicit_uuid = Ecto.UUID.generate()
+      cs = UuidUser.changeset(%UuidUser{uuid: explicit_uuid}, %{name: "Alice"})
+      assert {:ok, %UuidUser{uuid: ^explicit_uuid}} = Repo.Port.insert(cs)
+    end
+
+    test "Ecto.UUID PK is retrievable via get after insert" do
+      {:ok, user} = Repo.Port.insert(UuidUser.changeset(%{name: "Alice"}))
+      assert user == Repo.Port.get(UuidUser, user.uuid)
+    end
+
+    test "no autogenerate configured raises on nil PK" do
+      cs = NoAutoIdUser.changeset(%{name: "Alice"})
+
+      assert_raise ArgumentError, ~r/Cannot autogenerate primary key/, fn ->
+        Repo.Port.insert(cs)
+      end
+    end
+
+    test "no autogenerate works with explicit PK" do
+      explicit_id = Ecto.UUID.generate()
+      cs = NoAutoIdUser.changeset(%NoAutoIdUser{id: explicit_id}, %{name: "Alice"})
+      assert {:ok, %NoAutoIdUser{id: ^explicit_id}} = Repo.Port.insert(cs)
+    end
+
+    test "@primary_key false schema inserts without error" do
+      cs = NoPkEvent.changeset(%{name: "thing_happened"})
+      assert {:ok, %NoPkEvent{name: "thing_happened"}} = Repo.Port.insert(cs)
     end
   end
 
