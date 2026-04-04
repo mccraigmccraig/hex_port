@@ -80,6 +80,13 @@ if Code.ensure_loaded?(Ecto) do
     # Bulk Operations
     # -----------------------------------------------------------------
 
+    @doc "Insert all entries into a schema or source at once."
+    defport insert_all(
+              source :: Ecto.Queryable.t() | binary(),
+              entries :: [map() | keyword()],
+              opts :: keyword()
+            ) :: {non_neg_integer(), nil | list()}
+
     @doc "Update all records matching a queryable."
     defport update_all(
               queryable :: Ecto.Queryable.t(),

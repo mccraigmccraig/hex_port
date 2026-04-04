@@ -140,6 +140,7 @@ if Code.ensure_loaded?(Ecto) do
                 :all,
                 :exists?,
                 :aggregate,
+                :insert_all,
                 :update_all,
                 :delete_all
               ] do

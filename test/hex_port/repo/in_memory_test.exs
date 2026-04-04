@@ -587,6 +587,30 @@ defmodule HexPort.Repo.InMemoryTest do
   # -------------------------------------------------------------------
 
   describe "bulk operations (require fallback)" do
+    test "insert_all dispatches to fallback" do
+      entries = [%{name: "a"}, %{name: "b"}]
+
+      state =
+        Repo.InMemory.new(
+          fallback_fn: fn :insert_all, [User, ^entries, []], _state -> {2, nil} end
+        )
+
+      HexPort.Testing.set_stateful_handler(Repo.Contract, &Repo.InMemory.dispatch/3, state)
+      assert {2, nil} = Repo.Port.insert_all(User, entries, [])
+    end
+
+    test "insert_all raises without fallback" do
+      HexPort.Testing.set_stateful_handler(
+        Repo.Contract,
+        &Repo.InMemory.dispatch/3,
+        Repo.InMemory.new()
+      )
+
+      assert_raise ArgumentError, ~r/InMemory cannot service :insert_all/, fn ->
+        Repo.Port.insert_all(User, [%{name: "a"}], [])
+      end
+    end
+
     test "delete_all dispatches to fallback" do
       state =
         Repo.InMemory.new(fallback_fn: fn :delete_all, [User, []], _state -> {2, nil} end)

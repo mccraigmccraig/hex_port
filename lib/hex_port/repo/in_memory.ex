@@ -305,6 +305,9 @@ if Code.ensure_loaded?(Ecto) do
     # Bulk operations — 2-stage: fallback -> error
     # -----------------------------------------------------------------
 
+    def dispatch(:insert_all, args, store),
+      do: dispatch_via_fallback(:insert_all, args, store)
+
     def dispatch(:update_all, args, store),
       do: dispatch_via_fallback(:update_all, args, store)
 

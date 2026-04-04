@@ -106,10 +106,10 @@ defmodule HexPort.RepoTest do
       assert :one! in ops
     end
 
-    test "__port_operations__ lists all 15 operations" do
+    test "__port_operations__ lists all 16 operations" do
       ops = Repo.Contract.__port_operations__()
 
-      assert length(ops) == 15
+      assert length(ops) == 16
 
       op_names = Enum.map(ops, & &1.name) |> Enum.sort()
 
@@ -124,6 +124,7 @@ defmodule HexPort.RepoTest do
                :get_by,
                :get_by!,
                :insert,
+               :insert_all,
                :one,
                :one!,
                :transact,
@@ -141,6 +142,7 @@ defmodule HexPort.RepoTest do
     def insert(cs), do: {:ok, Ecto.Changeset.apply_changes(cs)}
     def update(cs), do: {:ok, Ecto.Changeset.apply_changes(cs)}
     def delete(record), do: {:ok, record}
+    def insert_all(_s, entries, _o), do: {length(entries), nil}
     def update_all(_q, _u, _o), do: {3, nil}
     def delete_all(_q, _o), do: {5, nil}
     def get(_q, id), do: %User{id: id, name: "found"}
@@ -222,6 +224,10 @@ defmodule HexPort.RepoTest do
 
     test "aggregate delegates to mock Repo" do
       assert 42 = Repo.Port.aggregate(User, :count, :id)
+    end
+
+    test "insert_all delegates to mock Repo" do
+      assert {2, nil} = Repo.Port.insert_all(User, [%{name: "a"}, %{name: "b"}], [])
     end
 
     test "update_all delegates to mock Repo" do
@@ -433,6 +439,12 @@ defmodule HexPort.RepoTest do
     test "aggregate raises without fallback" do
       assert_raise ArgumentError, ~r/Repo.Test cannot service :aggregate/, fn ->
         Repo.Port.aggregate(User, :count, :id)
+      end
+    end
+
+    test "insert_all raises without fallback" do
+      assert_raise ArgumentError, ~r/Repo.Test cannot service :insert_all/, fn ->
+        Repo.Port.insert_all(User, [%{name: "a"}], [])
       end
     end
 
