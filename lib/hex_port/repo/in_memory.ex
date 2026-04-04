@@ -220,7 +220,7 @@ if Code.ensure_loaded?(Ecto) do
     end
 
     def dispatch(:insert, [changeset], store) do
-      record = safe_apply_changes(changeset)
+      record = safe_apply_changes(changeset, :insert)
       schema = record.__struct__
       id = get_primary_key(record)
 
@@ -242,7 +242,7 @@ if Code.ensure_loaded?(Ecto) do
     end
 
     def dispatch(:update, [changeset], store) do
-      record = safe_apply_changes(changeset)
+      record = safe_apply_changes(changeset, :update)
       schema = record.__struct__
       id = get_primary_key(record)
       {{:ok, record}, put_record(store, schema, id, record)}
@@ -417,8 +417,36 @@ if Code.ensure_loaded?(Ecto) do
     # Other helpers
     # -----------------------------------------------------------------
 
-    defp safe_apply_changes(%Ecto.Changeset{} = changeset) do
-      Ecto.Changeset.apply_changes(changeset)
+    defp safe_apply_changes(%Ecto.Changeset{} = changeset, action) do
+      changeset
+      |> Ecto.Changeset.apply_changes()
+      |> apply_autogenerate(action)
+    end
+
+    defp apply_autogenerate(record, action) do
+      schema = record.__struct__
+
+      if function_exported?(schema, :__schema__, 1) do
+        autogen_fields =
+          case action do
+            :insert -> schema.__schema__(:autogenerate)
+            :update -> schema.__schema__(:autoupdate)
+          end
+
+        Enum.reduce(autogen_fields, record, fn {fields, {mod, fun, args}}, acc ->
+          generated_value = apply(mod, fun, args)
+
+          Enum.reduce(fields, acc, fn field, rec ->
+            if Map.get(rec, field) == nil do
+              Map.put(rec, field, generated_value)
+            else
+              rec
+            end
+          end)
+        end)
+      else
+        record
+      end
     end
 
     defp extract_schema(queryable) when is_atom(queryable), do: queryable

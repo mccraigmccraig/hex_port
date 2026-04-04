@@ -110,7 +110,7 @@ if Code.ensure_loaded?(Ecto) do
     end
 
     defp dispatch(:insert, [changeset], _fallback_fn) do
-      {:ok, safe_apply_changes(changeset)}
+      {:ok, safe_apply_changes(changeset, :insert)}
     end
 
     defp dispatch(:update, [%Ecto.Changeset{valid?: false} = changeset], _fallback_fn) do
@@ -118,7 +118,7 @@ if Code.ensure_loaded?(Ecto) do
     end
 
     defp dispatch(:update, [changeset], _fallback_fn) do
-      {:ok, safe_apply_changes(changeset)}
+      {:ok, safe_apply_changes(changeset, :update)}
     end
 
     defp dispatch(:delete, [record], _fallback_fn) do
@@ -199,8 +199,36 @@ if Code.ensure_loaded?(Ecto) do
     # Helpers
     # -----------------------------------------------------------------
 
-    defp safe_apply_changes(%Ecto.Changeset{} = changeset) do
-      Ecto.Changeset.apply_changes(changeset)
+    defp safe_apply_changes(%Ecto.Changeset{} = changeset, action) do
+      changeset
+      |> Ecto.Changeset.apply_changes()
+      |> apply_autogenerate(action)
+    end
+
+    defp apply_autogenerate(record, action) do
+      schema = record.__struct__
+
+      if function_exported?(schema, :__schema__, 1) do
+        autogen_fields =
+          case action do
+            :insert -> schema.__schema__(:autogenerate)
+            :update -> schema.__schema__(:autoupdate)
+          end
+
+        Enum.reduce(autogen_fields, record, fn {fields, {mod, fun, args}}, acc ->
+          generated_value = apply(mod, fun, args)
+
+          Enum.reduce(fields, acc, fn field, rec ->
+            if Map.get(rec, field) == nil do
+              Map.put(rec, field, generated_value)
+            else
+              rec
+            end
+          end)
+        end)
+      else
+        record
+      end
     end
   end
 end

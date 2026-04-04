@@ -36,6 +36,20 @@ defmodule HexPort.Repo.InMemoryTest do
     end
   end
 
+  defmodule TimestampUser do
+    use Ecto.Schema
+
+    schema "timestamp_users" do
+      field(:name, :string)
+      timestamps()
+    end
+
+    def changeset(user \\ %__MODULE__{}, attrs) do
+      user
+      |> Ecto.Changeset.cast(attrs, [:name])
+    end
+  end
+
   # -------------------------------------------------------------------
   # Direct dispatch/3 unit tests
   # -------------------------------------------------------------------
@@ -262,6 +276,51 @@ defmodule HexPort.Repo.InMemoryTest do
       assert_raise RuntimeError, fn ->
         Repo.Port.insert!(cs)
       end
+    end
+
+    test "insert populates inserted_at and updated_at for schemas with timestamps" do
+      cs = TimestampUser.changeset(%{name: "Alice"})
+      assert {:ok, user} = Repo.Port.insert(cs)
+
+      assert %NaiveDateTime{} = user.inserted_at
+      assert %NaiveDateTime{} = user.updated_at
+    end
+
+    test "update populates updated_at for schemas with timestamps" do
+      cs = TimestampUser.changeset(%{name: "Alice"})
+      {:ok, user} = Repo.Port.insert(cs)
+
+      update_cs = TimestampUser.changeset(user, %{name: "Alicia"})
+      {:ok, updated} = Repo.Port.update(update_cs)
+
+      assert %NaiveDateTime{} = updated.updated_at
+      assert updated.inserted_at == user.inserted_at
+    end
+
+    test "insert does not overwrite explicitly set timestamps" do
+      explicit_time = ~N[2020-01-01 00:00:00]
+
+      cs =
+        %TimestampUser{inserted_at: explicit_time, updated_at: explicit_time}
+        |> Ecto.Changeset.cast(%{name: "Alice"}, [:name])
+
+      assert {:ok, user} = Repo.Port.insert(cs)
+      assert user.inserted_at == explicit_time
+      assert user.updated_at == explicit_time
+    end
+
+    test "timestamps are persisted in store and available via get" do
+      cs = TimestampUser.changeset(%{name: "Alice"})
+      {:ok, user} = Repo.Port.insert(cs)
+
+      found = Repo.Port.get(TimestampUser, user.id)
+      assert found.inserted_at == user.inserted_at
+      assert found.updated_at == user.updated_at
+    end
+
+    test "schemas without timestamps are unaffected by autogeneration" do
+      cs = User.changeset(%{name: "Alice"})
+      assert {:ok, %User{name: "Alice"}} = Repo.Port.insert(cs)
     end
   end
 
