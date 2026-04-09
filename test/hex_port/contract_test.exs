@@ -218,27 +218,27 @@ defmodule HexPort.ContractTest do
   # ── Key helpers ───────────────────────────────────────────
 
   describe "key helpers" do
-    test "key/2 generates a canonical key tuple" do
-      key = HexPort.Test.Greeter.Port.key(:greet, "world")
+    test "__key__/2 generates a canonical key tuple" do
+      key = HexPort.Test.Greeter.Port.__key__(:greet, "world")
 
       assert key == {HexPort.Test.Greeter, :greet, ["world"]}
     end
 
-    test "key/2 with zero args" do
-      key = HexPort.Test.ZeroArg.Port.key(:health_check)
+    test "__key__/2 with zero args" do
+      key = HexPort.Test.ZeroArg.Port.__key__(:health_check)
 
       assert key == {HexPort.Test.ZeroArg, :health_check, []}
     end
 
-    test "key/2 with multiple args" do
-      key = HexPort.Test.MultiParam.Port.key(:find, "t1", :user, "u1")
+    test "__key__/2 with multiple args" do
+      key = HexPort.Test.MultiParam.Port.__key__(:find, "t1", :user, "u1")
 
       assert key == {HexPort.Test.MultiParam, :find, ["t1", :user, "u1"]}
     end
 
-    test "key/2 normalizes map argument order" do
-      key1 = HexPort.Test.Greeter.Port.key(:greet, %{b: 2, a: 1})
-      key2 = HexPort.Test.Greeter.Port.key(:greet, %{a: 1, b: 2})
+    test "__key__/2 normalizes map argument order" do
+      key1 = HexPort.Test.Greeter.Port.__key__(:greet, %{b: 2, a: 1})
+      key2 = HexPort.Test.Greeter.Port.__key__(:greet, %{a: 1, b: 2})
 
       assert key1 == key2
     end
@@ -248,11 +248,11 @@ defmodule HexPort.ContractTest do
       {:module, _} = Code.ensure_loaded(HexPort.Test.Counter.Port)
 
       # Greeter has two operations, each gets a key helper
-      assert function_exported?(HexPort.Test.Greeter.Port, :key, 2)
+      assert function_exported?(HexPort.Test.Greeter.Port, :__key__, 2)
 
-      # Counter: increment(amount) → key/2, get_count() → key/1
-      assert function_exported?(HexPort.Test.Counter.Port, :key, 2)
-      assert function_exported?(HexPort.Test.Counter.Port, :key, 1)
+      # Counter: increment(amount) → __key__/2, get_count() → __key__/1
+      assert function_exported?(HexPort.Test.Counter.Port, :__key__, 2)
+      assert function_exported?(HexPort.Test.Counter.Port, :__key__, 1)
     end
   end
 

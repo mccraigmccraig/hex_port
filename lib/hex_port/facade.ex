@@ -295,7 +295,7 @@ defmodule HexPort.Facade do
 
     quote do
       @doc unquote(doc_string)
-      def key(unquote(name), unquote_splicing(param_vars)) do
+      def __key__(unquote(name), unquote_splicing(param_vars)) do
         HexPort.Dispatch.key(unquote(contract), unquote(name), unquote(param_vars))
       end
     end

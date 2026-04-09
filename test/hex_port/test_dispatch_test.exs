@@ -61,9 +61,9 @@ defmodule HexPort.TestDispatchTest do
 
       mod = HexPort.Test.ConfigOnlyKeys
 
-      assert function_exported?(mod, :key, 2)
+      assert function_exported?(mod, :__key__, 2)
 
-      key = apply(mod, :key, [:greet, "world"])
+      key = apply(mod, :__key__, [:greet, "world"])
       assert key == {Greeter, :greet, ["world"]}
     end
 

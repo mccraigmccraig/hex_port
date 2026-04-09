@@ -238,13 +238,17 @@ use HexPort.Facade, otp_app: :my_app, test_dispatch?: fn -> Mix.env() == :test e
 
 ## Key helpers
 
-Facade modules also generate `key/2` helper functions for building
+Facade modules also generate `__key__` helper functions for building
 test stub keys:
 
 ```elixir
-MyApp.Todos.key(:get_todo, "42")
+MyApp.Todos.__key__(:get_todo, "42")
 # => {MyApp.Todos, :get_todo, ["42"]}
 ```
+
+The `__key__` name follows the Elixir convention for generated
+introspection functions (like `__struct__`, `__schema__`), avoiding
+clashes with user-defined `defport key(...)` operations.
 
 These are used with Skuld's `Port.with_test_handler/2` for effectful
 testing. For plain HexPort testing, use the handler modes described
