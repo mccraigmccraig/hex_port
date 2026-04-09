@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0]
+
+### Added
+
+- `:test_dispatch?` option for `use HexPort.Facade` — controls whether
+  the generated facade includes the `NimbleOwnership`-based test handler
+  resolution step. Accepts `true`, `false`, or a zero-arity function
+  returning a boolean, evaluated at compile time. Defaults to
+  `fn -> Mix.env() != :prod end`, so production builds get a config-only
+  dispatch path with zero `NimbleOwnership` overhead (no
+  `GenServer.whereis` ETS lookup).
+- `HexPort.Dispatch.call_config/4` — config-only dispatch function that
+  skips test handler resolution entirely. Used by facades compiled with
+  `test_dispatch?: false`.
+
 ## [0.15.0]
 
 ### Added
@@ -221,7 +236,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `HexPort.Testing` with NimbleOwnership, `Repo.Test` stateless
   adapter, CI setup, Credo, Dialyzer.
 
-[Unreleased]: https://github.com/mccraigmccraig/hex_port/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/mccraigmccraig/hex_port/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/mccraigmccraig/hex_port/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/mccraigmccraig/hex_port/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/mccraigmccraig/hex_port/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/mccraigmccraig/hex_port/compare/v0.12.0...v0.13.0
