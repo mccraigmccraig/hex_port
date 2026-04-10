@@ -8,13 +8,10 @@ defmodule HexPort.Log do
   (especially `Repo.Test`) do real computation (changeset validation,
   PK autogeneration, timestamps).
 
-  ## Usage
+  ## Basic usage
 
       HexPort.Log.match(MyContract, :insert, fn
         {_, _, [%Changeset{data: %Thing{}}], {:ok, %Thing{}}} -> true
-      end)
-      |> HexPort.Log.match(MyContract, :update, fn
-        {_, _, [%Changeset{}], {:ok, _}} -> true
       end)
       |> HexPort.Log.reject(MyContract, :delete)
       |> HexPort.Log.verify!()
@@ -23,11 +20,64 @@ defmodule HexPort.Log do
   `FunctionClauseError` is caught and interpreted as "didn't match".
   No need for a `_ -> false` catch-all branch.
 
+  ## Matching on results
+
+  Unlike Mox/Mimic where asserting on return values would be
+  circular (you wrote the stub), HexPort handlers do real
+  computation. Matching on results is a meaningful assertion:
+
+      HexPort.Log.match(RepoContract, :insert, fn
+        {_, _, [%Changeset{data: %Thing{}}],
+         {:ok, %Thing{id: id}}} when is_binary(id) -> true
+      end)
+      |> HexPort.Log.verify!()
+
+  ## Counting occurrences
+
+      HexPort.Log.match(RepoContract, :insert, fn
+        {_, _, [%Changeset{data: %Discrepancy{}}], {:ok, _}} -> true
+      end, times: 3)
+      |> HexPort.Log.verify!()
+
+  ## Multi-contract
+
+      HexPort.Log.match(QueriesContract, :get_record, fn {_, _, _, %Record{}} -> true end)
+      |> HexPort.Log.match(RepoContract, :insert, fn {_, _, _, {:ok, _}} -> true end)
+      |> HexPort.Log.verify!()
+
+  ## Matching modes
+
+  ### Loose (default)
+
+  Matchers must be satisfied in order within each operation, but
+  other log entries are allowed between them. Different operations
+  are matched independently (no cross-operation ordering):
+
+      HexPort.Log.match(Contract, :insert, matcher)
+      |> HexPort.Log.match(Contract, :update, matcher)
+      |> HexPort.Log.verify!()
+      # Passes if log contains an insert and an update for this
+      # contract, regardless of other entries or relative order
+      # of insert vs update.
+
+  ### Strict
+
+  Every log entry for each referenced contract must be matched.
+  No unmatched entries allowed:
+
+      HexPort.Log.match(Contract, :insert, matcher)
+      |> HexPort.Log.match(Contract, :update, matcher)
+      |> HexPort.Log.verify!(strict: true)
+
   ## Relationship to existing APIs
 
   Built on `HexPort.Testing.get_log/1`. Completely decoupled from
   handler choice — works with `Repo.Test`, `Repo.InMemory`,
   `set_fn_handler`, `set_stateful_handler`, or `HexPort.Handler`.
+
+  Can be used alongside `HexPort.Handler` — Handler for fail-fast
+  validation and producing return values, Log for after-the-fact
+  result inspection.
   """
 
   defstruct expectations: []

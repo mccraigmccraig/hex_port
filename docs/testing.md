@@ -178,9 +178,81 @@ test "logs dispatch calls" do
 end
 ```
 
-The log captures `{operation, args, result}` tuples in dispatch order.
-Enable logging before making calls; `get_log/1` returns the full
-sequence.
+The log captures `{contract, operation, args, result}` tuples in
+dispatch order. Enable logging before making calls; `get_log/1`
+returns the full sequence.
+
+## Log matcher (structured log assertions)
+
+`HexPort.Log` provides structured expectations against the dispatch
+log. Unlike `get_log/1` + manual assertions, it supports ordered
+matching, counting, reject expectations, and strict mode.
+
+This is particularly valuable with handlers like `Repo.Test` that
+do real computation — matching on results in the log is a meaningful
+assertion, not a tautology.
+
+### Basic usage
+
+```elixir
+HexPort.Testing.enable_log(MyApp.Todos)
+# ... set handler and dispatch ...
+
+HexPort.Log.match(MyApp.Todos, :create_todo, fn
+  {_, _, [params], {:ok, %Todo{id: id}}} when is_binary(id) -> true
+end)
+|> HexPort.Log.reject(MyApp.Todos, :delete_todo)
+|> HexPort.Log.verify!()
+```
+
+Matcher functions only need positive clauses — `FunctionClauseError`
+is caught and treated as "didn't match". No `_ -> false` needed.
+
+### Counting occurrences
+
+```elixir
+HexPort.Log.match(RepoContract, :insert, fn
+  {_, _, [%Changeset{data: %Discrepancy{}}], {:ok, _}} -> true
+end, times: 3)
+|> HexPort.Log.verify!()
+```
+
+### Strict mode
+
+By default, extra log entries between matchers are ignored (loose
+mode). Strict mode requires every log entry to be matched:
+
+```elixir
+HexPort.Log.match(Contract, :insert, fn _ -> true end)
+|> HexPort.Log.match(Contract, :update, fn _ -> true end)
+|> HexPort.Log.verify!(strict: true)
+```
+
+### Using with HexPort.Handler
+
+Handler and Log serve complementary roles — Handler for fail-fast
+validation and producing return values, Log for after-the-fact
+result inspection:
+
+```elixir
+# Set up handlers
+HexPort.Handler.expect(MyContract, :create, fn [p] -> {:ok, struct!(Thing, p)} end)
+|> HexPort.Handler.install!()
+
+HexPort.Testing.enable_log(MyContract)
+
+# Run code under test
+MyModule.do_work(params)
+
+# Verify handler expectations consumed
+HexPort.Handler.verify!()
+
+# Verify log entries match expected patterns
+HexPort.Log.match(MyContract, :create, fn
+  {_, _, _, {:ok, %Thing{}}} -> true
+end)
+|> HexPort.Log.verify!()
+```
 
 ## Process sharing and async safety
 
