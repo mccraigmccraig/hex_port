@@ -25,6 +25,9 @@ defmodule HexPort.Handler do
   those remain for cases that don't fit the expect/stub pattern.
   """
 
+  @ownership_server HexPort.Dispatch.Ownership
+  @contracts_key HexPort.Handler.Contracts
+
   defstruct contracts: %{}
 
   @type t :: %__MODULE__{
@@ -117,6 +120,64 @@ defmodule HexPort.Handler do
     :ok
   end
 
+  @doc """
+  Verify that all expectations have been consumed.
+
+  Reads the current handler state for each contract installed via
+  `install!/1` and checks that all expect queues are empty. Stubs
+  are not checked — they are allowed to be called zero or more times.
+
+  Raises with a descriptive message if any expectations remain
+  unconsumed.
+
+  Returns `:ok` if all expectations are satisfied.
+  """
+  @spec verify!() :: :ok
+  def verify! do
+    owned = NimbleOwnership.get_owned(@ownership_server, self())
+
+    contracts =
+      case owned do
+        %{@contracts_key => contracts} ->
+          contracts
+
+        _ ->
+          raise "HexPort.Handler.verify!/0 called but no handlers were installed via install!/1"
+      end
+
+    unconsumed =
+      Enum.flat_map(contracts, fn contract ->
+        state_key = Module.concat(HexPort.State, contract)
+
+        case owned do
+          %{^state_key => %{expects: expects}} ->
+            expects
+            |> Enum.reject(fn {_op, queue} -> queue == [] end)
+            |> Enum.map(fn {op, queue} -> {contract, op, length(queue)} end)
+
+          _ ->
+            []
+        end
+      end)
+
+    if unconsumed != [] do
+      details =
+        unconsumed
+        |> Enum.map(fn {contract, op, count} ->
+          "  #{inspect(contract)}.#{op}: #{count} expected call(s) not made"
+        end)
+        |> Enum.join("\n")
+
+      raise """
+      HexPort.Handler expectations not fulfilled:
+
+      #{details}
+      """
+    end
+
+    :ok
+  end
+
   # -- Internal: accumulator manipulation --
 
   defp empty_contract_data do
@@ -130,9 +191,6 @@ defmodule HexPort.Handler do
   end
 
   # -- Internal: handler construction --
-
-  @ownership_server HexPort.Dispatch.Ownership
-  @contracts_key HexPort.Handler.Contracts
 
   defp build_handler_fn(contract, stubs) do
     fn operation, args, state ->
