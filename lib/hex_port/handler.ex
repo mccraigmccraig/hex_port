@@ -81,6 +81,7 @@ defmodule HexPort.Handler do
   | `stub(Mock, :fn, fun)` | `stub(Contract, :fn, fun)` — per-operation |
   | (no equivalent) | `stub(Contract, fn op, args -> ... end)` — contract-wide fallback |
   | `verify!()` | `verify!()` |
+  | `verify_on_exit!()` | `verify_on_exit!()` |
   | `Mox.defmock(Mock, for: Behaviour)` | Not needed |
   | `Application.put_env(...)` | `install!()` |
 
@@ -255,8 +256,57 @@ defmodule HexPort.Handler do
   Returns `:ok` if all expectations are satisfied.
   """
   @spec verify!() :: :ok
-  def verify! do
-    owned = NimbleOwnership.get_owned(@ownership_server, self())
+  def verify!, do: do_verify!(self())
+
+  @doc """
+  Verify expectations for a specific process.
+
+  Same as `verify!/0` but checks the expectations owned by `pid`
+  instead of the calling process. Used internally by `verify_on_exit!/0`.
+  """
+  @spec verify!(pid()) :: :ok
+  def verify!(pid) when is_pid(pid), do: do_verify!(pid)
+
+  @doc """
+  Register an `on_exit` callback that verifies expectations after
+  each test.
+
+  Call this in a `setup` block so that tests which forget to call
+  `verify!/0` explicitly still fail on unconsumed expectations:
+
+      setup :verify_on_exit!
+
+  Or equivalently:
+
+      setup do
+        HexPort.Handler.verify_on_exit!()
+      end
+
+  The verification runs in the on_exit callback (a separate process),
+  using the test pid captured at setup time.
+  """
+  @spec verify_on_exit!(map()) :: :ok
+  def verify_on_exit!(_context \\ %{}) do
+    pid = self()
+
+    # Prevent NimbleOwnership from cleaning up when the test process
+    # exits — the data must survive until the on_exit callback runs.
+    NimbleOwnership.set_owner_to_manual_cleanup(@ownership_server, pid)
+
+    ExUnit.Callbacks.on_exit(HexPort.Handler, fn ->
+      try do
+        verify!(pid)
+      after
+        # Clean up the ownership entries now that verification is done.
+        NimbleOwnership.cleanup_owner(@ownership_server, pid)
+      end
+    end)
+
+    :ok
+  end
+
+  defp do_verify!(pid) do
+    owned = NimbleOwnership.get_owned(@ownership_server, pid)
 
     contracts =
       case owned do

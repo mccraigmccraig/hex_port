@@ -159,11 +159,28 @@ HexPort.Handler.expect(MyApp.Todos, :create_todo, fn [p] -> {:ok, struct!(Todo, 
 ### Verification
 
 `verify!/0` checks that all expectations have been consumed. Stubs
-are not checked — zero calls is valid. Call it at the end of your
-test or in `on_exit`:
+are not checked — zero calls is valid.
+
+The easiest approach is `verify_on_exit!/0` in a setup block — it
+automatically verifies after each test, catching forgotten `verify!`
+calls:
 
 ```elixir
-on_exit(fn -> HexPort.Handler.verify!() end)
+setup :verify_on_exit!
+
+# or equivalently:
+setup do
+  HexPort.Handler.verify_on_exit!()
+end
+```
+
+You can also call `verify!/0` explicitly at the end of a test:
+
+```elixir
+test "creates a todo" do
+  # ... setup and dispatch ...
+  HexPort.Handler.verify!()
+end
 ```
 
 ### When to use Handler vs raw handlers

@@ -440,6 +440,55 @@ defmodule HexPort.HandlerTest do
     end
   end
 
+  # ── verify!/1 (pid) tests ──────────────────────────────────
+
+  describe "verify!/1" do
+    test "verifies expectations for a specific pid" do
+      Handler.expect(Greeter, :greet, fn [_] -> "hi" end)
+      |> Handler.install!()
+
+      Greeter.Port.greet("Alice")
+
+      assert :ok = Handler.verify!(self())
+    end
+
+    test "raises when expectations remain for the given pid" do
+      Handler.expect(Greeter, :greet, fn [_] -> "hi" end, times: 2)
+      |> Handler.install!()
+
+      Greeter.Port.greet("Alice")
+
+      assert_raise RuntimeError, ~r/expectations not fulfilled/, fn ->
+        Handler.verify!(self())
+      end
+    end
+  end
+
+  # ── verify_on_exit! tests ─────────────────────────────────
+
+  describe "verify_on_exit!/0" do
+    test "passes when all expectations consumed" do
+      Handler.verify_on_exit!()
+
+      Handler.expect(Greeter, :greet, fn [_] -> "hi" end)
+      |> Handler.install!()
+
+      Greeter.Port.greet("Alice")
+
+      # on_exit will call verify! — test passes because expectations consumed
+    end
+
+    test "can be used as setup callback" do
+      # Simulate what `setup :verify_on_exit!` does
+      Handler.verify_on_exit!(%{})
+
+      Handler.stub(Greeter, :greet, fn [name] -> "stub: #{name}" end)
+      |> Handler.install!()
+
+      # Stubs don't need to be called — on_exit verify should pass
+    end
+  end
+
   # ── Integration tests ─────────────────────────────────────
 
   describe "full pipeline" do
