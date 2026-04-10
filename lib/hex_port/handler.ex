@@ -236,11 +236,9 @@ defmodule HexPort.Handler do
 
     if unconsumed != [] do
       details =
-        unconsumed
-        |> Enum.map(fn {contract, op, count} ->
+        Enum.map_join(unconsumed, "\n", fn {contract, op, count} ->
           "  #{inspect(contract)}.#{op}: #{count} expected call(s) not made"
         end)
-        |> Enum.join("\n")
 
       raise """
       HexPort.Handler expectations not fulfilled:
