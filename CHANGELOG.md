@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0]
+
+### Added
+
+- `HexPort.Handler.verify_on_exit!/0` — registers an `on_exit`
+  callback that automatically verifies all expectations after each
+  test. Usable as `setup :verify_on_exit!`. Uses
+  `NimbleOwnership.set_owner_to_manual_cleanup/2` to preserve
+  ownership data until the on_exit callback runs.
+- `HexPort.Handler.verify!/1` — verifies expectations for a
+  specific process pid, used internally by `verify_on_exit!/0`.
+
+### Fixed
+
+- Added `:ex_unit` to `plt_add_apps` in `mix.exs` so Dialyzer can
+  resolve the `ExUnit.Callbacks.on_exit/2` call in
+  `HexPort.Handler.verify_on_exit!/0`.
+
 ## [0.19.0]
 
 ### Added
@@ -292,7 +310,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `HexPort.Testing` with NimbleOwnership, `Repo.Test` stateless
   adapter, CI setup, Credo, Dialyzer.
 
-[Unreleased]: https://github.com/mccraigmccraig/hex_port/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/mccraigmccraig/hex_port/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/mccraigmccraig/hex_port/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/mccraigmccraig/hex_port/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/mccraigmccraig/hex_port/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/mccraigmccraig/hex_port/compare/v0.16.1...v0.17.0

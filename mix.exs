@@ -15,7 +15,7 @@ defmodule HexPort.MixProject do
       package: package(),
       source_url: "https://github.com/mccraigmccraig/hex_port",
       homepage_url: "https://github.com/mccraigmccraig/hex_port",
-      dialyzer: [plt_add_apps: [:mix]],
+      dialyzer: [plt_add_apps: [:mix, :ex_unit]],
       docs: [
         main: "readme",
         extras: [
