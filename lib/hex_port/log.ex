@@ -159,26 +159,31 @@ defmodule HexPort.Log do
         {:reject, _, _} -> false
       end)
 
-    # Group matches by contract, preserving declaration order within each contract
-    matches_by_contract =
-      Enum.group_by(matches, fn {:match, contract, _, _, _} -> contract end)
+    # Group matches by {contract, operation}, preserving declaration order
+    # within each group. Loose-partial means per-operation ordering with
+    # independent cursors — no cross-operation ordering enforced.
+    matches_by_contract_op =
+      Enum.group_by(matches, fn {:match, contract, op, _, _} -> {contract, op} end)
 
-    # Verify match expectations (loose-partial: per-contract ordering)
-    matched_indices_by_contract =
-      Map.new(contracts, fn contract ->
-        contract_matches = Map.get(matches_by_contract, contract, [])
+    # Verify match expectations per {contract, operation} group
+    all_matched_indices =
+      Enum.flat_map(matches_by_contract_op, fn {{contract, _op}, group_matches} ->
         contract_log = Map.get(logs, contract, [])
-
-        matched_indices = verify_matches(contract_matches, contract_log, contract)
-        {contract, matched_indices}
+        verify_matches(group_matches, contract_log, contract)
       end)
+
+    # Collect matched indices by contract for strict mode
+    matched_indices_by_contract =
+      all_matched_indices
+      |> Enum.group_by(fn {contract, _index} -> contract end)
+      |> Map.new(fn {contract, pairs} -> {contract, Enum.map(pairs, &elem(&1, 1))} end)
 
     # Verify reject expectations
     verify_rejects(rejects, logs)
 
     # Strict mode: check for unmatched log entries
     if strict? do
-      verify_strict(matched_indices_by_contract, logs)
+      verify_strict(contracts, matched_indices_by_contract, logs)
     end
 
     :ok
@@ -189,20 +194,20 @@ defmodule HexPort.Log do
   defp verify_matches(matches, log, contract) do
     indexed_log = Enum.with_index(log)
 
-    {_remaining_log, matched_indices} =
+    {_remaining_log, matched_pairs} =
       Enum.reduce(matches, {indexed_log, []}, fn
-        {:match, _contract, operation, matcher_fn, times}, {remaining, acc_indices} ->
-          find_n_matches(remaining, contract, operation, matcher_fn, times, acc_indices)
+        {:match, _contract, operation, matcher_fn, times}, {remaining, acc} ->
+          find_n_matches(remaining, contract, operation, matcher_fn, times, acc)
       end)
 
-    matched_indices
+    matched_pairs
   end
 
-  defp find_n_matches(remaining_log, contract, operation, matcher_fn, times, acc_indices) do
-    Enum.reduce(1..times, {remaining_log, acc_indices}, fn n, {remaining, indices} ->
+  defp find_n_matches(remaining_log, contract, operation, matcher_fn, times, acc_pairs) do
+    Enum.reduce(1..times, {remaining_log, acc_pairs}, fn n, {remaining, pairs} ->
       case find_next_match(remaining, contract, operation, matcher_fn) do
         {:ok, index, rest} ->
-          {rest, [index | indices]}
+          {rest, [{contract, index} | pairs]}
 
         :not_found ->
           raise """
@@ -210,7 +215,7 @@ defmodule HexPort.Log do
 
             #{inspect(contract)}.#{operation} — match #{n} of #{times} not found.
 
-            Searched #{length(remaining)} remaining log entries (of #{length(remaining) + length(indices)} total for this contract).
+            Searched #{length(remaining)} remaining log entries.
 
           Tip: check that the handler produced the expected result and that
           the matcher function's pattern matches the log entry shape
@@ -266,8 +271,9 @@ defmodule HexPort.Log do
 
   # -- Internal: strict mode --
 
-  defp verify_strict(matched_indices_by_contract, logs) do
-    Enum.each(logs, fn {contract, log} ->
+  defp verify_strict(contracts, matched_indices_by_contract, logs) do
+    Enum.each(contracts, fn contract ->
+      log = Map.get(logs, contract, [])
       matched_set = MapSet.new(Map.get(matched_indices_by_contract, contract, []))
 
       unmatched =
