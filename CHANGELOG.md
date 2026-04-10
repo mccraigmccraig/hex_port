@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.0]
+
+### Added
+
+- `HexPort.Handler.stub/3` (with accumulator: `stub/4`) for module
+  fallback — delegates unhandled operations to a module implementing
+  the contract's `@behaviour`. Validated at `install!` time.
+- `HexPort.Handler.stub/3` (with accumulator: `stub/4`) for stateful
+  fallback — accepts a 3-arity `fn operation, args, state ->
+  {result, new_state} end` with initial state, same signature as
+  `set_stateful_handler`. Integrates stateful fakes (e.g.
+  `Repo.InMemory`) into the Handler dispatch chain. Expects that
+  short-circuit (e.g. error simulation) leave the fallback state
+  unchanged.
+- Fallback types are now a tagged union (`{:fn, fun}`,
+  `{:stateful, fun, init_state}`, `{:module, module}`) — mutually
+  exclusive, setting one replaces the other.
+
 ## [0.20.0]
 
 ### Added
@@ -310,7 +328,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `HexPort.Testing` with NimbleOwnership, `Repo.Test` stateless
   adapter, CI setup, Credo, Dialyzer.
 
-[Unreleased]: https://github.com/mccraigmccraig/hex_port/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/mccraigmccraig/hex_port/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/mccraigmccraig/hex_port/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/mccraigmccraig/hex_port/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/mccraigmccraig/hex_port/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/mccraigmccraig/hex_port/compare/v0.17.0...v0.18.0
