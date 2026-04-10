@@ -131,6 +131,23 @@ HexPort.Handler.expect(MyApp.Todos, :get_todo, fn [id] -> {:ok, %Todo{id: id}} e
 |> HexPort.Handler.install!()
 ```
 
+### Contract-wide fallback stub
+
+A 2-arity stub acts as a catch-all for operations without a specific
+expect or stub. This is the same signature as `set_fn_handler`, so
+existing handler functions can be reused:
+
+```elixir
+HexPort.Handler.expect(MyApp.Todos, :create_todo, fn [p] -> {:ok, struct!(Todo, p)} end)
+|> HexPort.Handler.stub(MyApp.Todos, fn
+  :list_todos, [_] -> []
+  :get_todo, [id] -> {:ok, %Todo{id: id}}
+end)
+|> HexPort.Handler.install!()
+```
+
+Dispatch priority: expects > per-operation stubs > fallback stub > raise.
+
 ### Multi-contract
 
 ```elixir

@@ -51,6 +51,22 @@ defmodule HexPort.Handler do
       |> HexPort.Handler.stub(MyContract, :get, fn [_] -> :default end)
       |> HexPort.Handler.install!()
 
+  ## Contract-wide fallback stub
+
+  A 2-arity stub `fn operation, args -> result end` acts as a
+  catch-all for any operation without a specific expect or stub.
+  This is the same signature as `set_fn_handler`, so existing
+  handler functions can be reused directly:
+
+      HexPort.Handler.expect(MyContract, :get, fn [id] -> %Thing{id: id} end)
+      |> HexPort.Handler.stub(MyContract, fn
+        :list, [_] -> []
+        :count, [] -> 0
+      end)
+      |> HexPort.Handler.install!()
+
+  Dispatch priority: expects > per-operation stubs > fallback stub > raise.
+
   ## Multi-contract
 
       HexPort.Handler.expect(TodosContract, :create, fn [p] -> {:ok, struct!(Todo, p)} end)
@@ -62,7 +78,8 @@ defmodule HexPort.Handler do
   | Mox | HexPort.Handler |
   |-----|-----------------|
   | `expect(Mock, :fn, n, fun)` | `expect(Contract, :fn, fun, times: n)` |
-  | `stub(Mock, :fn, fun)` | `stub(Contract, :fn, fun)` |
+  | `stub(Mock, :fn, fun)` | `stub(Contract, :fn, fun)` — per-operation |
+  | (no equivalent) | `stub(Contract, fn op, args -> ... end)` — contract-wide fallback |
   | `verify!()` | `verify!()` |
   | `Mox.defmock(Mock, for: Behaviour)` | Not needed |
   | `Application.put_env(...)` | `install!()` |
