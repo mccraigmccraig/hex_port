@@ -289,7 +289,14 @@ defmodule HexPort.Handler do
   The accumulator argument is optional — when omitted, a fresh
   accumulator is created via `new/0`.
   """
+  @spec stub(module(), function()) :: t()
+  @spec stub(module(), module()) :: t()
+  @spec stub(t(), module(), function()) :: t()
+  @spec stub(t(), module(), module()) :: t()
+  @spec stub(module(), atom(), function()) :: t()
+  @spec stub(module(), function(), term()) :: t()
   @spec stub(t(), module(), atom(), function()) :: t()
+  @spec stub(t(), module(), function(), term()) :: t()
   def stub(contract, fun)
       when is_atom(contract) and is_function(fun, 2) do
     stub(new(), contract, fun)
