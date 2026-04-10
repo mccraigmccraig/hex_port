@@ -187,6 +187,38 @@ be visible, the module must call through the facade.
 
 Dispatch priority: expects > per-operation stubs > fallback > raise.
 
+### Passthrough expects
+
+When a fallback is configured, pass `:passthrough` instead of a
+function to delegate to the fallback while still consuming the
+expect for `verify!` counting:
+
+```elixir
+HexPort.Handler.expect(MyApp.Todos, :get_todo, :passthrough, times: 2)
+|> HexPort.Handler.stub(MyApp.Todos, MyApp.Todos.Impl)
+|> HexPort.Handler.install!()
+
+# Both calls delegate to MyApp.Todos.Impl
+# verify! checks that get_todo was called exactly twice
+```
+
+`:passthrough` works with all fallback types (function, stateful,
+module) and threads state correctly for stateful fallbacks. It can
+be mixed with function expects for patterns like "first call
+succeeds through the fallback, second call returns an error":
+
+```elixir
+HexPort.Handler.expect(RepoContract, :insert, :passthrough)
+|> HexPort.Handler.expect(RepoContract, :insert, fn [changeset] ->
+  {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
+end)
+|> HexPort.Handler.stub(RepoContract, &Repo.InMemory.handler/3, %{})
+|> HexPort.Handler.install!()
+
+# First insert: passthrough to InMemory (writes to store)
+# Second insert: expect fires, returns error (store unchanged)
+```
+
 ### Multi-contract
 
 ```elixir
