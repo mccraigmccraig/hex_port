@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.0]
+
+### Added
+
+- `HexPort.Handler.expect/4..5` now accepts `:passthrough` as the
+  handler argument. A `:passthrough` expect delegates to the
+  configured fallback (fn, stateful, or module) while consuming the
+  expect for `verify!` counting. Supports `times: n`. Enables
+  call-counting without changing behaviour, and can be mixed with
+  function expects for patterns like "first insert succeeds through
+  InMemory, second fails".
+- Documentation in `docs/repo.md` for using `HexPort.Handler` with
+  `Repo.Test` and `Repo.InMemory` for failure scenario testing,
+  including error simulation, `:passthrough` call counting, and
+  combined Handler + Log assertions.
+
+### Fixed
+
+- Added `@spec` clauses for all `stub/2..4` forms to satisfy
+  Dialyzer.
+
 ## [0.21.0]
 
 ### Added
@@ -328,7 +349,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `HexPort.Testing` with NimbleOwnership, `Repo.Test` stateless
   adapter, CI setup, Credo, Dialyzer.
 
-[Unreleased]: https://github.com/mccraigmccraig/hex_port/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/mccraigmccraig/hex_port/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/mccraigmccraig/hex_port/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/mccraigmccraig/hex_port/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/mccraigmccraig/hex_port/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/mccraigmccraig/hex_port/compare/v0.18.0...v0.19.0
