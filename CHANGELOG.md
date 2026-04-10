@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0]
+
+### Added
+
+- `HexPort.Handler` — Mox-style expect/stub handler builder. Builds
+  stateful handler functions from a declarative specification with
+  multi-contract chaining and ordered expectations. API:
+  `expect/3..5`, `stub/3..4`, `install!/1`, `verify!/0`.
+- `HexPort.Log` — log-based expectation matcher. Declares structured
+  expectations against the dispatch log after execution, matching on
+  the full `{contract, operation, args, result}` tuple. Supports
+  loose (default) and strict matching modes, `times: n` counting,
+  and `reject` expectations. API: `match/3..5`, `reject/2..3`,
+  `verify!/1..2`.
+- Terminology mapping and glossary in README and getting-started
+  guide, mapping HexPort concepts (contract, facade, test double,
+  port) to familiar Elixir/Mox equivalents with a stub/mock/fake
+  breakdown.
+
 ## [0.17.0]
 
 ### Changed
@@ -262,7 +281,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `HexPort.Testing` with NimbleOwnership, `Repo.Test` stateless
   adapter, CI setup, Credo, Dialyzer.
 
-[Unreleased]: https://github.com/mccraigmccraig/hex_port/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/mccraigmccraig/hex_port/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/mccraigmccraig/hex_port/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/mccraigmccraig/hex_port/compare/v0.16.1...v0.17.0
 [0.16.1]: https://github.com/mccraigmccraig/hex_port/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/mccraigmccraig/hex_port/compare/v0.15.0...v0.16.0
