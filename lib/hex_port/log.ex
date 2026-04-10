@@ -114,4 +114,179 @@ defmodule HexPort.Log do
     expectation = {:reject, contract, operation}
     %{acc | expectations: acc.expectations ++ [expectation]}
   end
+
+  @doc """
+  Verify all expectations against the dispatch log.
+
+  Reads the dispatch log for each contract referenced in the
+  accumulator and checks that all match expectations are satisfied
+  and all reject expectations hold.
+
+  ## Options
+
+    * `:strict` — when `true`, every log entry for each referenced
+      contract must be matched by some matcher. Unmatched entries
+      cause verification to fail. Default `false` (loose mode).
+
+  Returns `:ok` if all expectations are satisfied.
+  """
+  @spec verify!(t(), keyword()) :: :ok
+  def verify!(acc, opts \\ [])
+
+  def verify!(%__MODULE__{expectations: []}, _opts) do
+    raise ArgumentError, "no expectations to verify — call match/4 or reject/3 first"
+  end
+
+  def verify!(%__MODULE__{expectations: expectations}, opts) do
+    strict? = Keyword.get(opts, :strict, false)
+
+    # Collect all contracts referenced
+    contracts =
+      expectations
+      |> Enum.map(fn
+        {:match, contract, _op, _fn, _times} -> contract
+        {:reject, contract, _op} -> contract
+      end)
+      |> Enum.uniq()
+
+    # Read logs per contract
+    logs = Map.new(contracts, fn contract -> {contract, HexPort.Testing.get_log(contract)} end)
+
+    # Separate match and reject expectations
+    {matches, rejects} =
+      Enum.split_with(expectations, fn
+        {:match, _, _, _, _} -> true
+        {:reject, _, _} -> false
+      end)
+
+    # Group matches by contract, preserving declaration order within each contract
+    matches_by_contract =
+      Enum.group_by(matches, fn {:match, contract, _, _, _} -> contract end)
+
+    # Verify match expectations (loose-partial: per-contract ordering)
+    matched_indices_by_contract =
+      Map.new(contracts, fn contract ->
+        contract_matches = Map.get(matches_by_contract, contract, [])
+        contract_log = Map.get(logs, contract, [])
+
+        matched_indices = verify_matches(contract_matches, contract_log, contract)
+        {contract, matched_indices}
+      end)
+
+    # Verify reject expectations
+    verify_rejects(rejects, logs)
+
+    # Strict mode: check for unmatched log entries
+    if strict? do
+      verify_strict(matched_indices_by_contract, logs)
+    end
+
+    :ok
+  end
+
+  # -- Internal: match verification --
+
+  defp verify_matches(matches, log, contract) do
+    indexed_log = Enum.with_index(log)
+
+    {_remaining_log, matched_indices} =
+      Enum.reduce(matches, {indexed_log, []}, fn
+        {:match, _contract, operation, matcher_fn, times}, {remaining, acc_indices} ->
+          find_n_matches(remaining, contract, operation, matcher_fn, times, acc_indices)
+      end)
+
+    matched_indices
+  end
+
+  defp find_n_matches(remaining_log, contract, operation, matcher_fn, times, acc_indices) do
+    Enum.reduce(1..times, {remaining_log, acc_indices}, fn n, {remaining, indices} ->
+      case find_next_match(remaining, contract, operation, matcher_fn) do
+        {:ok, index, rest} ->
+          {rest, [index | indices]}
+
+        :not_found ->
+          raise """
+          HexPort.Log expectation not satisfied:
+
+            #{inspect(contract)}.#{operation} — match #{n} of #{times} not found.
+
+            Searched #{length(remaining)} remaining log entries (of #{length(remaining) + length(indices)} total for this contract).
+
+          Tip: check that the handler produced the expected result and that
+          the matcher function's pattern matches the log entry shape
+          {contract, operation, args, result}.
+          """
+      end
+    end)
+  end
+
+  defp find_next_match([], _contract, _operation, _matcher_fn), do: :not_found
+
+  defp find_next_match([{entry, index} | rest], contract, operation, matcher_fn) do
+    {entry_contract, entry_op, _args, _result} = entry
+
+    if entry_contract == contract and entry_op == operation and matches?(matcher_fn, entry) do
+      {:ok, index, rest}
+    else
+      find_next_match(rest, contract, operation, matcher_fn)
+    end
+  end
+
+  defp matches?(matcher_fn, entry) do
+    matcher_fn.(entry)
+  rescue
+    FunctionClauseError -> false
+  end
+
+  # -- Internal: reject verification --
+
+  defp verify_rejects(rejects, logs) do
+    Enum.each(rejects, fn {:reject, contract, operation} ->
+      contract_log = Map.get(logs, contract, [])
+
+      found =
+        Enum.find(contract_log, fn {c, op, _args, _result} ->
+          c == contract and op == operation
+        end)
+
+      if found do
+        {_, _, args, result} = found
+
+        raise """
+        HexPort.Log reject expectation violated:
+
+          #{inspect(contract)}.#{operation} was called but should not have been.
+
+          Args: #{inspect(args)}
+          Result: #{inspect(result)}
+        """
+      end
+    end)
+  end
+
+  # -- Internal: strict mode --
+
+  defp verify_strict(matched_indices_by_contract, logs) do
+    Enum.each(logs, fn {contract, log} ->
+      matched_set = MapSet.new(Map.get(matched_indices_by_contract, contract, []))
+
+      unmatched =
+        log
+        |> Enum.with_index()
+        |> Enum.reject(fn {_entry, index} -> MapSet.member?(matched_set, index) end)
+
+      if unmatched != [] do
+        details =
+          Enum.map_join(unmatched, "\n", fn {{c, op, args, result}, _index} ->
+            "  #{inspect(c)}.#{op} args=#{inspect(args)} result=#{inspect(result)}"
+          end)
+
+        raise """
+        HexPort.Log strict verification failed — unmatched log entries:
+
+        #{details}
+        """
+      end
+    end)
+  end
 end
