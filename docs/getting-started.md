@@ -2,6 +2,47 @@
 
 [Up: README](../README.md) | [Testing >](testing.md)
 
+## Terminology
+
+HexPort uses terms from hexagonal architecture and testing theory.
+If you're coming from Mox or standard Elixir, here's the mapping:
+
+| HexPort term | Familiar Elixir equivalent | Nuance |
+|---|---|---|
+| **Contract** | Behaviour (`@callback` specs) | The abstract interface an implementation must satisfy. Same sense of "contract" in [Mocks and explicit contracts](https://dashbit.co/blog/mocks-and-explicit-contracts). HexPort generates the `@behaviour` + `@callback` from `defport` — the contract is the source of truth. |
+| **Facade** | The proxy module you write by hand in Mox (`def foo(x), do: impl().foo(x)`) | The module callers use — dispatches to the configured implementation. HexPort generates this; with Mox you write it manually. |
+| **Port** | (hexagonal architecture term) | A boundary through which I/O operations pass. In practice, a contract + its facade. |
+| **Test double** | Mock (but broader) | Any thing that stands in for a real implementation in tests. See [test double types](https://en.wikipedia.org/wiki/Test_double#Types). |
+
+### Test double types
+
+HexPort supports several kinds of test double, all built on the same
+handler mechanism:
+
+| Type | What it does | HexPort API |
+|---|---|---|
+| **Stub** | Returns canned responses, no verification | `set_fn_handler`, `HexPort.Handler.stub` |
+| **Mock** | Returns canned responses + verifies call counts/order | `HexPort.Handler.expect` + `verify!` |
+| **Fake** | Working logic, simpler than production but behaviourally realistic | `set_stateful_handler`, `Repo.Test`, `Repo.InMemory` |
+
+**Stubs** are the simplest — register a function that returns what you
+need, don't bother checking how many times it was called.
+
+**Mocks** (via `HexPort.Handler`) add expectations — the handler is
+consumed in order, and `verify!` checks that all expected calls were
+made. This is the Mox model.
+
+**Fakes** are the most powerful — they have real logic. `Repo.Test`
+and `Repo.InMemory` are fakes: they validate changesets, autogenerate
+primary keys and timestamps, handle `Ecto.Multi`, and support
+`transact(fn repo -> ... end)`. A fake can be wrong in different ways
+than the real implementation, but it exercises more of your code's
+behaviour than a stub or mock.
+
+The spectrum from stub to fake is a tradeoff: stubs are easier to
+write but test less; fakes test more but require more upfront work
+(which HexPort provides out of the box for Repo operations).
+
 ## Defining a contract
 
 A port contract declares the operations that cross a boundary. HexPort

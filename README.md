@@ -30,6 +30,21 @@ and accept the speed penalty and the inability to adopt property-based testing.
 | Dispatch logging              | Record every call that crosses a port boundary                   |
 | Built-in Repo contract        | 15-operation Ecto Repo contract with stateless + in-memory impls |
 
+## Terminology
+
+If you're coming from Mox or standard Elixir testing, here's how
+HexPort's terms map to what you already know:
+
+| HexPort term | Familiar Elixir equivalent |
+|---|---|
+| **Contract** | Behaviour (`@callback` specs) — the interface an implementation must satisfy |
+| **Facade** | The dispatch module (`def foo(x), do: impl().foo(x)`) — HexPort generates this |
+| **Test double** | Mock/stub/fake — anything standing in for a real implementation in tests |
+| **Port** | A contract + its facade — the boundary through which I/O operations pass |
+
+See [Getting Started](docs/getting-started.md#terminology) for the
+expanded version with test double types (mocks, stubs, fakes).
+
 ## Quick example
 
 Define a port contract and facade in one module:
