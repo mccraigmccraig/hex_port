@@ -8,28 +8,32 @@ Builds on the Mox pattern — generates behaviours and dispatch facades
 from `defport` declarations — and adds stateful test doubles powerful
 enough to test Ecto.Repo operations without a database.
 
-## Why not just Mox?
+## Why DoubleDown?
 
-Mox is great for simple mocks: define a behaviour, `defmock`, set
-expectations. But the pattern has friction points as your system grows:
+DoubleDown builds on the familiar Mox pattern and extends it:
 
-- **Boilerplate** — for each boundary you hand-write a behaviour
-  module, a dispatch facade, and config wiring. DoubleDown's `defport`
-  generates all three from a single declaration.
-- **Stubs only** — Mox mocks return canned values. They can't model
-  stateful dependencies like a database, so you end up hitting the real
-  DB in every test. DoubleDown's stateful handlers maintain in-memory
-  state with atomic updates, giving you read-after-write consistency
-  without a database.
-- **No fakes** — testing "what happens when the second insert fails
-  with a constraint violation?" requires a real DB with Mox. DoubleDown
-  lets you layer expects over a stateful fake, so the first insert
-  writes to an in-memory store and the second returns an error — all
-  without a database connection.
-- **No dispatch logging** — Mox tells you what was called (via
-  `verify!`), but not what was returned. DoubleDown logs the full
-  `{contract, operation, args, result}` tuple, including results
-  computed by stateful handlers.
+- **Boilerplate & consistency** — `defport` generates the behaviour,
+  callbacks, dispatch facade, and typespecs from a single declaration.
+  The behaviour and facade are always in sync — no hand-maintained
+  boilerplate to drift.
+- **Stubs are not always enough** — modelling stateful dependencies
+  like a database with plain mocks is verbose and fragile, so most
+  projects just hit the real DB and accept the speed penalty.
+  DoubleDown's stateful handlers maintain in-memory state with atomic
+  updates, giving you read-after-write consistency without a database
+  — fast enough for property-based testing.
+- **Fakes with expectations** — testing "what happens when the second
+  insert fails with a constraint violation?" means either a real DB
+  or a mock that responds to each Repo call individually — verbose and
+  brittle. DoubleDown lets you layer expects over a stateful fake:
+  the first insert writes to an in-memory store, the second returns
+  an error, and subsequent reads find the first record.
+- **Dispatch logging** — when test doubles do real computation
+  (changeset validation, PK autogeneration, timestamps), the results
+  are worth asserting on. DoubleDown logs the full
+  `{contract, operation, args, result}` tuple for every call, and
+  `DoubleDown.Log` provides structured pattern matching over those
+  logs.
 
 ## What DoubleDown provides
 
