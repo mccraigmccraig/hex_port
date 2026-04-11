@@ -52,6 +52,7 @@ defmodule DoubleDown.ContractTest do
     end
 
     test "Port defines functions matching each defcallback" do
+      {:module, _} = Code.ensure_loaded(DoubleDown.Test.Greeter.Port)
       assert function_exported?(DoubleDown.Test.Greeter.Port, :greet, 1)
       assert function_exported?(DoubleDown.Test.Greeter.Port, :fetch_greeting, 1)
     end
