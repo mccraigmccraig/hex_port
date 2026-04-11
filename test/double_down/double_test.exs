@@ -1,7 +1,7 @@
-defmodule DoubleDown.HandlerTest do
+defmodule DoubleDown.DoubleTest do
   use ExUnit.Case, async: true
 
-  alias DoubleDown.Handler
+  alias DoubleDown.Double
   alias DoubleDown.Test.Greeter
   alias DoubleDown.Test.Counter
 
@@ -9,13 +9,13 @@ defmodule DoubleDown.HandlerTest do
 
   describe "expect/3..4" do
     test "returns contract module for piping" do
-      result = Handler.expect(Greeter, :greet, fn [_] -> "hi" end)
+      result = Double.expect(Greeter, :greet, fn [_] -> "hi" end)
       assert result == Greeter
     end
 
     test "with times: n" do
       Greeter
-      |> Handler.expect(:greet, fn [name] -> "hi #{name}" end, times: 3)
+      |> Double.expect(:greet, fn [name] -> "hi #{name}" end, times: 3)
 
       assert "hi A" = Greeter.Port.greet("A")
       assert "hi B" = Greeter.Port.greet("B")
@@ -24,14 +24,14 @@ defmodule DoubleDown.HandlerTest do
 
     test "times: 0 raises" do
       assert_raise ArgumentError, ~r/times must be >= 1/, fn ->
-        Handler.expect(Greeter, :greet, fn [_] -> :ok end, times: 0)
+        Double.expect(Greeter, :greet, fn [_] -> :ok end, times: 0)
       end
     end
 
     test "sequenced expectations consumed in order" do
       Greeter
-      |> Handler.expect(:greet, fn [_] -> "first" end)
-      |> Handler.expect(:greet, fn [_] -> "second" end)
+      |> Double.expect(:greet, fn [_] -> "first" end)
+      |> Double.expect(:greet, fn [_] -> "second" end)
 
       assert "first" = Greeter.Port.greet("A")
       assert "second" = Greeter.Port.greet("B")
@@ -39,23 +39,23 @@ defmodule DoubleDown.HandlerTest do
 
     test "multiple operations on same contract" do
       Greeter
-      |> Handler.expect(:greet, fn [_] -> "hi" end)
-      |> Handler.expect(:fetch_greeting, fn [_] -> {:ok, "hello"} end)
+      |> Double.expect(:greet, fn [_] -> "hi" end)
+      |> Double.expect(:fetch_greeting, fn [_] -> {:ok, "hello"} end)
 
       assert "hi" = Greeter.Port.greet("A")
       assert {:ok, "hello"} = Greeter.Port.fetch_greeting("B")
     end
 
     test "multi-contract" do
-      Handler.expect(Greeter, :greet, fn [name] -> "greet: #{name}" end)
-      Handler.expect(Counter, :increment, fn [n] -> n * 10 end)
+      Double.expect(Greeter, :greet, fn [name] -> "greet: #{name}" end)
+      Double.expect(Counter, :increment, fn [n] -> n * 10 end)
 
       assert "greet: Alice" = Greeter.Port.greet("Alice")
       assert 50 = Counter.Port.increment(5)
     end
 
     test "exhausted expects with no stub raises" do
-      Handler.expect(Greeter, :greet, fn [_] -> "once" end)
+      Double.expect(Greeter, :greet, fn [_] -> "once" end)
 
       assert "once" = Greeter.Port.greet("A")
 
@@ -69,12 +69,12 @@ defmodule DoubleDown.HandlerTest do
 
   describe "stub/2..3 per-operation" do
     test "returns contract module for piping" do
-      result = Handler.stub(Greeter, :greet, fn [_] -> "hi" end)
+      result = Double.stub(Greeter, :greet, fn [_] -> "hi" end)
       assert result == Greeter
     end
 
     test "stub called any number of times" do
-      Handler.stub(Greeter, :greet, fn [name] -> "stub: #{name}" end)
+      Double.stub(Greeter, :greet, fn [name] -> "stub: #{name}" end)
 
       assert "stub: A" = Greeter.Port.greet("A")
       assert "stub: B" = Greeter.Port.greet("B")
@@ -82,23 +82,23 @@ defmodule DoubleDown.HandlerTest do
     end
 
     test "stub called zero times is valid" do
-      Handler.stub(Greeter, :greet, fn [_] -> "never called" end)
+      Double.stub(Greeter, :greet, fn [_] -> "never called" end)
 
-      assert :ok = Handler.verify!()
+      assert :ok = Double.verify!()
     end
 
     test "replacing stub overwrites previous" do
       Greeter
-      |> Handler.stub(:greet, fn [_] -> "first" end)
-      |> Handler.stub(:greet, fn [_] -> "second" end)
+      |> Double.stub(:greet, fn [_] -> "first" end)
+      |> Double.stub(:greet, fn [_] -> "second" end)
 
       assert "second" = Greeter.Port.greet("A")
     end
 
     test "expect and stub coexist — expects consumed first" do
       Greeter
-      |> Handler.expect(:greet, fn [_] -> "expected" end)
-      |> Handler.stub(:greet, fn [name] -> "stub: #{name}" end)
+      |> Double.expect(:greet, fn [_] -> "expected" end)
+      |> Double.stub(:greet, fn [name] -> "stub: #{name}" end)
 
       assert "expected" = Greeter.Port.greet("A")
       assert "stub: B" = Greeter.Port.greet("B")
@@ -108,12 +108,12 @@ defmodule DoubleDown.HandlerTest do
 
   describe "stub/2 function fallback" do
     test "returns contract module for piping" do
-      result = Handler.stub(Greeter, fn _op, _args -> :fallback end)
+      result = Double.stub(Greeter, fn _op, _args -> :fallback end)
       assert result == Greeter
     end
 
     test "handles operations without specific stubs" do
-      Handler.stub(Greeter, fn
+      Double.stub(Greeter, fn
         :greet, [name] -> "fallback: #{name}"
         :fetch_greeting, [name] -> {:ok, "fallback: #{name}"}
       end)
@@ -124,23 +124,23 @@ defmodule DoubleDown.HandlerTest do
 
     test "per-op stub takes priority over fallback" do
       Greeter
-      |> Handler.stub(:greet, fn [name] -> "per-op: #{name}" end)
-      |> Handler.stub(fn _op, [name] -> "fallback: #{name}" end)
+      |> Double.stub(:greet, fn [name] -> "per-op: #{name}" end)
+      |> Double.stub(fn _op, [name] -> "fallback: #{name}" end)
 
       assert "per-op: Alice" = Greeter.Port.greet("Alice")
     end
 
     test "expects take priority over fallback" do
       Greeter
-      |> Handler.stub(fn _op, [name] -> "fallback: #{name}" end)
-      |> Handler.expect(:greet, fn [_] -> "expected" end)
+      |> Double.stub(fn _op, [name] -> "fallback: #{name}" end)
+      |> Double.expect(:greet, fn [_] -> "expected" end)
 
       assert "expected" = Greeter.Port.greet("Alice")
       assert "fallback: Bob" = Greeter.Port.greet("Bob")
     end
 
     test "FunctionClauseError in fallback raises descriptive error" do
-      Handler.stub(Greeter, fn
+      Double.stub(Greeter, fn
         :greet, [name] -> "only greet: #{name}"
       end)
 
@@ -157,21 +157,21 @@ defmodule DoubleDown.HandlerTest do
         :fetch_greeting, [name] -> {:ok, "handler: #{name}"}
       end
 
-      Handler.stub(Greeter, handler_fn)
+      Double.stub(Greeter, handler_fn)
 
       assert "handler: Alice" = Greeter.Port.greet("Alice")
       assert {:ok, "handler: Bob"} = Greeter.Port.fetch_greeting("Bob")
     end
   end
 
-  describe "stub/2 module fallback" do
+  describe "fake/2 module fake" do
     test "returns contract module for piping" do
-      result = Handler.stub(Greeter, Greeter.Impl)
+      result = Double.fake(Greeter, Greeter.Impl)
       assert result == Greeter
     end
 
     test "delegates to module" do
-      Handler.stub(Greeter, Greeter.Impl)
+      Double.fake(Greeter, Greeter.Impl)
 
       assert "Hello, Alice!" = Greeter.Port.greet("Alice")
       assert {:ok, "Hello, Bob!"} = Greeter.Port.fetch_greeting("Bob")
@@ -179,8 +179,8 @@ defmodule DoubleDown.HandlerTest do
 
     test "expects take priority" do
       Greeter
-      |> Handler.stub(Greeter.Impl)
-      |> Handler.expect(:greet, fn [_] -> "expected" end)
+      |> Double.fake(Greeter.Impl)
+      |> Double.expect(:greet, fn [_] -> "expected" end)
 
       assert "expected" = Greeter.Port.greet("Alice")
       assert "Hello, Bob!" = Greeter.Port.greet("Bob")
@@ -188,8 +188,8 @@ defmodule DoubleDown.HandlerTest do
 
     test "per-op stubs take priority" do
       Greeter
-      |> Handler.stub(Greeter.Impl)
-      |> Handler.stub(:greet, fn [name] -> "stubbed: #{name}" end)
+      |> Double.fake(Greeter.Impl)
+      |> Double.stub(:greet, fn [name] -> "stubbed: #{name}" end)
 
       assert "stubbed: Alice" = Greeter.Port.greet("Alice")
       assert {:ok, "Hello, Bob!"} = Greeter.Port.fetch_greeting("Bob")
@@ -197,27 +197,27 @@ defmodule DoubleDown.HandlerTest do
 
     test "validates module at stub time — not loaded" do
       assert_raise ArgumentError, ~r/not loaded/, fn ->
-        Handler.stub(Greeter, DoesNotExist.Module)
+        Double.fake(Greeter, DoesNotExist.Module)
       end
     end
 
     test "validates module at stub time — missing functions" do
       assert_raise ArgumentError, ~r/missing functions/, fn ->
-        Handler.stub(Greeter, String)
+        Double.fake(Greeter, String)
       end
     end
   end
 
-  describe "stub/3 stateful fallback" do
+  describe "fake/3 stateful fake" do
     test "returns contract module for piping" do
       result =
-        Handler.stub(Counter, fn _op, _args, state -> {:ok, state} end, 0)
+        Double.fake(Counter, fn _op, _args, state -> {:ok, state} end, 0)
 
       assert result == Counter
     end
 
     test "handles operations with state threading" do
-      Handler.stub(
+      Double.fake(
         Counter,
         fn
           :increment, [n], count -> {count + n, count + n}
@@ -233,14 +233,14 @@ defmodule DoubleDown.HandlerTest do
 
     test "expects take priority, fallback state unchanged on expect" do
       Counter
-      |> Handler.stub(
+      |> Double.fake(
         fn
           :increment, [n], count -> {count + n, count + n}
           :get_count, [], count -> {count, count}
         end,
         0
       )
-      |> Handler.expect(:increment, fn [_] -> 999 end)
+      |> Double.expect(:increment, fn [_] -> 999 end)
 
       # First: expect fires, state unchanged (still 0)
       assert 999 = Counter.Port.increment(5)
@@ -251,14 +251,14 @@ defmodule DoubleDown.HandlerTest do
 
     test "error simulation — expect short-circuits before fallback" do
       Counter
-      |> Handler.stub(
+      |> Double.fake(
         fn
           :increment, [n], count -> {count + n, count + n}
           :get_count, [], count -> {count, count}
         end,
         0
       )
-      |> Handler.expect(:increment, fn [_n] -> {:error, :overflow} end)
+      |> Double.expect(:increment, fn [_n] -> {:error, :overflow} end)
 
       assert {:error, :overflow} = Counter.Port.increment(100)
       assert 5 = Counter.Port.increment(5)
@@ -267,15 +267,15 @@ defmodule DoubleDown.HandlerTest do
 
     test "full priority chain: expects > per-op stubs > stateful fallback" do
       Counter
-      |> Handler.stub(
+      |> Double.fake(
         fn
           :increment, [n], count -> {count + n, count + n}
           :get_count, [], count -> {count, count}
         end,
         0
       )
-      |> Handler.expect(:increment, fn [_] -> :expected end)
-      |> Handler.stub(:get_count, fn [] -> :stubbed end)
+      |> Double.expect(:increment, fn [_] -> :expected end)
+      |> Double.stub(:get_count, fn [] -> :stubbed end)
 
       assert :expected = Counter.Port.increment(5)
       assert :stubbed = Counter.Port.get_count()
@@ -283,7 +283,7 @@ defmodule DoubleDown.HandlerTest do
     end
 
     test "FunctionClauseError in stateful fallback raises" do
-      Handler.stub(
+      Double.fake(
         Counter,
         fn :increment, [n], count -> {count + n, count + n} end,
         0
@@ -302,16 +302,16 @@ defmodule DoubleDown.HandlerTest do
   describe "fallback mutual exclusivity" do
     test "module replaces fn fallback" do
       Greeter
-      |> Handler.stub(fn _op, _args -> :fn_fallback end)
-      |> Handler.stub(Greeter.Impl)
+      |> Double.stub(fn _op, _args -> :fn_fallback end)
+      |> Double.fake(Greeter.Impl)
 
       assert "Hello, Alice!" = Greeter.Port.greet("Alice")
     end
 
     test "fn replaces module fallback" do
       Greeter
-      |> Handler.stub(Greeter.Impl)
-      |> Handler.stub(fn :greet, [name] -> "fn: #{name}" end)
+      |> Double.fake(Greeter.Impl)
+      |> Double.stub(fn :greet, [name] -> "fn: #{name}" end)
 
       assert "fn: Alice" = Greeter.Port.greet("Alice")
     end
@@ -321,7 +321,7 @@ defmodule DoubleDown.HandlerTest do
 
   describe "unexpected operations" do
     test "raises with descriptive error" do
-      Handler.stub(Greeter, :greet, fn [_] -> "hi" end)
+      Double.stub(Greeter, :greet, fn [_] -> "hi" end)
 
       assert_raise RuntimeError, ~r/Unexpected call to.*fetch_greeting/, fn ->
         Greeter.Port.fetch_greeting("Alice")
@@ -329,7 +329,7 @@ defmodule DoubleDown.HandlerTest do
     end
 
     test "error message includes remaining expectations" do
-      Handler.expect(Greeter, :greet, fn [_] -> "hi" end)
+      Double.expect(Greeter, :greet, fn [_] -> "hi" end)
 
       error =
         assert_raise RuntimeError, fn ->
@@ -346,71 +346,71 @@ defmodule DoubleDown.HandlerTest do
   describe ":passthrough expects" do
     test "delegates to fn fallback" do
       Greeter
-      |> Handler.stub(fn :greet, [name] -> "fallback: #{name}" end)
-      |> Handler.expect(:greet, :passthrough)
+      |> Double.stub(fn :greet, [name] -> "fallback: #{name}" end)
+      |> Double.expect(:greet, :passthrough)
 
       assert "fallback: Alice" = Greeter.Port.greet("Alice")
-      assert :ok = Handler.verify!()
+      assert :ok = Double.verify!()
     end
 
     test "delegates to module fallback" do
       Greeter
-      |> Handler.stub(Greeter.Impl)
-      |> Handler.expect(:greet, :passthrough)
+      |> Double.fake(Greeter.Impl)
+      |> Double.expect(:greet, :passthrough)
 
       assert "Hello, Alice!" = Greeter.Port.greet("Alice")
-      assert :ok = Handler.verify!()
+      assert :ok = Double.verify!()
     end
 
     test "delegates to stateful fallback with state threading" do
       Counter
-      |> Handler.stub(
+      |> Double.fake(
         fn
           :increment, [n], count -> {count + n, count + n}
           :get_count, [], count -> {count, count}
         end,
         0
       )
-      |> Handler.expect(:increment, :passthrough)
-      |> Handler.expect(:increment, :passthrough)
+      |> Double.expect(:increment, :passthrough)
+      |> Double.expect(:increment, :passthrough)
 
       assert 5 = Counter.Port.increment(5)
       assert 8 = Counter.Port.increment(3)
       assert 8 = Counter.Port.get_count()
-      assert :ok = Handler.verify!()
+      assert :ok = Double.verify!()
     end
 
     test "with times: n" do
       Greeter
-      |> Handler.stub(Greeter.Impl)
-      |> Handler.expect(:greet, :passthrough, times: 3)
+      |> Double.fake(Greeter.Impl)
+      |> Double.expect(:greet, :passthrough, times: 3)
 
       assert "Hello, A!" = Greeter.Port.greet("A")
       assert "Hello, B!" = Greeter.Port.greet("B")
       assert "Hello, C!" = Greeter.Port.greet("C")
-      assert :ok = Handler.verify!()
+      assert :ok = Double.verify!()
     end
 
     test "consumed for verify! counting" do
       Counter
-      |> Handler.stub(
+      |> Double.fake(
         fn
           :increment, [n], count -> {count + n, count + n}
           :get_count, [], count -> {count, count}
         end,
         0
       )
-      |> Handler.expect(:increment, :passthrough, times: 2)
+      |> Double.expect(:increment, :passthrough, times: 2)
 
       Counter.Port.increment(1)
 
       assert_raise RuntimeError, ~r/expectations not fulfilled/, fn ->
-        Handler.verify!()
+        Double.verify!()
       end
     end
 
     test "raises when no fallback configured" do
-      Handler.expect(Greeter, :greet, :passthrough)
+      Double.expect(Greeter, :greet, :passthrough)
 
       assert_raise RuntimeError, ~r/Unexpected call to.*greet/, fn ->
         Greeter.Port.greet("Alice")
@@ -419,15 +419,15 @@ defmodule DoubleDown.HandlerTest do
 
     test "mixed passthrough and function expects" do
       Greeter
-      |> Handler.stub(Greeter.Impl)
-      |> Handler.expect(:greet, :passthrough)
-      |> Handler.expect(:greet, fn [_] -> "custom" end)
-      |> Handler.expect(:greet, :passthrough)
+      |> Double.fake(Greeter.Impl)
+      |> Double.expect(:greet, :passthrough)
+      |> Double.expect(:greet, fn [_] -> "custom" end)
+      |> Double.expect(:greet, :passthrough)
 
       assert "Hello, A!" = Greeter.Port.greet("A")
       assert "custom" = Greeter.Port.greet("B")
       assert "Hello, C!" = Greeter.Port.greet("C")
-      assert :ok = Handler.verify!()
+      assert :ok = Double.verify!()
     end
   end
 
@@ -435,31 +435,31 @@ defmodule DoubleDown.HandlerTest do
 
   describe "verify!/0" do
     test "passes when all expects consumed" do
-      Handler.expect(Greeter, :greet, fn [_] -> "hi" end)
+      Double.expect(Greeter, :greet, fn [_] -> "hi" end)
 
       Greeter.Port.greet("Alice")
 
-      assert :ok = Handler.verify!()
+      assert :ok = Double.verify!()
     end
 
     test "raises when expects remain" do
-      Handler.expect(Greeter, :greet, fn [_] -> "hi" end, times: 2)
+      Double.expect(Greeter, :greet, fn [_] -> "hi" end, times: 2)
 
       Greeter.Port.greet("Alice")
 
       assert_raise RuntimeError, ~r/expectations not fulfilled/, fn ->
-        Handler.verify!()
+        Double.verify!()
       end
     end
 
     test "error message lists contract, operation, and count" do
-      Handler.expect(Greeter, :greet, fn [_] -> "hi" end, times: 3)
+      Double.expect(Greeter, :greet, fn [_] -> "hi" end, times: 3)
 
       Greeter.Port.greet("Alice")
 
       error =
         assert_raise RuntimeError, fn ->
-          Handler.verify!()
+          Double.verify!()
         end
 
       assert error.message =~ inspect(Greeter)
@@ -468,31 +468,31 @@ defmodule DoubleDown.HandlerTest do
     end
 
     test "ignores stubs (zero calls OK)" do
-      Handler.stub(Greeter, :greet, fn [_] -> "never" end)
-      Handler.stub(Counter, :get_count, fn [] -> 0 end)
+      Double.stub(Greeter, :greet, fn [_] -> "never" end)
+      Double.stub(Counter, :get_count, fn [] -> 0 end)
 
-      assert :ok = Handler.verify!()
+      assert :ok = Double.verify!()
     end
 
     test "works across multiple contracts" do
-      Handler.expect(Greeter, :greet, fn [_] -> "hi" end)
-      Handler.expect(Counter, :increment, fn [_] -> 1 end)
+      Double.expect(Greeter, :greet, fn [_] -> "hi" end)
+      Double.expect(Counter, :increment, fn [_] -> 1 end)
 
       Greeter.Port.greet("Alice")
       Counter.Port.increment(1)
 
-      assert :ok = Handler.verify!()
+      assert :ok = Double.verify!()
     end
 
     test "reports unconsumed expects across multiple contracts" do
-      Handler.expect(Greeter, :greet, fn [_] -> "hi" end)
-      Handler.expect(Counter, :increment, fn [_] -> 1 end)
+      Double.expect(Greeter, :greet, fn [_] -> "hi" end)
+      Double.expect(Counter, :increment, fn [_] -> 1 end)
 
       Greeter.Port.greet("Alice")
 
       error =
         assert_raise RuntimeError, fn ->
-          Handler.verify!()
+          Double.verify!()
         end
 
       assert error.message =~ inspect(Counter)
@@ -501,7 +501,7 @@ defmodule DoubleDown.HandlerTest do
 
     test "raises when called with no handlers" do
       assert_raise RuntimeError, ~r/no handlers were installed/, fn ->
-        Handler.verify!()
+        Double.verify!()
       end
     end
   end
@@ -510,20 +510,20 @@ defmodule DoubleDown.HandlerTest do
 
   describe "verify!/1" do
     test "verifies expectations for a specific pid" do
-      Handler.expect(Greeter, :greet, fn [_] -> "hi" end)
+      Double.expect(Greeter, :greet, fn [_] -> "hi" end)
 
       Greeter.Port.greet("Alice")
 
-      assert :ok = Handler.verify!(self())
+      assert :ok = Double.verify!(self())
     end
 
     test "raises when expectations remain for the given pid" do
-      Handler.expect(Greeter, :greet, fn [_] -> "hi" end, times: 2)
+      Double.expect(Greeter, :greet, fn [_] -> "hi" end, times: 2)
 
       Greeter.Port.greet("Alice")
 
       assert_raise RuntimeError, ~r/expectations not fulfilled/, fn ->
-        Handler.verify!(self())
+        Double.verify!(self())
       end
     end
   end
@@ -532,17 +532,17 @@ defmodule DoubleDown.HandlerTest do
 
   describe "verify_on_exit!/0" do
     test "passes when all expectations consumed" do
-      Handler.verify_on_exit!()
+      Double.verify_on_exit!()
 
-      Handler.expect(Greeter, :greet, fn [_] -> "hi" end)
+      Double.expect(Greeter, :greet, fn [_] -> "hi" end)
 
       Greeter.Port.greet("Alice")
     end
 
     test "can be used as setup callback" do
-      Handler.verify_on_exit!(%{})
+      Double.verify_on_exit!(%{})
 
-      Handler.stub(Greeter, :greet, fn [name] -> "stub: #{name}" end)
+      Double.stub(Greeter, :greet, fn [name] -> "stub: #{name}" end)
     end
   end
 
@@ -551,65 +551,65 @@ defmodule DoubleDown.HandlerTest do
   describe "full pipeline" do
     test "expect → stub → dispatch → verify" do
       Greeter
-      |> Handler.expect(:greet, fn [name] -> "expected: #{name}" end)
-      |> Handler.stub(:fetch_greeting, fn [name] -> {:ok, "stub: #{name}"} end)
+      |> Double.expect(:greet, fn [name] -> "expected: #{name}" end)
+      |> Double.stub(:fetch_greeting, fn [name] -> {:ok, "stub: #{name}"} end)
 
       assert "expected: Alice" = Greeter.Port.greet("Alice")
       assert {:ok, "stub: Bob"} = Greeter.Port.fetch_greeting("Bob")
       assert {:ok, "stub: Carol"} = Greeter.Port.fetch_greeting("Carol")
 
-      assert :ok = Handler.verify!()
+      assert :ok = Double.verify!()
     end
 
     test "sequenced expectations with different return values" do
       Greeter
-      |> Handler.expect(:fetch_greeting, fn [_] -> {:error, :not_found} end)
-      |> Handler.expect(:fetch_greeting, fn [name] -> {:ok, "Hello, #{name}!"} end)
+      |> Double.expect(:fetch_greeting, fn [_] -> {:error, :not_found} end)
+      |> Double.expect(:fetch_greeting, fn [name] -> {:ok, "Hello, #{name}!"} end)
 
       assert {:error, :not_found} = Greeter.Port.fetch_greeting("Alice")
       assert {:ok, "Hello, Bob!"} = Greeter.Port.fetch_greeting("Bob")
 
-      assert :ok = Handler.verify!()
+      assert :ok = Double.verify!()
     end
 
     test "times option with dispatch and verify" do
       Counter
-      |> Handler.expect(:increment, fn [n] -> n end, times: 3)
-      |> Handler.stub(:get_count, fn [] -> 0 end)
+      |> Double.expect(:increment, fn [n] -> n end, times: 3)
+      |> Double.stub(:get_count, fn [] -> 0 end)
 
       Counter.Port.increment(1)
       Counter.Port.increment(2)
       Counter.Port.increment(3)
       Counter.Port.get_count()
 
-      assert :ok = Handler.verify!()
+      assert :ok = Double.verify!()
     end
 
     test "mix of expects and stubs on same operation" do
       Greeter
-      |> Handler.expect(:greet, fn [_] -> "first call" end)
-      |> Handler.expect(:greet, fn [_] -> "second call" end)
-      |> Handler.stub(:greet, fn [name] -> "stub: #{name}" end)
+      |> Double.expect(:greet, fn [_] -> "first call" end)
+      |> Double.expect(:greet, fn [_] -> "second call" end)
+      |> Double.stub(:greet, fn [name] -> "stub: #{name}" end)
 
       assert "first call" = Greeter.Port.greet("A")
       assert "second call" = Greeter.Port.greet("B")
       assert "stub: C" = Greeter.Port.greet("C")
       assert "stub: D" = Greeter.Port.greet("D")
 
-      assert :ok = Handler.verify!()
+      assert :ok = Double.verify!()
     end
 
     test "full priority chain with all layers" do
       Greeter
-      |> Handler.stub(Greeter.Impl)
-      |> Handler.stub(:fetch_greeting, fn [name] -> {:ok, "per-op: #{name}"} end)
-      |> Handler.expect(:greet, fn [_] -> "expected" end)
+      |> Double.fake(Greeter.Impl)
+      |> Double.stub(:fetch_greeting, fn [name] -> {:ok, "per-op: #{name}"} end)
+      |> Double.expect(:greet, fn [_] -> "expected" end)
 
       assert "expected" = Greeter.Port.greet("Alice")
       assert "Hello, Bob!" = Greeter.Port.greet("Bob")
       assert {:ok, "per-op: Carol"} = Greeter.Port.fetch_greeting("Carol")
 
-      assert :ok = Handler.verify!()
+      assert :ok = Double.verify!()
     end
   end
 end

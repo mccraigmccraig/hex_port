@@ -4,7 +4,7 @@ defmodule DoubleDown.TestingTest do
   alias DoubleDown.Test.Greeter
   alias DoubleDown.Test.Counter
 
-  # ── Handler registration API ──────────────────────────────
+  # ── handler registration API ──────────────────────────────
 
   describe "set_handler/2" do
     test "returns :ok" do
@@ -84,7 +84,7 @@ defmodule DoubleDown.TestingTest do
     end
   end
 
-  # ── Handler replacement ───────────────────────────────────
+  # ── handler replacement ───────────────────────────────────
 
   describe "handler replacement" do
     test "setting a new handler overwrites the previous one" do

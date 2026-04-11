@@ -48,7 +48,7 @@ defmodule DoubleDown.MixProject do
           ],
           Testing: [
             DoubleDown.Testing,
-            DoubleDown.Handler,
+            DoubleDown.Double,
             DoubleDown.Log
           ],
           Repo: [

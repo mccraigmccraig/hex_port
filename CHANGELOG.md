@@ -47,14 +47,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Breaking:** `DoubleDown.Handler` API simplified — `expect` and `stub`
+- **Breaking:** `DoubleDown.Double` API simplified — `expect` and `stub`
   now write directly to NimbleOwnership with immediate effect. Removed
-  `%DoubleDown.Handler{}` struct, `new/0`, and `install!/1`. All functions
+  `%DoubleDown.Double{}` struct, `new/0`, and `install!/1`. All functions
   return the contract module atom for Mimic-style piping:
 
       MyContract
-      |> DoubleDown.Handler.stub(MyImpl)
-      |> DoubleDown.Handler.expect(:get, fn [id] -> %Thing{id: id} end)
+      |> DoubleDown.Double.stub(MyImpl)
+      |> DoubleDown.Double.expect(:get, fn [id] -> %Thing{id: id} end)
 
   A canonical handler function is installed on first touch and reads
   dispatch config from state — no builder assembly step needed.
@@ -63,14 +63,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `DoubleDown.Handler.expect/4..5` now accepts `:passthrough` as the
+- `DoubleDown.Double.expect/4..5` now accepts `:passthrough` as the
   handler argument. A `:passthrough` expect delegates to the
   configured fallback (fn, stateful, or module) while consuming the
   expect for `verify!` counting. Supports `times: n`. Enables
   call-counting without changing behaviour, and can be mixed with
   function expects for patterns like "first insert succeeds through
   InMemory, second fails".
-- Documentation in `docs/repo.md` for using `DoubleDown.Handler` with
+- Documentation in `docs/repo.md` for using `DoubleDown.Double` with
   `Repo.Test` and `Repo.InMemory` for failure scenario testing,
   including error simulation, `:passthrough` call counting, and
   combined Handler + Log assertions.
@@ -84,10 +84,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `DoubleDown.Handler.stub/3` (with accumulator: `stub/4`) for module
+- `DoubleDown.Double.stub/3` (with accumulator: `stub/4`) for module
   fallback — delegates unhandled operations to a module implementing
   the contract's `@behaviour`. Validated at `install!` time.
-- `DoubleDown.Handler.stub/3` (with accumulator: `stub/4`) for stateful
+- `DoubleDown.Double.stub/3` (with accumulator: `stub/4`) for stateful
   fallback — accepts a 3-arity `fn operation, args, state ->
   {result, new_state} end` with initial state, same signature as
   `set_stateful_handler`. Integrates stateful fakes (e.g.
@@ -102,25 +102,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `DoubleDown.Handler.verify_on_exit!/0` — registers an `on_exit`
+- `DoubleDown.Double.verify_on_exit!/0` — registers an `on_exit`
   callback that automatically verifies all expectations after each
   test. Usable as `setup :verify_on_exit!`. Uses
   `NimbleOwnership.set_owner_to_manual_cleanup/2` to preserve
   ownership data until the on_exit callback runs.
-- `DoubleDown.Handler.verify!/1` — verifies expectations for a
+- `DoubleDown.Double.verify!/1` — verifies expectations for a
   specific process pid, used internally by `verify_on_exit!/0`.
 
 ### Fixed
 
 - Added `:ex_unit` to `plt_add_apps` in `mix.exs` so Dialyzer can
   resolve the `ExUnit.Callbacks.on_exit/2` call in
-  `DoubleDown.Handler.verify_on_exit!/0`.
+  `DoubleDown.Double.verify_on_exit!/0`.
 
 ## [0.19.0]
 
 ### Added
 
-- `DoubleDown.Handler.stub/2` and `stub/3` (with accumulator) for
+- `DoubleDown.Double.stub/2` and `stub/3` (with accumulator) for
   2-arity contract-wide fallback stubs. Accepts
   `fn operation, args -> result end` — the same signature as
   `set_fn_handler` — as a catch-all for operations without a
@@ -131,7 +131,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `DoubleDown.Handler` — Mox-style expect/stub handler builder. Builds
+- `DoubleDown.Double` — Mox-style expect/stub handler builder. Builds
   stateful handler functions from a declarative specification with
   multi-contract chaining and ordered expectations. API:
   `expect/3..5`, `stub/3..4`, `install!/1`, `verify!/0`.

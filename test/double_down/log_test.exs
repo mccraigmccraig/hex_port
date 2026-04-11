@@ -397,10 +397,10 @@ defmodule DoubleDown.LogTest do
                |> Log.verify!(Greeter)
     end
 
-    test "used alongside DoubleDown.Handler" do
+    test "used alongside DoubleDown.Double" do
       Greeter
-      |> DoubleDown.Handler.expect(:greet, fn [name] -> "Hi, #{name}!" end)
-      |> DoubleDown.Handler.expect(:fetch_greeting, fn [name] ->
+      |> DoubleDown.Double.expect(:greet, fn [name] -> "Hi, #{name}!" end)
+      |> DoubleDown.Double.expect(:fetch_greeting, fn [name] ->
         {:ok, "Hello, #{name}!"}
       end)
 
@@ -410,7 +410,7 @@ defmodule DoubleDown.LogTest do
       Greeter.Port.fetch_greeting("Bob")
 
       # Verify handler expectations
-      DoubleDown.Handler.verify!()
+      DoubleDown.Double.verify!()
 
       # Also verify log expectations
       assert {:ok, _} =

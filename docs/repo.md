@@ -327,7 +327,7 @@ Ecto's sandbox.
 
 ## Testing failure scenarios with Handler
 
-`DoubleDown.Handler` integrates with both Repo test doubles, letting you
+`DoubleDown.Double` integrates with both Repo test doubles, letting you
 override specific operations to simulate failures while the rest of
 the Repo behaves normally.
 
@@ -340,8 +340,8 @@ should fail:
 ```elixir
 setup do
   DoubleDown.Repo
-  |> DoubleDown.Handler.stub(DoubleDown.Repo.Test.new())
-  |> DoubleDown.Handler.expect(:insert, fn [changeset] ->
+  |> DoubleDown.Double.stub(DoubleDown.Repo.Test.new())
+  |> DoubleDown.Double.expect(:insert, fn [changeset] ->
     {:error, Ecto.Changeset.add_error(changeset, :email, "has already been taken")}
   end)
   :ok
@@ -357,7 +357,7 @@ test "handles duplicate email gracefully" do
   # Second insert succeeds (falls through to Repo.Test)
   assert {:ok, %User{}} = MyApp.Repo.insert(changeset)
 
-  DoubleDown.Handler.verify!()
+  DoubleDown.Double.verify!()
 end
 ```
 
@@ -369,8 +369,8 @@ need read-after-write consistency alongside failure simulation:
 ```elixir
 setup do
   DoubleDown.Repo
-  |> DoubleDown.Handler.stub(&DoubleDown.Repo.InMemory.dispatch/3, DoubleDown.Repo.InMemory.new())
-  |> DoubleDown.Handler.expect(:insert, fn [changeset] ->
+  |> DoubleDown.Double.fake(&DoubleDown.Repo.InMemory.dispatch/3, DoubleDown.Repo.InMemory.new())
+  |> DoubleDown.Double.expect(:insert, fn [changeset] ->
     {:error, Ecto.Changeset.add_error(changeset, :email, "has already been taken")}
   end)
   :ok
@@ -388,7 +388,7 @@ test "retries after constraint violation" do
   # Read-after-write: InMemory serves from store
   assert ^user = MyApp.Repo.get(User, user.id)
 
-  DoubleDown.Handler.verify!()
+  DoubleDown.Double.verify!()
 end
 ```
 
@@ -401,14 +401,14 @@ expect is consumed for `verify!` counting:
 ```elixir
 setup do
   DoubleDown.Repo
-  |> DoubleDown.Handler.stub(&DoubleDown.Repo.InMemory.dispatch/3, DoubleDown.Repo.InMemory.new())
-  |> DoubleDown.Handler.expect(:insert, :passthrough, times: 2)
+  |> DoubleDown.Double.fake(&DoubleDown.Repo.InMemory.dispatch/3, DoubleDown.Repo.InMemory.new())
+  |> DoubleDown.Double.expect(:insert, :passthrough, times: 2)
   :ok
 end
 
 test "creates exactly two records" do
   # ... code under test that should insert twice ...
-  DoubleDown.Handler.verify!()  # fails if insert wasn't called exactly twice
+  DoubleDown.Double.verify!()  # fails if insert wasn't called exactly twice
 end
 ```
 
@@ -417,9 +417,9 @@ You can mix `:passthrough` and function expects — for example,
 
 ```elixir
 DoubleDown.Repo
-|> DoubleDown.Handler.stub(&DoubleDown.Repo.InMemory.dispatch/3, DoubleDown.Repo.InMemory.new())
-|> DoubleDown.Handler.expect(:insert, :passthrough)
-|> DoubleDown.Handler.expect(:insert, fn [changeset] ->
+|> DoubleDown.Double.fake(&DoubleDown.Repo.InMemory.dispatch/3, DoubleDown.Repo.InMemory.new())
+|> DoubleDown.Double.expect(:insert, :passthrough)
+|> DoubleDown.Double.expect(:insert, fn [changeset] ->
   {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
 end)
 ```
@@ -433,8 +433,8 @@ including computed results:
 ```elixir
 setup do
   DoubleDown.Repo
-  |> DoubleDown.Handler.stub(&DoubleDown.Repo.InMemory.dispatch/3, DoubleDown.Repo.InMemory.new())
-  |> DoubleDown.Handler.expect(:insert, fn [changeset] ->
+  |> DoubleDown.Double.fake(&DoubleDown.Repo.InMemory.dispatch/3, DoubleDown.Repo.InMemory.new())
+  |> DoubleDown.Double.expect(:insert, fn [changeset] ->
     {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
   end)
 
@@ -448,7 +448,7 @@ test "logs the failure then the success" do
   assert {:error, _} = MyApp.Repo.insert(changeset)
   assert {:ok, %User{}} = MyApp.Repo.insert(changeset)
 
-  DoubleDown.Handler.verify!()
+  DoubleDown.Double.verify!()
 
   DoubleDown.Log.match(:insert, fn
     {_, _, _, {:error, _}} -> true

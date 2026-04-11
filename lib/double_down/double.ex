@@ -1,4 +1,4 @@
-defmodule DoubleDown.Handler do
+defmodule DoubleDown.Double do
   @moduledoc """
   Mox-style expect/stub handler declarations with immediate effect.
 
@@ -8,20 +8,20 @@ defmodule DoubleDown.Handler do
 
   ## Basic usage
 
-      DoubleDown.Handler.expect(MyContract, :get_thing, fn [id] -> %Thing{id: id} end)
-      DoubleDown.Handler.stub(MyContract, :list, fn [_] -> [] end)
+      DoubleDown.Double.expect(MyContract, :get_thing, fn [id] -> %Thing{id: id} end)
+      DoubleDown.Double.stub(MyContract, :list, fn [_] -> [] end)
 
       # ... run code under test ...
 
-      DoubleDown.Handler.verify!()
+      DoubleDown.Double.verify!()
 
   ## Piping
 
   All functions return the contract module, so you can pipe:
 
       MyContract
-      |> DoubleDown.Handler.expect(:get_thing, fn [id] -> %Thing{id: id} end)
-      |> DoubleDown.Handler.stub(:list, fn [_] -> [] end)
+      |> DoubleDown.Double.expect(:get_thing, fn [id] -> %Thing{id: id} end)
+      |> DoubleDown.Double.stub(:list, fn [_] -> [] end)
 
   ## Sequenced expectations
 
@@ -29,8 +29,8 @@ defmodule DoubleDown.Handler do
   that are consumed in order:
 
       MyContract
-      |> DoubleDown.Handler.expect(:get_thing, fn [_] -> {:error, :not_found} end)
-      |> DoubleDown.Handler.expect(:get_thing, fn [id] -> %Thing{id: id} end)
+      |> DoubleDown.Double.expect(:get_thing, fn [_] -> {:error, :not_found} end)
+      |> DoubleDown.Double.expect(:get_thing, fn [id] -> %Thing{id: id} end)
 
       # First call returns :not_found, second returns the thing
 
@@ -38,7 +38,7 @@ defmodule DoubleDown.Handler do
 
   Use `times: n` when the same function should handle multiple calls:
 
-      DoubleDown.Handler.expect(MyContract, :check, fn [_] -> :ok end, times: 3)
+      DoubleDown.Double.expect(MyContract, :check, fn [_] -> :ok end, times: 3)
 
   ## Expects + stubs
 
@@ -46,109 +46,94 @@ defmodule DoubleDown.Handler do
   first; once exhausted, the stub handles all subsequent calls:
 
       MyContract
-      |> DoubleDown.Handler.expect(:get, fn [_] -> :first end)
-      |> DoubleDown.Handler.stub(:get, fn [_] -> :default end)
+      |> DoubleDown.Double.expect(:get, fn [_] -> :first end)
+      |> DoubleDown.Double.stub(:get, fn [_] -> :default end)
 
-  ## Contract-wide fallback
+  ## Stubs and fakes as fallbacks
 
   A fallback handles any operation without a specific expect or
-  per-operation stub. Three forms are supported:
+  per-operation stub. Stubs and fakes serve different purposes:
 
-  ### Function fallback
+  ### Function fallback (stub)
 
-  A 2-arity `fn operation, args -> result end` — the same signature
-  as `set_fn_handler`:
+  A stateless 2-arity `fn operation, args -> result end` — canned
+  responses, same signature as `set_fn_handler`:
 
       MyContract
-      |> DoubleDown.Handler.expect(:get, fn [id] -> %Thing{id: id} end)
-      |> DoubleDown.Handler.stub(fn
+      |> DoubleDown.Double.expect(:get, fn [id] -> %Thing{id: id} end)
+      |> DoubleDown.Double.stub(fn
         :list, [_] -> []
         :count, [] -> 0
       end)
 
-  ### Stateful fallback
+  ### Stateful fake
 
-  A 3-arity `fn operation, args, state -> {result, new_state} end` —
-  the same signature as `set_stateful_handler`. This integrates a
-  stateful fake (like `Repo.InMemory`) into the dispatch chain while
-  allowing expects to override specific calls:
+  A 3-arity `fn operation, args, state -> {result, new_state} end`
+  with real logic and state. Integrates fakes like `Repo.InMemory`
+  while allowing expects to override specific calls:
 
-      # First insert fails, rest go through the stateful handler
-      RepoContract
-      |> DoubleDown.Handler.stub(&Repo.InMemory.handler/3, %{})
-      |> DoubleDown.Handler.expect(:insert, fn [changeset] ->
+      # First insert fails, rest go through InMemory
+      DoubleDown.Repo
+      |> DoubleDown.Double.fake(&Repo.InMemory.dispatch/3, Repo.InMemory.new())
+      |> DoubleDown.Double.expect(:insert, fn [changeset] ->
         {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
       end)
 
-  The fallback's state is managed alongside the expect queue state.
-  When an expect short-circuits (e.g. returning an error), the
-  fallback state is unchanged — correct for error simulation.
+  When an expect short-circuits (e.g. returning an error), the fake
+  state is unchanged — correct for error simulation.
 
   **Limitation: no inline passthrough.** Expects and per-operation
-  stubs cannot delegate to the stateful fallback inline — they
-  produce return values directly without access to the fallback's
-  state. This is a deliberate design choice: providing a
-  `passthrough` callback that threads mutable state through a
-  user-provided function is fundamentally an algebraic effects
-  problem. Without an effects library, any solution is either
-  janky (process dictionary side-channel) or leaky (exposing
-  `{result, state}` tuples to the user).
+  stubs cannot delegate to a stateful fake inline — they produce
+  return values directly without access to the fake's state.
+  Threading mutable state through a user-provided callback requires
+  a complex API and seems of limited value given that the main use
+  case — error simulation — doesn't need it.
 
-  In practice, the main use case — error simulation — doesn't need
-  passthrough: the expect returns an error, the fallback never runs,
-  and its state is correctly unchanged. For wrapping or transforming
-  fallback results, [Skuld](https://github.com/mccraigmccraig/skuld)
-  provides algebraic effects that handle this naturally.
+  ### Module fake
 
-  ### Module fallback
-
-  A module implementing the contract's `@behaviour` — all operations
-  delegate to the module via `apply(module, operation, args)`:
+  A module implementing the contract's `@behaviour`:
 
       MyContract
-      |> DoubleDown.Handler.expect(:get, fn [_] -> {:error, :not_found} end)
-      |> DoubleDown.Handler.stub(MyApp.Impl)
-
-  The module is validated at stub time — all contract operations
-  must be exported.
+      |> DoubleDown.Double.expect(:get, fn [_] -> {:error, :not_found} end)
+      |> DoubleDown.Double.fake(MyApp.Impl)
 
   **Mimic-style limitation:** if the module's `:bar` internally calls
   `:foo`, and you've stubbed `:foo`, the module won't see your stub —
   it calls its own `:foo` directly. For stubs to be visible, the
   module must call through the facade.
 
-  Dispatch priority: expects > per-operation stubs > fallback > raise.
-  Function, stateful, and module fallbacks are mutually exclusive —
-  setting one replaces the other.
+  Dispatch priority: expects > per-operation stubs > fallback/fake > raise.
+  Function stub, stateful fake, and module fake are mutually
+  exclusive — setting one replaces the other.
 
   ## Passthrough expects
 
-  When a fallback is configured, pass `:passthrough` instead of a
-  function to delegate to the fallback while still consuming the
-  expect for `verify!` counting:
+  When a fallback/fake is configured, pass `:passthrough` instead of
+  a function to delegate while still consuming the expect for
+  `verify!` counting:
 
       MyContract
-      |> DoubleDown.Handler.stub(MyApp.Impl)
-      |> DoubleDown.Handler.expect(:get, :passthrough, times: 2)
+      |> DoubleDown.Double.fake(MyApp.Impl)
+      |> DoubleDown.Double.expect(:get, :passthrough, times: 2)
 
   ## Multi-contract
 
-      RepoContract
-      |> DoubleDown.Handler.stub(&Repo.InMemory.handler/3, %{})
-      |> DoubleDown.Handler.expect(:insert, fn [cs] -> {:error, :taken} end)
+      DoubleDown.Repo
+      |> DoubleDown.Double.fake(&Repo.InMemory.dispatch/3, Repo.InMemory.new())
+      |> DoubleDown.Double.expect(:insert, fn [cs] -> {:error, :taken} end)
 
       QueriesContract
-      |> DoubleDown.Handler.expect(:get_record, fn [id] -> %Record{id: id} end)
+      |> DoubleDown.Double.expect(:get_record, fn [id] -> %Record{id: id} end)
 
   ## Relationship to Mox
 
-  | Mox | DoubleDown.Handler |
+  | Mox | DoubleDown.Double |
   |-----|-----------------|
   | `expect(Mock, :fn, n, fun)` | `expect(Contract, :fn, fun, times: n)` |
   | `stub(Mock, :fn, fun)` | `stub(Contract, :fn, fun)` — per-operation |
   | (no equivalent) | `stub(Contract, fn op, args -> ... end)` — function fallback |
-  | (no equivalent) | `stub(Contract, fn op, args, state -> ... end, init)` — stateful fallback |
-  | (no equivalent) | `stub(Contract, ImplModule)` — module fallback |
+  | (no equivalent) | `fake(Contract, fn op, args, state -> ... end, init)` — stateful fake |
+  | (no equivalent) | `fake(Contract, ImplModule)` — module fake |
   | `verify!()` | `verify!()` |
   | `verify_on_exit!()` | `verify_on_exit!()` |
   | `Mox.defmock(Mock, for: Behaviour)` | Not needed |
@@ -162,7 +147,7 @@ defmodule DoubleDown.Handler do
   """
 
   @ownership_server DoubleDown.Dispatch.Ownership
-  @contracts_key DoubleDown.Handler.Contracts
+  @contracts_key DoubleDown.Double.Contracts
 
   # -- Public API: expect --
 
@@ -220,7 +205,7 @@ defmodule DoubleDown.Handler do
   # -- Public API: stub --
 
   @doc """
-  Add a stub for a contract operation or a contract-wide fallback.
+  Add a stub for a contract operation or a stateless function fallback.
 
   ## Per-operation stub (1-arity function)
 
@@ -229,7 +214,7 @@ defmodule DoubleDown.Handler do
   for an operation are consumed. Setting a stub twice for the same
   operation replaces the previous one.
 
-      DoubleDown.Handler.stub(MyContract, :list, fn [_] -> [] end)
+      DoubleDown.Double.stub(MyContract, :list, fn [_] -> [] end)
 
   ## Function fallback (2-arity function)
 
@@ -238,44 +223,21 @@ defmodule DoubleDown.Handler do
   no per-operation expect or stub. This is the same signature as
   `set_fn_handler`, so existing handler functions can be reused:
 
-      DoubleDown.Handler.stub(MyContract, fn
+      DoubleDown.Double.stub(MyContract, fn
         :list, [_] -> []
         :count, [] -> 0
       end)
 
-  ## Stateful fallback (3-arity function + initial state)
+  For stateful fakes and module delegation, see `fake/2` and `fake/3`.
 
-  When a 3-arity `fn operation, args, state -> {result, new_state} end`
-  is passed with an initial state, it acts as a stateful fallback.
-  This is the same signature as `set_stateful_handler`, allowing
-  stateful fakes like `Repo.InMemory` to be integrated:
-
-      DoubleDown.Handler.stub(RepoContract, &Repo.InMemory.handler/3, %{})
-
-  The fallback's state is threaded through calls automatically.
-  When an expect short-circuits (e.g. returning an error), the
-  fallback state is unchanged.
-
-  ## Module fallback (atom)
-
-  When an atom (module name) is passed, all unhandled operations
-  delegate to the module via `apply(module, operation, args)`. The
-  module must implement the contract's `@behaviour`:
-
-      DoubleDown.Handler.stub(MyContract, MyApp.Impl)
-
-  The module is validated immediately.
-
-  Function, stateful, and module fallbacks are mutually exclusive —
-  setting one replaces the other.
-
-  Dispatch priority: expects > per-operation stubs > fallback > raise.
+  Dispatch priority: expects > per-operation stubs > fallback/fake > raise.
+  Function fallback, stateful fake, and module fake are mutually
+  exclusive — setting one replaces the other.
 
   Returns the contract module for piping.
   """
-  # stub/2 — function fallback or module fallback
+  # stub/2 — function fallback
   @spec stub(module(), function()) :: module()
-  @spec stub(module(), module()) :: module()
   def stub(contract, fun)
       when is_atom(contract) and is_function(fun, 2) do
     ensure_handler_installed(contract)
@@ -287,21 +249,8 @@ defmodule DoubleDown.Handler do
     contract
   end
 
-  def stub(contract, module)
-      when is_atom(contract) and is_atom(module) do
-    validate_module_fallback!(contract, module)
-    ensure_handler_installed(contract)
-
-    update_handler_state(contract, fn state ->
-      %{state | fallback: {:module, module}}
-    end)
-
-    contract
-  end
-
-  # stub/3 — per-operation stub or stateful fallback
+  # stub/3 — per-operation stub
   @spec stub(module(), atom(), function()) :: module()
-  @spec stub(module(), function(), term()) :: module()
   def stub(contract, operation, fun)
       when is_atom(contract) and is_atom(operation) and is_function(fun, 1) do
     ensure_handler_installed(contract)
@@ -313,7 +262,65 @@ defmodule DoubleDown.Handler do
     contract
   end
 
-  def stub(contract, fun, init_state)
+  # -- Public API: fake --
+
+  @doc """
+  Set a fake implementation as the fallback for a contract.
+
+  Fakes have real logic — they maintain state or delegate to a real
+  implementation module. They handle any operation not covered by an
+  `expect` or per-operation `stub`.
+
+  ## Module fake
+
+  A module implementing the contract's `@behaviour`. All unhandled
+  operations delegate via `apply(module, operation, args)`:
+
+      DoubleDown.Double.fake(MyContract, MyApp.Impl)
+
+  The module is validated immediately — all contract operations must
+  be exported.
+
+  **Mimic-style limitation:** if the module's `:bar` internally calls
+  `:foo`, and you've stubbed `:foo`, the module won't see your stub —
+  it calls its own `:foo` directly. For stubs to be visible, the
+  module must call through the facade.
+
+  ## Stateful fake
+
+  A 3-arity `fn operation, args, state -> {result, new_state} end`
+  with initial state. Same signature as `set_stateful_handler`,
+  allowing fakes like `Repo.InMemory` to integrate directly:
+
+      DoubleDown.Double.fake(MyContract, &Repo.InMemory.dispatch/3, Repo.InMemory.new())
+
+  The fake's state is threaded through calls automatically. When an
+  expect short-circuits (e.g. returning an error), the fake state is
+  unchanged — correct for error simulation.
+
+  Dispatch priority: expects > per-operation stubs > fake > raise.
+  Function fallback (`stub/2`), module fake, and stateful fake are
+  mutually exclusive — setting one replaces the other.
+
+  Returns the contract module for piping.
+  """
+  # fake/2 — module fake
+  @spec fake(module(), module()) :: module()
+  def fake(contract, module)
+      when is_atom(contract) and is_atom(module) do
+    validate_module_fallback!(contract, module)
+    ensure_handler_installed(contract)
+
+    update_handler_state(contract, fn state ->
+      %{state | fallback: {:module, module}}
+    end)
+
+    contract
+  end
+
+  # fake/3 — stateful fake
+  @spec fake(module(), function(), term()) :: module()
+  def fake(contract, fun, init_state)
       when is_atom(contract) and is_function(fun, 3) do
     ensure_handler_installed(contract)
 
@@ -362,7 +369,7 @@ defmodule DoubleDown.Handler do
   Or equivalently:
 
       setup do
-        DoubleDown.Handler.verify_on_exit!()
+        DoubleDown.Double.verify_on_exit!()
       end
 
   The verification runs in the on_exit callback (a separate process),
@@ -376,7 +383,7 @@ defmodule DoubleDown.Handler do
     # exits — the data must survive until the on_exit callback runs.
     NimbleOwnership.set_owner_to_manual_cleanup(@ownership_server, pid)
 
-    ExUnit.Callbacks.on_exit(DoubleDown.Handler, fn ->
+    ExUnit.Callbacks.on_exit(DoubleDown.Double, fn ->
       try do
         verify!(pid)
       after
@@ -544,7 +551,7 @@ defmodule DoubleDown.Handler do
           contracts
 
         _ ->
-          raise "DoubleDown.Handler.verify!/0 called but no handlers were installed"
+          raise "DoubleDown.Double.verify!/0 called but no handlers were installed"
       end
 
     unconsumed =
@@ -569,7 +576,7 @@ defmodule DoubleDown.Handler do
         end)
 
       raise """
-      DoubleDown.Handler expectations not fulfilled:
+      DoubleDown.Double expectations not fulfilled:
 
       #{details}
       """

@@ -20,14 +20,14 @@ handler mechanism:
 
 | Type | What it does | DoubleDown API |
 |---|---|---|
-| **Stub** | Returns canned responses, no verification | `set_fn_handler`, `DoubleDown.Handler.stub` |
-| **Mock** | Returns canned responses + verifies call counts/order | `DoubleDown.Handler.expect` + `verify!` |
+| **Stub** | Returns canned responses, no verification | `set_fn_handler`, `DoubleDown.Double.stub` |
+| **Mock** | Returns canned responses + verifies call counts/order | `DoubleDown.Double.expect` + `verify!` |
 | **Fake** | Working logic, simpler than production but behaviourally realistic | `set_stateful_handler`, `Repo.Test`, `Repo.InMemory` |
 
 **Stubs** are the simplest — register a function that returns what you
 need, don't bother checking how many times it was called.
 
-**Mocks** (via `DoubleDown.Handler`) add expectations — the handler is
+**Mocks** (via `DoubleDown.Double`) add expectations — the handler is
 consumed in order, and `verify!` checks that all expected calls were
 made. This is the Mox model.
 

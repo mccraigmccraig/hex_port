@@ -81,9 +81,9 @@ defmodule DoubleDown.Log do
 
   Built on `DoubleDown.Testing.get_log/1`. Completely decoupled from
   handler choice — works with `Repo.Test`, `Repo.InMemory`,
-  `set_fn_handler`, `set_stateful_handler`, or `DoubleDown.Handler`.
+  `set_fn_handler`, `set_stateful_handler`, or `DoubleDown.Double`.
 
-  Can be used alongside `DoubleDown.Handler` — Handler for fail-fast
+  Can be used alongside `DoubleDown.Double` — Handler for fail-fast
   validation and producing return values, Log for after-the-fact
   result inspection.
   """

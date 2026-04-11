@@ -58,7 +58,7 @@ DoubleDown extends the Mox pattern:
 
 | Feature                            | Description                                                                |
 |------------------------------------|----------------------------------------------------------------------------|
-| Mox-style expect/stub              | `DoubleDown.Handler` — ordered expectations, call counting, `verify!`      |
+| Mox-style expect/stub              | `DoubleDown.Double` — ordered expectations, call counting, `verify!`      |
 | Stateful fakes                     | In-memory state with atomic updates via NimbleOwnership                    |
 | Expect + fake composition          | Layer expects over a stateful fake for failure simulation                  |
 | `:passthrough` expects             | Count calls without changing behaviour                                     |
@@ -128,18 +128,18 @@ Test with expects and stubs — no database, full async isolation:
 ```elixir
 setup do
   MyApp.Todos
-  |> DoubleDown.Handler.expect(:create_todo, fn [params] ->
+  |> DoubleDown.Double.expect(:create_todo, fn [params] ->
     {:ok, struct!(Todo, Map.put(params, :id, "123"))}
   end)
-  |> DoubleDown.Handler.stub(:get_todo, fn [id] -> {:ok, %Todo{id: id}} end)
-  |> DoubleDown.Handler.stub(:list_todos, fn [_] -> [] end)
+  |> DoubleDown.Double.stub(:get_todo, fn [id] -> {:ok, %Todo{id: id}} end)
+  |> DoubleDown.Double.stub(:list_todos, fn [_] -> [] end)
   :ok
 end
 
 test "create then get" do
   {:ok, todo} = MyApp.Todos.create_todo(%{title: "Ship it"})
   assert {:ok, _} = MyApp.Todos.get_todo(todo.id)
-  DoubleDown.Handler.verify!()
+  DoubleDown.Double.verify!()
 end
 ```
 
@@ -151,10 +151,10 @@ Layer expects over a stateful fake to simulate specific failures:
 setup do
   # InMemory Repo as the baseline — real state, read-after-write
   DoubleDown.Repo
-  |> DoubleDown.Handler.stub(&DoubleDown.Repo.InMemory.dispatch/3,
+  |> DoubleDown.Double.fake(&DoubleDown.Repo.InMemory.dispatch/3,
     DoubleDown.Repo.InMemory.new())
   # First insert fails with constraint error
-  |> DoubleDown.Handler.expect(:insert, fn [changeset] ->
+  |> DoubleDown.Double.expect(:insert, fn [changeset] ->
     {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
   end)
   :ok

@@ -89,7 +89,7 @@ stateful test doubles — see [Repo](repo.md).
 
 ## Handler (expect/stub)
 
-`DoubleDown.Handler` provides a Mox-style expect/stub API for declaring
+`DoubleDown.Double` provides a Mox-style expect/stub API for declaring
 test handlers. Each call writes directly to NimbleOwnership — no
 builder, no `install!` step. All functions return the contract module
 for piping.
@@ -99,14 +99,14 @@ for piping.
 ```elixir
 setup do
   MyApp.Todos
-  |> DoubleDown.Handler.expect(:get_todo, fn [id] -> {:ok, %Todo{id: id}} end)
-  |> DoubleDown.Handler.stub(:list_todos, fn [_] -> [] end)
+  |> DoubleDown.Double.expect(:get_todo, fn [id] -> {:ok, %Todo{id: id}} end)
+  |> DoubleDown.Double.stub(:list_todos, fn [_] -> [] end)
   :ok
 end
 
 test "..." do
   # ... run code under test ...
-  DoubleDown.Handler.verify!()
+  DoubleDown.Double.verify!()
 end
 ```
 
@@ -118,8 +118,8 @@ with no remaining expectations and no stub raises immediately.
 
 ```elixir
 MyApp.Todos
-|> DoubleDown.Handler.expect(:get_todo, fn [_] -> {:error, :not_found} end)
-|> DoubleDown.Handler.expect(:get_todo, fn [id] -> {:ok, %Todo{id: id}} end)
+|> DoubleDown.Double.expect(:get_todo, fn [_] -> {:error, :not_found} end)
+|> DoubleDown.Double.expect(:get_todo, fn [id] -> {:ok, %Todo{id: id}} end)
 
 # First call returns :not_found, second returns the todo
 ```
@@ -127,7 +127,7 @@ MyApp.Todos
 ### Repeated expectations
 
 ```elixir
-DoubleDown.Handler.expect(MyApp.Todos, :get_todo, fn [id] -> {:ok, %Todo{id: id}} end, times: 3)
+DoubleDown.Double.expect(MyApp.Todos, :get_todo, fn [id] -> {:ok, %Todo{id: id}} end, times: 3)
 ```
 
 ### Contract-wide fallback
@@ -140,11 +140,11 @@ the same signature as `set_fn_handler`:
 
 ```elixir
 MyApp.Todos
-|> DoubleDown.Handler.stub(fn
+|> DoubleDown.Double.stub(fn
   :list_todos, [_] -> []
   :get_todo, [id] -> {:ok, %Todo{id: id}}
 end)
-|> DoubleDown.Handler.expect(:create_todo, fn [p] -> {:ok, struct!(Todo, p)} end)
+|> DoubleDown.Double.expect(:create_todo, fn [p] -> {:ok, struct!(Todo, p)} end)
 ```
 
 **Stateful fallback** — a 3-arity `fn op, args, state -> {result, state}` with
@@ -155,8 +155,8 @@ operations with expects while the fake handles everything else:
 ```elixir
 # First insert fails with constraint error, rest go through InMemory
 DoubleDown.Repo
-|> DoubleDown.Handler.stub(&DoubleDown.Repo.InMemory.dispatch/3, DoubleDown.Repo.InMemory.new())
-|> DoubleDown.Handler.expect(:insert, fn [changeset] ->
+|> DoubleDown.Double.fake(&DoubleDown.Repo.InMemory.dispatch/3, DoubleDown.Repo.InMemory.new())
+|> DoubleDown.Double.expect(:insert, fn [changeset] ->
   {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
 end)
 ```
@@ -176,8 +176,8 @@ implementation:
 
 ```elixir
 MyApp.Todos
-|> DoubleDown.Handler.stub(MyApp.Todos.Ecto)
-|> DoubleDown.Handler.expect(:create_todo, fn [_] -> {:error, :conflict} end)
+|> DoubleDown.Double.fake(MyApp.Todos.Ecto)
+|> DoubleDown.Double.expect(:create_todo, fn [_] -> {:error, :conflict} end)
 ```
 
 The module is validated at stub time. Note: if the module's
@@ -195,8 +195,8 @@ expect for `verify!` counting:
 
 ```elixir
 MyApp.Todos
-|> DoubleDown.Handler.stub(MyApp.Todos.Impl)
-|> DoubleDown.Handler.expect(:get_todo, :passthrough, times: 2)
+|> DoubleDown.Double.fake(MyApp.Todos.Impl)
+|> DoubleDown.Double.expect(:get_todo, :passthrough, times: 2)
 
 # Both calls delegate to MyApp.Todos.Impl
 # verify! checks that get_todo was called exactly twice
@@ -209,9 +209,9 @@ succeeds through the fallback, second call returns an error":
 
 ```elixir
 RepoContract
-|> DoubleDown.Handler.stub(&Repo.InMemory.handler/3, %{})
-|> DoubleDown.Handler.expect(:insert, :passthrough)
-|> DoubleDown.Handler.expect(:insert, fn [changeset] ->
+|> DoubleDown.Double.fake(&Repo.InMemory.handler/3, %{})
+|> DoubleDown.Double.expect(:insert, :passthrough)
+|> DoubleDown.Double.expect(:insert, fn [changeset] ->
   {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
 end)
 
@@ -223,9 +223,9 @@ end)
 
 ```elixir
 MyApp.Todos
-|> DoubleDown.Handler.expect(:create_todo, fn [p] -> {:ok, struct!(Todo, p)} end)
+|> DoubleDown.Double.expect(:create_todo, fn [p] -> {:ok, struct!(Todo, p)} end)
 
-DoubleDown.Handler.stub(DoubleDown.Repo, :one, fn [_] -> nil end)
+DoubleDown.Double.stub(DoubleDown.Repo, :one, fn [_] -> nil end)
 ```
 
 ### Verification
@@ -242,7 +242,7 @@ setup :verify_on_exit!
 
 # or equivalently:
 setup do
-  DoubleDown.Handler.verify_on_exit!()
+  DoubleDown.Double.verify_on_exit!()
 end
 ```
 
@@ -251,13 +251,13 @@ You can also call `verify!/0` explicitly at the end of a test:
 ```elixir
 test "creates a todo" do
   # ... setup and dispatch ...
-  DoubleDown.Handler.verify!()
+  DoubleDown.Double.verify!()
 end
 ```
 
 ### When to use Handler vs raw handlers
 
-Use `DoubleDown.Handler` when you want Mox-style call counting and
+Use `DoubleDown.Double` when you want Mox-style call counting and
 ordered expectations. Use `set_fn_handler` for simple canned
 responses. Use `set_stateful_handler` directly when you need custom
 state management (e.g. in-memory stores with complex query logic).
@@ -337,7 +337,7 @@ DoubleDown.Log.match(:insert, fn _ -> true end)
 |> DoubleDown.Log.verify!(MyContract, strict: true)
 ```
 
-### Using with DoubleDown.Handler
+### Using with DoubleDown.Double
 
 Handler and Log serve complementary roles — Handler for fail-fast
 validation and producing return values, Log for after-the-fact
@@ -345,7 +345,7 @@ result inspection:
 
 ```elixir
 # Set up handlers
-DoubleDown.Handler.expect(MyContract, :create, fn [p] -> {:ok, struct!(Thing, p)} end)
+DoubleDown.Double.expect(MyContract, :create, fn [p] -> {:ok, struct!(Thing, p)} end)
 
 DoubleDown.Testing.enable_log(MyContract)
 
@@ -353,7 +353,7 @@ DoubleDown.Testing.enable_log(MyContract)
 MyModule.do_work(params)
 
 # Verify handler expectations consumed
-DoubleDown.Handler.verify!()
+DoubleDown.Double.verify!()
 
 # Verify log entries match expected patterns
 DoubleDown.Log.match(:create, fn
