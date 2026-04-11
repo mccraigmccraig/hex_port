@@ -334,7 +334,10 @@ but there are practical limitations:
   like `@callback get(term(), term()) :: term()` has no parameter names.
 - **`Code.Typespec.fetch_callbacks/1` has limitations.** It only works
   on compiled modules with beam files on disk, not on modules being
-  compiled in the same project.
+  compiled in the same project. This rules out the combined
+  contract + facade pattern entirely — the contract must be in a
+  separate, pre-compiled module, which also means the LSP-friendly
+  `@doc` hover docs described above are never available.
 - **No place for additional metadata.** `defcallback` supports options like
   `bang:` (bang variant generation) and `pre_dispatch:` (argument
   transforms before dispatch). Plain `@callback` has no mechanism for
