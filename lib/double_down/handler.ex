@@ -390,7 +390,7 @@ defmodule DoubleDown.Handler do
 
   # -- Internal: handler installation --
 
-  @initial_state %{expects: %{}, stubs: %{}, fallback: nil, fallback_state: nil}
+  @initial_state %{contract: nil, expects: %{}, stubs: %{}, fallback: nil, fallback_state: nil}
 
   defp ensure_handler_installed(contract) do
     state_key = Module.concat(DoubleDown.State, contract)
@@ -405,7 +405,7 @@ defmodule DoubleDown.Handler do
         DoubleDown.Testing.set_stateful_handler(
           contract,
           &canonical_handler/3,
-          @initial_state
+          %{@initial_state | contract: contract}
         )
 
         register_contract(contract)
@@ -467,7 +467,7 @@ defmodule DoubleDown.Handler do
   defp invoke_fallback_or_raise(state, operation, args) do
     case state.fallback do
       nil ->
-        msg = unexpected_call_message(state, operation, args)
+        msg = unexpected_call_message(state.contract, state, operation, args)
         {{:defer, fn -> raise msg end}, state}
 
       {:fn, fallback_fn} ->
@@ -486,7 +486,7 @@ defmodule DoubleDown.Handler do
     {result, state}
   rescue
     FunctionClauseError ->
-      msg = unexpected_call_message(state, operation, args)
+      msg = unexpected_call_message(state.contract, state, operation, args)
       {{:defer, fn -> reraise msg, __STACKTRACE__ end}, state}
   end
 
@@ -495,7 +495,7 @@ defmodule DoubleDown.Handler do
     {result, %{state | fallback_state: new_fallback_state}}
   rescue
     FunctionClauseError ->
-      msg = unexpected_call_message(state, operation, args)
+      msg = unexpected_call_message(state.contract, state, operation, args)
       {{:defer, fn -> reraise msg, __STACKTRACE__ end}, state}
   end
 
@@ -504,11 +504,11 @@ defmodule DoubleDown.Handler do
     {result, state}
   rescue
     UndefinedFunctionError ->
-      msg = unexpected_call_message(state, operation, args)
+      msg = unexpected_call_message(state.contract, state, operation, args)
       {{:defer, fn -> reraise msg, __STACKTRACE__ end}, state}
   end
 
-  defp unexpected_call_message(%{expects: expects}, operation, args) do
+  defp unexpected_call_message(contract, %{expects: expects}, operation, args) do
     remaining =
       expects
       |> Enum.reject(fn {_op, queue} -> queue == [] end)
@@ -522,11 +522,13 @@ defmodule DoubleDown.Handler do
       end
 
     """
-    Unexpected call to #{operation}/#{length(args)}.
+    Unexpected call to #{inspect(contract)}.#{operation}/#{length(args)}.
+
+    Args: #{inspect(args)}
 
     No expectations or stubs defined for this operation.
 
-    Remaining expectations:
+    Remaining expectations for #{inspect(contract)}:
     #{remaining_msg}
     """
   end
