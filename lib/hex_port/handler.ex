@@ -1,37 +1,36 @@
 defmodule HexPort.Handler do
   @moduledoc """
-  Stateful handler builder from expect/stub clauses.
+  Mox-style expect/stub handler declarations with immediate effect.
 
-  Builds stateful handler functions from a declarative specification,
-  then installs them via `HexPort.Testing.set_stateful_handler/3`.
-  Multi-contract expectations can be chained in a single pipeline
-  and installed with one call.
-
-  This is essentially Mox's expect/stub model, but:
-
-  - **Multi-contract** — one pipeline across multiple contracts
-  - **No mock modules** — handlers installed directly on contracts
-  - **Built on `set_stateful_handler`** — doesn't replace or limit
-    the existing general-purpose handler APIs
+  Each `expect` and `stub` call writes directly to NimbleOwnership —
+  no builder struct, no `install!` step. Functions return the contract
+  module atom for Mimic-style piping.
 
   ## Basic usage
 
       HexPort.Handler.expect(MyContract, :get_thing, fn [id] -> %Thing{id: id} end)
-      |> HexPort.Handler.stub(MyContract, :list, fn [_] -> [] end)
-      |> HexPort.Handler.install!()
+      HexPort.Handler.stub(MyContract, :list, fn [_] -> [] end)
 
       # ... run code under test ...
 
       HexPort.Handler.verify!()
+
+  ## Piping
+
+  All functions return the contract module, so you can pipe:
+
+      MyContract
+      |> HexPort.Handler.expect(:get_thing, fn [id] -> %Thing{id: id} end)
+      |> HexPort.Handler.stub(:list, fn [_] -> [] end)
 
   ## Sequenced expectations
 
   Successive calls to `expect` for the same operation queue handlers
   that are consumed in order:
 
-      HexPort.Handler.expect(MyContract, :get_thing, fn [_] -> {:error, :not_found} end)
-      |> HexPort.Handler.expect(MyContract, :get_thing, fn [id] -> %Thing{id: id} end)
-      |> HexPort.Handler.install!()
+      MyContract
+      |> HexPort.Handler.expect(:get_thing, fn [_] -> {:error, :not_found} end)
+      |> HexPort.Handler.expect(:get_thing, fn [id] -> %Thing{id: id} end)
 
       # First call returns :not_found, second returns the thing
 
@@ -40,33 +39,32 @@ defmodule HexPort.Handler do
   Use `times: n` when the same function should handle multiple calls:
 
       HexPort.Handler.expect(MyContract, :check, fn [_] -> :ok end, times: 3)
-      |> HexPort.Handler.install!()
 
   ## Expects + stubs
 
   When an operation has both expects and a stub, expects are consumed
   first; once exhausted, the stub handles all subsequent calls:
 
-      HexPort.Handler.expect(MyContract, :get, fn [_] -> :first end)
-      |> HexPort.Handler.stub(MyContract, :get, fn [_] -> :default end)
-      |> HexPort.Handler.install!()
+      MyContract
+      |> HexPort.Handler.expect(:get, fn [_] -> :first end)
+      |> HexPort.Handler.stub(:get, fn [_] -> :default end)
 
   ## Contract-wide fallback
 
   A fallback handles any operation without a specific expect or
-  per-operation stub. Two forms are supported:
+  per-operation stub. Three forms are supported:
 
   ### Function fallback
 
   A 2-arity `fn operation, args -> result end` — the same signature
   as `set_fn_handler`:
 
-      HexPort.Handler.expect(MyContract, :get, fn [id] -> %Thing{id: id} end)
-      |> HexPort.Handler.stub(MyContract, fn
+      MyContract
+      |> HexPort.Handler.expect(:get, fn [id] -> %Thing{id: id} end)
+      |> HexPort.Handler.stub(fn
         :list, [_] -> []
         :count, [] -> 0
       end)
-      |> HexPort.Handler.install!()
 
   ### Stateful fallback
 
@@ -76,11 +74,11 @@ defmodule HexPort.Handler do
   allowing expects to override specific calls:
 
       # First insert fails, rest go through the stateful handler
-      HexPort.Handler.expect(RepoContract, :insert, fn [changeset] ->
+      RepoContract
+      |> HexPort.Handler.stub(&Repo.InMemory.handler/3, %{})
+      |> HexPort.Handler.expect(:insert, fn [changeset] ->
         {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
       end)
-      |> HexPort.Handler.stub(RepoContract, &Repo.InMemory.handler/3, %{})
-      |> HexPort.Handler.install!()
 
   The fallback's state is managed alongside the expect queue state.
   When an expect short-circuits (e.g. returning an error), the
@@ -107,11 +105,11 @@ defmodule HexPort.Handler do
   A module implementing the contract's `@behaviour` — all operations
   delegate to the module via `apply(module, operation, args)`:
 
-      HexPort.Handler.expect(MyContract, :get, fn [_] -> {:error, :not_found} end)
-      |> HexPort.Handler.stub(MyContract, MyApp.Impl)
-      |> HexPort.Handler.install!()
+      MyContract
+      |> HexPort.Handler.expect(:get, fn [_] -> {:error, :not_found} end)
+      |> HexPort.Handler.stub(MyApp.Impl)
 
-  The module is validated at `install!` time — all contract operations
+  The module is validated at stub time — all contract operations
   must be exported.
 
   **Mimic-style limitation:** if the module's `:bar` internally calls
@@ -123,11 +121,24 @@ defmodule HexPort.Handler do
   Function, stateful, and module fallbacks are mutually exclusive —
   setting one replaces the other.
 
+  ## Passthrough expects
+
+  When a fallback is configured, pass `:passthrough` instead of a
+  function to delegate to the fallback while still consuming the
+  expect for `verify!` counting:
+
+      MyContract
+      |> HexPort.Handler.stub(MyApp.Impl)
+      |> HexPort.Handler.expect(:get, :passthrough, times: 2)
+
   ## Multi-contract
 
-      HexPort.Handler.expect(TodosContract, :create, fn [p] -> {:ok, struct!(Todo, p)} end)
-      |> HexPort.Handler.stub(RepoContract, :one, fn [_] -> nil end)
-      |> HexPort.Handler.install!()
+      RepoContract
+      |> HexPort.Handler.stub(&Repo.InMemory.handler/3, %{})
+      |> HexPort.Handler.expect(:insert, fn [cs] -> {:error, :taken} end)
+
+      QueriesContract
+      |> HexPort.Handler.expect(:get_record, fn [id] -> %Record{id: id} end)
 
   ## Relationship to Mox
 
@@ -141,7 +152,7 @@ defmodule HexPort.Handler do
   | `verify!()` | `verify!()` |
   | `verify_on_exit!()` | `verify_on_exit!()` |
   | `Mox.defmock(Mock, for: Behaviour)` | Not needed |
-  | `Application.put_env(...)` | `install!()` |
+  | `Application.put_env(...)` | Not needed |
 
   ## Relationship to existing APIs
 
@@ -153,29 +164,7 @@ defmodule HexPort.Handler do
   @ownership_server HexPort.Dispatch.Ownership
   @contracts_key HexPort.Handler.Contracts
 
-  defstruct contracts: %{}
-
-  @type fallback ::
-          nil
-          | {:fn, :erlang.function()}
-          | {:stateful, :erlang.function(), term()}
-          | {:module, module()}
-
-  @type t :: %__MODULE__{
-          contracts: %{
-            module() => %{
-              expects: %{atom() => [:erlang.function()]},
-              stubs: %{atom() => :erlang.function()},
-              fallback: fallback()
-            }
-          }
-        }
-
-  @doc """
-  Create an empty handler accumulator.
-  """
-  @spec new() :: t()
-  def new, do: %__MODULE__{}
+  # -- Public API: expect --
 
   @doc """
   Add an expectation for a contract operation.
@@ -187,52 +176,48 @@ defmodule HexPort.Handler do
 
   Instead of a function, pass `:passthrough` to delegate to the
   fallback (fn, stateful, or module) while still consuming the
-  expect for `verify!` counting:
+  expect for `verify!` counting.
 
-      HexPort.Handler.expect(MyContract, :get, :passthrough, times: 2)
-      |> HexPort.Handler.stub(MyContract, MyApp.Impl)
-      |> HexPort.Handler.install!()
-
-  The accumulator argument is optional — when omitted, a fresh
-  accumulator is created via `new/0`.
+  Returns the contract module for piping.
 
   ## Options
 
     * `:times` — enqueue the same function `n` times (default 1).
       Equivalent to calling `expect` `n` times with the same function.
   """
-  @spec expect(t(), module(), atom(), function() | :passthrough, keyword()) :: t()
-  def expect(contract, operation, fun) when is_atom(contract) do
-    expect(new(), contract, operation, fun, [])
-  end
+  @spec expect(module(), atom(), function() | :passthrough, keyword()) :: module()
+  def expect(contract, operation, fun_or_passthrough, opts \\ [])
 
   def expect(contract, operation, fun, opts)
+      when is_atom(contract) and is_atom(operation) and is_function(fun, 1) and is_list(opts) do
+    do_expect(contract, operation, fun, opts)
+  end
+
+  def expect(contract, operation, :passthrough, opts)
       when is_atom(contract) and is_atom(operation) and is_list(opts) do
-    expect(new(), contract, operation, fun, opts)
+    do_expect(contract, operation, :passthrough, opts)
   end
 
-  def expect(%__MODULE__{} = acc, contract, operation, fun)
-      when is_atom(contract) and is_atom(operation) and
-             (is_function(fun, 1) or fun == :passthrough) do
-    expect(acc, contract, operation, fun, [])
-  end
-
-  def expect(%__MODULE__{} = acc, contract, operation, fun, opts)
-      when is_atom(contract) and is_atom(operation) and
-             (is_function(fun, 1) or fun == :passthrough) and is_list(opts) do
+  defp do_expect(contract, operation, fun_or_passthrough, opts) do
     times = Keyword.get(opts, :times, 1)
 
     if times < 1 do
       raise ArgumentError, "times must be >= 1, got: #{times}"
     end
 
-    funs = List.duplicate(fun, times)
+    entries = List.duplicate(fun_or_passthrough, times)
 
-    update_contract(acc, contract, fn contract_data ->
-      existing = Map.get(contract_data.expects, operation, [])
-      %{contract_data | expects: Map.put(contract_data.expects, operation, existing ++ funs)}
+    ensure_handler_installed(contract)
+
+    update_handler_state(contract, fn state ->
+      existing = Map.get(state.expects, operation, [])
+      %{state | expects: Map.put(state.expects, operation, existing ++ entries)}
     end)
+
+    contract
   end
+
+  # -- Public API: stub --
 
   @doc """
   Add a stub for a contract operation or a contract-wide fallback.
@@ -279,113 +264,74 @@ defmodule HexPort.Handler do
 
       HexPort.Handler.stub(MyContract, MyApp.Impl)
 
-  The module is validated at `install!` time.
+  The module is validated immediately.
 
   Function, stateful, and module fallbacks are mutually exclusive —
   setting one replaces the other.
 
   Dispatch priority: expects > per-operation stubs > fallback > raise.
 
-  The accumulator argument is optional — when omitted, a fresh
-  accumulator is created via `new/0`.
+  Returns the contract module for piping.
   """
-  @spec stub(module(), function()) :: t()
-  @spec stub(module(), module()) :: t()
-  @spec stub(t(), module(), function()) :: t()
-  @spec stub(t(), module(), module()) :: t()
-  @spec stub(module(), atom(), function()) :: t()
-  @spec stub(module(), function(), term()) :: t()
-  @spec stub(t(), module(), atom(), function()) :: t()
-  @spec stub(t(), module(), function(), term()) :: t()
+  # stub/2 — function fallback or module fallback
+  @spec stub(module(), function()) :: module()
+  @spec stub(module(), module()) :: module()
   def stub(contract, fun)
       when is_atom(contract) and is_function(fun, 2) do
-    stub(new(), contract, fun)
+    ensure_handler_installed(contract)
+
+    update_handler_state(contract, fn state ->
+      %{state | fallback: {:fn, fun}}
+    end)
+
+    contract
   end
 
   def stub(contract, module)
       when is_atom(contract) and is_atom(module) do
-    stub(new(), contract, module)
+    validate_module_fallback!(contract, module)
+    ensure_handler_installed(contract)
+
+    update_handler_state(contract, fn state ->
+      %{state | fallback: {:module, module}}
+    end)
+
+    contract
   end
 
+  # stub/3 — per-operation stub or stateful fallback
+  @spec stub(module(), atom(), function()) :: module()
+  @spec stub(module(), function(), term()) :: module()
   def stub(contract, operation, fun)
       when is_atom(contract) and is_atom(operation) and is_function(fun, 1) do
-    stub(new(), contract, operation, fun)
+    ensure_handler_installed(contract)
+
+    update_handler_state(contract, fn state ->
+      %{state | stubs: Map.put(state.stubs, operation, fun)}
+    end)
+
+    contract
   end
 
   def stub(contract, fun, init_state)
       when is_atom(contract) and is_function(fun, 3) do
-    stub(new(), contract, fun, init_state)
-  end
+    ensure_handler_installed(contract)
 
-  def stub(%__MODULE__{} = acc, contract, fun)
-      when is_atom(contract) and is_function(fun, 2) do
-    update_contract(acc, contract, fn contract_data ->
-      %{contract_data | fallback: {:fn, fun}}
+    update_handler_state(contract, fn state ->
+      %{state | fallback: {:stateful, fun}, fallback_state: init_state}
     end)
+
+    contract
   end
 
-  def stub(%__MODULE__{} = acc, contract, module)
-      when is_atom(contract) and is_atom(module) do
-    update_contract(acc, contract, fn contract_data ->
-      %{contract_data | fallback: {:module, module}}
-    end)
-  end
-
-  def stub(%__MODULE__{} = acc, contract, fun, init_state)
-      when is_atom(contract) and is_function(fun, 3) do
-    update_contract(acc, contract, fn contract_data ->
-      %{contract_data | fallback: {:stateful, fun, init_state}}
-    end)
-  end
-
-  def stub(%__MODULE__{} = acc, contract, operation, fun)
-      when is_atom(contract) and is_atom(operation) and is_function(fun, 1) do
-    update_contract(acc, contract, fn contract_data ->
-      %{contract_data | stubs: Map.put(contract_data.stubs, operation, fun)}
-    end)
-  end
-
-  @doc """
-  Install all accumulated expectations and stubs.
-
-  Groups expectations by contract, builds a stateful handler function
-  for each, and registers them via `HexPort.Testing.set_stateful_handler/3`.
-
-  Returns `:ok`.
-  """
-  @spec install!(t()) :: :ok
-  def install!(%__MODULE__{contracts: contracts}) when contracts == %{} do
-    raise ArgumentError, "no expectations or stubs to install — call expect/5 or stub/4 first"
-  end
-
-  def install!(%__MODULE__{contracts: contracts}) do
-    contract_modules = Map.keys(contracts)
-
-    for {contract, %{expects: expects, stubs: stubs, fallback: fallback}} <- contracts do
-      validate_fallback!(contract, fallback)
-      handler_fn = build_handler_fn(contract, stubs, fallback)
-
-      initial_state =
-        case fallback do
-          {:stateful, _fun, init_state} -> %{expects: expects, fallback_state: init_state}
-          _ -> %{expects: expects}
-        end
-
-      HexPort.Testing.set_stateful_handler(contract, handler_fn, initial_state)
-    end
-
-    # Store the list of installed contracts so verify!/0 can find them
-    store_installed_contracts(contract_modules)
-
-    :ok
-  end
+  # -- Public API: verify --
 
   @doc """
   Verify that all expectations have been consumed.
 
-  Reads the current handler state for each contract installed via
-  `install!/1` and checks that all expect queues are empty. Stubs
-  are not checked — they are allowed to be called zero or more times.
+  Reads the current handler state for each contract and checks that
+  all expect queues are empty. Stubs are not checked — they are
+  allowed to be called zero or more times.
 
   Raises with a descriptive message if any expectations remain
   unconsumed.
@@ -442,6 +388,151 @@ defmodule HexPort.Handler do
     :ok
   end
 
+  # -- Internal: handler installation --
+
+  @initial_state %{expects: %{}, stubs: %{}, fallback: nil, fallback_state: nil}
+
+  defp ensure_handler_installed(contract) do
+    state_key = Module.concat(HexPort.State, contract)
+
+    # Check if we've already installed the handler for this contract
+    case NimbleOwnership.get_owned(@ownership_server, self()) do
+      %{^state_key => _} ->
+        :ok
+
+      _ ->
+        # First touch — install the canonical handler fn
+        HexPort.Testing.set_stateful_handler(
+          contract,
+          &canonical_handler/3,
+          @initial_state
+        )
+
+        register_contract(contract)
+    end
+  end
+
+  defp register_contract(contract) do
+    NimbleOwnership.get_and_update(@ownership_server, self(), @contracts_key, fn
+      nil -> {:ok, [contract]}
+      existing -> {:ok, Enum.uniq([contract | existing])}
+    end)
+  end
+
+  defp update_handler_state(contract, update_fn) do
+    state_key = Module.concat(HexPort.State, contract)
+
+    NimbleOwnership.get_and_update(@ownership_server, self(), state_key, fn state ->
+      {:ok, update_fn.(state)}
+    end)
+  end
+
+  # -- Internal: canonical handler fn --
+
+  # This single function handles all dispatch. It reads expects, stubs,
+  # and fallback config from state at dispatch time. Installed once per
+  # contract via set_stateful_handler and never replaced — all changes
+  # go through state mutations.
+  @doc false
+  def canonical_handler(operation, args, state) do
+    case pop_expect(state, operation) do
+      {:ok, :passthrough, new_state} ->
+        invoke_fallback_or_raise(new_state, operation, args)
+
+      {:ok, fun, new_state} ->
+        {fun.(args), new_state}
+
+      :none ->
+        case Map.get(state.stubs, operation) do
+          nil ->
+            invoke_fallback_or_raise(state, operation, args)
+
+          stub_fun ->
+            {stub_fun.(args), state}
+        end
+    end
+  end
+
+  defp pop_expect(%{expects: expects} = state, operation) do
+    case Map.get(expects, operation, []) do
+      [entry | rest] ->
+        new_expects = Map.put(expects, operation, rest)
+        {:ok, entry, %{state | expects: new_expects}}
+
+      [] ->
+        :none
+    end
+  end
+
+  defp invoke_fallback_or_raise(state, operation, args) do
+    case state.fallback do
+      nil ->
+        msg = unexpected_call_message(state, operation, args)
+        {{:defer, fn -> raise msg end}, state}
+
+      {:fn, fallback_fn} ->
+        invoke_fn_fallback(fallback_fn, state, operation, args)
+
+      {:stateful, fallback_fn} ->
+        invoke_stateful_fallback(fallback_fn, state, operation, args)
+
+      {:module, module} ->
+        invoke_module_fallback(module, state, operation, args)
+    end
+  end
+
+  defp invoke_fn_fallback(fallback_fn, state, operation, args) do
+    result = fallback_fn.(operation, args)
+    {result, state}
+  rescue
+    FunctionClauseError ->
+      msg = unexpected_call_message(state, operation, args)
+      {{:defer, fn -> reraise msg, __STACKTRACE__ end}, state}
+  end
+
+  defp invoke_stateful_fallback(fallback_fn, state, operation, args) do
+    {result, new_fallback_state} = fallback_fn.(operation, args, state.fallback_state)
+    {result, %{state | fallback_state: new_fallback_state}}
+  rescue
+    FunctionClauseError ->
+      msg = unexpected_call_message(state, operation, args)
+      {{:defer, fn -> reraise msg, __STACKTRACE__ end}, state}
+  end
+
+  defp invoke_module_fallback(module, state, operation, args) do
+    result = apply(module, operation, args)
+    {result, state}
+  rescue
+    UndefinedFunctionError ->
+      msg = unexpected_call_message(state, operation, args)
+      {{:defer, fn -> reraise msg, __STACKTRACE__ end}, state}
+  end
+
+  defp unexpected_call_message(%{expects: expects}, operation, args) do
+    remaining =
+      expects
+      |> Enum.reject(fn {_op, queue} -> queue == [] end)
+      |> Enum.map(fn {op, queue} -> "  #{op}: #{length(queue)} expected call(s) remaining" end)
+
+    remaining_msg =
+      if remaining == [] do
+        "  (no expectations remaining)"
+      else
+        Enum.join(remaining, "\n")
+      end
+
+    """
+    Unexpected call to #{operation}/#{length(args)}.
+
+    No expectations or stubs defined for this operation.
+
+    Remaining expectations:
+    #{remaining_msg}
+    """
+  end
+
+  # -- Internal: verification --
+
   defp do_verify!(pid) do
     owned = NimbleOwnership.get_owned(@ownership_server, pid)
 
@@ -451,7 +542,7 @@ defmodule HexPort.Handler do
           contracts
 
         _ ->
-          raise "HexPort.Handler.verify!/0 called but no handlers were installed via install!/1"
+          raise "HexPort.Handler.verify!/0 called but no handlers were installed"
       end
 
     unconsumed =
@@ -485,125 +576,14 @@ defmodule HexPort.Handler do
     :ok
   end
 
-  # -- Internal: accumulator manipulation --
+  # -- Internal: module fallback validation --
 
-  defp empty_contract_data do
-    %{expects: %{}, stubs: %{}, fallback: nil}
-  end
-
-  defp update_contract(%__MODULE__{contracts: contracts} = acc, contract, update_fn) do
-    contract_data = Map.get(contracts, contract, empty_contract_data())
-    updated = update_fn.(contract_data)
-    %{acc | contracts: Map.put(contracts, contract, updated)}
-  end
-
-  # -- Internal: handler construction --
-
-  defp build_handler_fn(contract, stubs, fallback) do
-    fn operation, args, state ->
-      case pop_expect(state, operation) do
-        {:ok, :passthrough, new_state} ->
-          # Delegate to fallback, consuming the expect for verify! counting
-          invoke_fallback_or_raise(fallback, contract, operation, args, new_state)
-
-        {:ok, fun, new_state} ->
-          {fun.(args), new_state}
-
-        :none ->
-          case Map.get(stubs, operation) do
-            nil ->
-              invoke_fallback_or_raise(fallback, contract, operation, args, state)
-
-            stub_fun ->
-              {stub_fun.(args), state}
-          end
-      end
-    end
-  end
-
-  defp invoke_fallback_or_raise(nil, contract, operation, args, state) do
-    # Defer the raise so it happens in the calling process,
-    # not inside the NimbleOwnership GenServer.
-    msg = unexpected_call_message(contract, operation, args, state)
-    {{:defer, fn -> raise msg end}, state}
-  end
-
-  defp invoke_fallback_or_raise({:fn, fallback_fn}, contract, operation, args, state) do
-    result = fallback_fn.(operation, args)
-    {result, state}
-  rescue
-    FunctionClauseError ->
-      # FunctionClauseError from the fallback fn means it doesn't handle
-      # this operation — defer the raise to the calling process.
-      msg = unexpected_call_message(contract, operation, args, state)
-      {{:defer, fn -> reraise msg, __STACKTRACE__ end}, state}
-  end
-
-  defp invoke_fallback_or_raise({:stateful, fallback_fn, _init}, contract, operation, args, state) do
-    fallback_state = state.fallback_state
-    {result, new_fallback_state} = fallback_fn.(operation, args, fallback_state)
-    {result, %{state | fallback_state: new_fallback_state}}
-  rescue
-    FunctionClauseError ->
-      msg = unexpected_call_message(contract, operation, args, state)
-      {{:defer, fn -> reraise msg, __STACKTRACE__ end}, state}
-  end
-
-  defp invoke_fallback_or_raise({:module, module}, contract, operation, args, state) do
-    result = apply(module, operation, args)
-    {result, state}
-  rescue
-    UndefinedFunctionError ->
-      # The module doesn't implement this operation.
-      msg = unexpected_call_message(contract, operation, args, state)
-      {{:defer, fn -> reraise msg, __STACKTRACE__ end}, state}
-  end
-
-  defp pop_expect(%{expects: expects} = state, operation) do
-    case Map.get(expects, operation, []) do
-      [fun | rest] ->
-        new_expects = Map.put(expects, operation, rest)
-        {:ok, fun, %{state | expects: new_expects}}
-
-      [] ->
-        :none
-    end
-  end
-
-  defp unexpected_call_message(contract, operation, args, %{expects: expects}) do
-    remaining =
-      expects
-      |> Enum.reject(fn {_op, queue} -> queue == [] end)
-      |> Enum.map(fn {op, queue} -> "  #{op}: #{length(queue)} expected call(s) remaining" end)
-
-    remaining_msg =
-      if remaining == [] do
-        "  (no expectations remaining)"
-      else
-        Enum.join(remaining, "\n")
-      end
-
-    """
-    Unexpected call to #{inspect(contract)}.#{operation}/#{length(args)}.
-
-    No expectations or stubs defined for this operation.
-
-    Remaining expectations for #{inspect(contract)}:
-    #{remaining_msg}
-    """
-  end
-
-  defp validate_fallback!(_contract, nil), do: :ok
-  defp validate_fallback!(_contract, {:fn, _fun}), do: :ok
-  defp validate_fallback!(_contract, {:stateful, _fun, _init}), do: :ok
-
-  defp validate_fallback!(contract, {:module, module}) do
+  defp validate_module_fallback!(contract, module) do
     unless Code.ensure_loaded?(module) do
       raise ArgumentError,
             "module fallback #{inspect(module)} for #{inspect(contract)} is not loaded"
     end
 
-    # Check that the module exports the contract's operations
     Code.ensure_loaded(contract)
 
     if function_exported?(contract, :__port_operations__, 0) do
@@ -625,14 +605,5 @@ defmodule HexPort.Handler do
                 "is missing functions: #{details}"
       end
     end
-
-    :ok
-  end
-
-  defp store_installed_contracts(contract_modules) do
-    NimbleOwnership.get_and_update(@ownership_server, self(), @contracts_key, fn
-      nil -> {:ok, contract_modules}
-      existing -> {:ok, Enum.uniq(existing ++ contract_modules)}
-    end)
   end
 end

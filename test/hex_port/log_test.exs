@@ -407,11 +407,11 @@ defmodule HexPort.LogTest do
     end
 
     test "used alongside HexPort.Handler" do
-      HexPort.Handler.expect(Greeter, :greet, fn [name] -> "Hi, #{name}!" end)
-      |> HexPort.Handler.expect(Greeter, :fetch_greeting, fn [name] ->
+      Greeter
+      |> HexPort.Handler.expect(:greet, fn [name] -> "Hi, #{name}!" end)
+      |> HexPort.Handler.expect(:fetch_greeting, fn [name] ->
         {:ok, "Hello, #{name}!"}
       end)
-      |> HexPort.Handler.install!()
 
       HexPort.Testing.enable_log(Greeter)
 

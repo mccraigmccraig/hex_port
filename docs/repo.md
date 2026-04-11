@@ -339,11 +339,11 @@ should fail:
 
 ```elixir
 setup do
-  HexPort.Handler.expect(HexPort.Repo.Contract, :insert, fn [changeset] ->
+  HexPort.Repo.Contract
+  |> HexPort.Handler.stub(HexPort.Repo.Test.new())
+  |> HexPort.Handler.expect(:insert, fn [changeset] ->
     {:error, Ecto.Changeset.add_error(changeset, :email, "has already been taken")}
   end)
-  |> HexPort.Handler.stub(HexPort.Repo.Contract, HexPort.Repo.Test.new())
-  |> HexPort.Handler.install!()
   :ok
 end
 
@@ -368,15 +368,11 @@ need read-after-write consistency alongside failure simulation:
 
 ```elixir
 setup do
-  HexPort.Handler.expect(HexPort.Repo.Contract, :insert, fn [changeset] ->
+  HexPort.Repo.Contract
+  |> HexPort.Handler.stub(&HexPort.Repo.InMemory.dispatch/3, HexPort.Repo.InMemory.new())
+  |> HexPort.Handler.expect(:insert, fn [changeset] ->
     {:error, Ecto.Changeset.add_error(changeset, :email, "has already been taken")}
   end)
-  |> HexPort.Handler.stub(
-    HexPort.Repo.Contract,
-    &HexPort.Repo.InMemory.dispatch/3,
-    HexPort.Repo.InMemory.new()
-  )
-  |> HexPort.Handler.install!()
   :ok
 end
 
@@ -404,13 +400,9 @@ expect is consumed for `verify!` counting:
 
 ```elixir
 setup do
-  HexPort.Handler.expect(HexPort.Repo.Contract, :insert, :passthrough, times: 2)
-  |> HexPort.Handler.stub(
-    HexPort.Repo.Contract,
-    &HexPort.Repo.InMemory.dispatch/3,
-    HexPort.Repo.InMemory.new()
-  )
-  |> HexPort.Handler.install!()
+  HexPort.Repo.Contract
+  |> HexPort.Handler.stub(&HexPort.Repo.InMemory.dispatch/3, HexPort.Repo.InMemory.new())
+  |> HexPort.Handler.expect(:insert, :passthrough, times: 2)
   :ok
 end
 
@@ -424,16 +416,12 @@ You can mix `:passthrough` and function expects — for example,
 "first insert succeeds through InMemory, second fails":
 
 ```elixir
-HexPort.Handler.expect(HexPort.Repo.Contract, :insert, :passthrough)
-|> HexPort.Handler.expect(HexPort.Repo.Contract, :insert, fn [changeset] ->
+HexPort.Repo.Contract
+|> HexPort.Handler.stub(&HexPort.Repo.InMemory.dispatch/3, HexPort.Repo.InMemory.new())
+|> HexPort.Handler.expect(:insert, :passthrough)
+|> HexPort.Handler.expect(:insert, fn [changeset] ->
   {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
 end)
-|> HexPort.Handler.stub(
-  HexPort.Repo.Contract,
-  &HexPort.Repo.InMemory.dispatch/3,
-  HexPort.Repo.InMemory.new()
-)
-|> HexPort.Handler.install!()
 ```
 
 ### Combining with `HexPort.Log`
@@ -444,15 +432,11 @@ including computed results:
 
 ```elixir
 setup do
-  HexPort.Handler.expect(HexPort.Repo.Contract, :insert, fn [changeset] ->
+  HexPort.Repo.Contract
+  |> HexPort.Handler.stub(&HexPort.Repo.InMemory.dispatch/3, HexPort.Repo.InMemory.new())
+  |> HexPort.Handler.expect(:insert, fn [changeset] ->
     {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
   end)
-  |> HexPort.Handler.stub(
-    HexPort.Repo.Contract,
-    &HexPort.Repo.InMemory.dispatch/3,
-    HexPort.Repo.InMemory.new()
-  )
-  |> HexPort.Handler.install!()
 
   HexPort.Testing.enable_log(HexPort.Repo.Contract)
   :ok

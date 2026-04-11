@@ -5,35 +5,21 @@ defmodule HexPort.HandlerTest do
   alias HexPort.Test.Greeter
   alias HexPort.Test.Counter
 
-  # ── Builder tests ─────────────────────────────────────────
+  # ── expect tests ──────────────────────────────────────────
 
-  describe "new/0" do
-    test "returns empty accumulator" do
-      acc = Handler.new()
-      assert %Handler{contracts: %{}} = acc
-    end
-  end
-
-  describe "expect/5" do
-    test "appends to per-operation queue" do
-      fun1 = fn [_] -> :first end
-      fun2 = fn [_] -> :second end
-
-      acc =
-        Handler.new()
-        |> Handler.expect(Greeter, :greet, fun1)
-        |> Handler.expect(Greeter, :greet, fun2)
-
-      assert [^fun1, ^fun2] = acc.contracts[Greeter].expects[:greet]
+  describe "expect/3..4" do
+    test "returns contract module for piping" do
+      result = Handler.expect(Greeter, :greet, fn [_] -> "hi" end)
+      assert result == Greeter
     end
 
-    test "with times: n enqueues n copies" do
-      fun = fn [_] -> :ok end
+    test "with times: n" do
+      Greeter
+      |> Handler.expect(:greet, fn [name] -> "hi #{name}" end, times: 3)
 
-      acc = Handler.expect(Greeter, :greet, fun, times: 3)
-
-      assert length(acc.contracts[Greeter].expects[:greet]) == 3
-      assert Enum.all?(acc.contracts[Greeter].expects[:greet], &(&1 == fun))
+      assert "hi A" = Greeter.Port.greet("A")
+      assert "hi B" = Greeter.Port.greet("B")
+      assert "hi C" = Greeter.Port.greet("C")
     end
 
     test "times: 0 raises" do
@@ -42,560 +28,127 @@ defmodule HexPort.HandlerTest do
       end
     end
 
-    test "default first arg starts with new()" do
-      acc = Handler.expect(Greeter, :greet, fn [_] -> :ok end)
-      assert %Handler{} = acc
-      assert Map.has_key?(acc.contracts, Greeter)
+    test "sequenced expectations consumed in order" do
+      Greeter
+      |> Handler.expect(:greet, fn [_] -> "first" end)
+      |> Handler.expect(:greet, fn [_] -> "second" end)
+
+      assert "first" = Greeter.Port.greet("A")
+      assert "second" = Greeter.Port.greet("B")
     end
 
     test "multiple operations on same contract" do
-      acc =
-        Handler.expect(Greeter, :greet, fn [_] -> "hi" end)
-        |> Handler.expect(Greeter, :fetch_greeting, fn [_] -> {:ok, "hi"} end)
+      Greeter
+      |> Handler.expect(:greet, fn [_] -> "hi" end)
+      |> Handler.expect(:fetch_greeting, fn [_] -> {:ok, "hello"} end)
 
-      assert Map.has_key?(acc.contracts[Greeter].expects, :greet)
-      assert Map.has_key?(acc.contracts[Greeter].expects, :fetch_greeting)
+      assert "hi" = Greeter.Port.greet("A")
+      assert {:ok, "hello"} = Greeter.Port.fetch_greeting("B")
     end
 
-    test "multi-contract accumulation" do
-      acc =
-        Handler.expect(Greeter, :greet, fn [_] -> "hi" end)
-        |> Handler.expect(Counter, :increment, fn [_] -> 1 end)
+    test "multi-contract" do
+      Handler.expect(Greeter, :greet, fn [name] -> "greet: #{name}" end)
+      Handler.expect(Counter, :increment, fn [n] -> n * 10 end)
 
-      assert Map.has_key?(acc.contracts, Greeter)
-      assert Map.has_key?(acc.contracts, Counter)
+      assert "greet: Alice" = Greeter.Port.greet("Alice")
+      assert 50 = Counter.Port.increment(5)
+    end
+
+    test "exhausted expects with no stub raises" do
+      Handler.expect(Greeter, :greet, fn [_] -> "once" end)
+
+      assert "once" = Greeter.Port.greet("A")
+
+      assert_raise RuntimeError, ~r/Unexpected call to.*greet/, fn ->
+        Greeter.Port.greet("B")
+      end
     end
   end
 
-  describe "stub/4" do
-    test "sets stub function" do
-      fun = fn [_] -> "stubbed" end
+  # ── stub tests ────────────────────────────────────────────
 
-      acc = Handler.stub(Greeter, :greet, fun)
+  describe "stub/2..3 per-operation" do
+    test "returns contract module for piping" do
+      result = Handler.stub(Greeter, :greet, fn [_] -> "hi" end)
+      assert result == Greeter
+    end
 
-      assert acc.contracts[Greeter].stubs[:greet] == fun
+    test "stub called any number of times" do
+      Handler.stub(Greeter, :greet, fn [name] -> "stub: #{name}" end)
+
+      assert "stub: A" = Greeter.Port.greet("A")
+      assert "stub: B" = Greeter.Port.greet("B")
+      assert "stub: C" = Greeter.Port.greet("C")
+    end
+
+    test "stub called zero times is valid" do
+      Handler.stub(Greeter, :greet, fn [_] -> "never called" end)
+
+      assert :ok = Handler.verify!()
     end
 
     test "replacing stub overwrites previous" do
-      fun1 = fn [_] -> "first" end
-      fun2 = fn [_] -> "second" end
+      Greeter
+      |> Handler.stub(:greet, fn [_] -> "first" end)
+      |> Handler.stub(:greet, fn [_] -> "second" end)
 
-      acc =
-        Handler.stub(Greeter, :greet, fun1)
-        |> Handler.stub(Greeter, :greet, fun2)
-
-      assert acc.contracts[Greeter].stubs[:greet] == fun2
+      assert "second" = Greeter.Port.greet("A")
     end
 
-    test "default first arg starts with new()" do
-      acc = Handler.stub(Greeter, :greet, fn [_] -> :ok end)
-      assert %Handler{} = acc
-      assert Map.has_key?(acc.contracts, Greeter)
-    end
+    test "expect and stub coexist — expects consumed first" do
+      Greeter
+      |> Handler.expect(:greet, fn [_] -> "expected" end)
+      |> Handler.stub(:greet, fn [name] -> "stub: #{name}" end)
 
-    test "expect and stub coexist for same operation" do
-      acc =
-        Handler.expect(Greeter, :greet, fn [_] -> "expected" end)
-        |> Handler.stub(Greeter, :greet, fn [_] -> "stubbed" end)
-
-      assert length(acc.contracts[Greeter].expects[:greet]) == 1
-      assert acc.contracts[Greeter].stubs[:greet] != nil
+      assert "expected" = Greeter.Port.greet("A")
+      assert "stub: B" = Greeter.Port.greet("B")
+      assert "stub: C" = Greeter.Port.greet("C")
     end
   end
 
-  describe "stub/2..3 contract-wide fallback" do
-    test "sets fallback stub with 2-arity function" do
-      fun = fn _op, _args -> :fallback end
-
-      acc = Handler.stub(Greeter, fun)
-
-      assert acc.contracts[Greeter].fallback == {:fn, fun}
+  describe "stub/2 function fallback" do
+    test "returns contract module for piping" do
+      result = Handler.stub(Greeter, fn _op, _args -> :fallback end)
+      assert result == Greeter
     end
 
-    test "replacing fallback stub overwrites previous" do
-      fun1 = fn _op, _args -> "first" end
-      fun2 = fn _op, _args -> "second" end
-
-      acc =
-        Handler.stub(Greeter, fun1)
-        |> Handler.stub(Greeter, fun2)
-
-      assert acc.contracts[Greeter].fallback == {:fn, fun2}
-    end
-
-    test "default first arg starts with new()" do
-      acc = Handler.stub(Greeter, fn _op, _args -> :ok end)
-      assert %Handler{} = acc
-      assert Map.has_key?(acc.contracts, Greeter)
-    end
-
-    test "piped with accumulator" do
-      acc =
-        Handler.expect(Greeter, :greet, fn [_] -> "expected" end)
-        |> Handler.stub(Greeter, fn _op, _args -> :fallback end)
-
-      assert acc.contracts[Greeter].fallback != nil
-      assert length(acc.contracts[Greeter].expects[:greet]) == 1
-    end
-
-    test "per-operation stub and fallback coexist" do
-      acc =
-        Handler.stub(Greeter, :greet, fn [_] -> "per-op" end)
-        |> Handler.stub(Greeter, fn _op, _args -> :fallback end)
-
-      assert acc.contracts[Greeter].stubs[:greet] != nil
-      assert acc.contracts[Greeter].fallback != nil
-    end
-  end
-
-  describe "stub/2..3 module fallback" do
-    test "sets module fallback" do
-      acc = Handler.stub(Greeter, Greeter.Impl)
-      assert acc.contracts[Greeter].fallback == {:module, Greeter.Impl}
-    end
-
-    test "module fallback replaces fn fallback" do
-      acc =
-        Handler.stub(Greeter, fn _op, _args -> :fn_fallback end)
-        |> Handler.stub(Greeter, Greeter.Impl)
-
-      assert acc.contracts[Greeter].fallback == {:module, Greeter.Impl}
-    end
-
-    test "fn fallback replaces module fallback" do
-      fun = fn _op, _args -> :fn_fallback end
-
-      acc =
-        Handler.stub(Greeter, Greeter.Impl)
-        |> Handler.stub(Greeter, fun)
-
-      assert acc.contracts[Greeter].fallback == {:fn, fun}
-    end
-
-    test "default first arg starts with new()" do
-      acc = Handler.stub(Greeter, Greeter.Impl)
-      assert %Handler{} = acc
-    end
-
-    test "piped with accumulator" do
-      acc =
-        Handler.expect(Greeter, :greet, fn [_] -> "expected" end)
-        |> Handler.stub(Greeter, Greeter.Impl)
-
-      assert acc.contracts[Greeter].fallback == {:module, Greeter.Impl}
-      assert length(acc.contracts[Greeter].expects[:greet]) == 1
-    end
-  end
-
-  describe "dispatch with module fallback" do
-    test "module fallback handles operations without expects or stubs" do
-      Handler.stub(Greeter, Greeter.Impl)
-      |> Handler.install!()
-
-      assert "Hello, Alice!" = Greeter.Port.greet("Alice")
-      assert {:ok, "Hello, Bob!"} = Greeter.Port.fetch_greeting("Bob")
-    end
-
-    test "expects take priority over module fallback" do
-      Handler.expect(Greeter, :greet, fn [_] -> "expected" end)
-      |> Handler.stub(Greeter, Greeter.Impl)
-      |> Handler.install!()
-
-      assert "expected" = Greeter.Port.greet("Alice")
-      # After expect consumed, module fallback takes over
-      assert "Hello, Bob!" = Greeter.Port.greet("Bob")
-    end
-
-    test "per-op stubs take priority over module fallback" do
-      Handler.stub(Greeter, :greet, fn [name] -> "stubbed: #{name}" end)
-      |> Handler.stub(Greeter, Greeter.Impl)
-      |> Handler.install!()
-
-      assert "stubbed: Alice" = Greeter.Port.greet("Alice")
-      # fetch_greeting falls through to module
-      assert {:ok, "Hello, Bob!"} = Greeter.Port.fetch_greeting("Bob")
-    end
-
-    test "full priority chain: expects > per-op stubs > module fallback" do
-      Handler.expect(Greeter, :greet, fn [_] -> "expected" end)
-      |> Handler.stub(Greeter, :fetch_greeting, fn [name] -> {:ok, "stubbed: #{name}"} end)
-      |> Handler.stub(Greeter, Greeter.Impl)
-      |> Handler.install!()
-
-      # greet: expect first
-      assert "expected" = Greeter.Port.greet("Alice")
-      # greet: expect consumed, module fallback
-      assert "Hello, Bob!" = Greeter.Port.greet("Bob")
-      # fetch_greeting: per-op stub
-      assert {:ok, "stubbed: Carol"} = Greeter.Port.fetch_greeting("Carol")
-    end
-
-    test "module fallback works with verify!" do
-      Handler.expect(Greeter, :greet, fn [_] -> "expected" end)
-      |> Handler.stub(Greeter, Greeter.Impl)
-      |> Handler.install!()
-
-      Greeter.Port.greet("Alice")
-
-      assert :ok = Handler.verify!()
-    end
-
-    test "install! validates module exports contract operations" do
-      assert_raise ArgumentError, ~r/missing functions/, fn ->
-        # Use a module that doesn't implement the contract
-        Handler.stub(Greeter, String)
-        |> Handler.install!()
-      end
-    end
-
-    test "install! validates module is loaded" do
-      assert_raise ArgumentError, ~r/not loaded/, fn ->
-        Handler.stub(Greeter, DoesNotExist.Module)
-        |> Handler.install!()
-      end
-    end
-  end
-
-  describe "stub/3..4 stateful fallback" do
-    test "sets stateful fallback" do
-      fun = fn _op, _args, state -> {:ok, state} end
-
-      acc = Handler.stub(Counter, fun, 0)
-
-      assert {:stateful, ^fun, 0} = acc.contracts[Counter].fallback
-    end
-
-    test "default first arg starts with new()" do
-      acc = Handler.stub(Counter, fn _op, _args, state -> {:ok, state} end, 0)
-      assert %Handler{} = acc
-    end
-
-    test "piped with accumulator" do
-      acc =
-        Handler.expect(Counter, :increment, fn [_] -> 1 end)
-        |> Handler.stub(Counter, fn _op, _args, state -> {:ok, state} end, 0)
-
-      assert {:stateful, _, 0} = acc.contracts[Counter].fallback
-      assert length(acc.contracts[Counter].expects[:increment]) == 1
-    end
-
-    test "stateful fallback replaces fn fallback" do
-      stateful_fn = fn _op, _args, state -> {:ok, state} end
-
-      acc =
-        Handler.stub(Counter, fn _op, _args -> :fn_fallback end)
-        |> Handler.stub(Counter, stateful_fn, 0)
-
-      assert {:stateful, ^stateful_fn, 0} = acc.contracts[Counter].fallback
-    end
-
-    test "fn fallback replaces stateful fallback" do
-      fn_fallback = fn _op, _args -> :fn_fallback end
-
-      acc =
-        Handler.stub(Counter, fn _op, _args, state -> {:ok, state} end, 0)
-        |> Handler.stub(Counter, fn_fallback)
-
-      assert {:fn, ^fn_fallback} = acc.contracts[Counter].fallback
-    end
-  end
-
-  describe "dispatch with stateful fallback" do
-    test "stateful fallback handles operations with state threading" do
-      # A simple counter: increment adds to state, get_count reads it
-      Handler.stub(
-        Counter,
-        fn
-          :increment, [n], count -> {count + n, count + n}
-          :get_count, [], count -> {count, count}
-        end,
-        0
-      )
-      |> Handler.install!()
-
-      assert 5 = Counter.Port.increment(5)
-      assert 8 = Counter.Port.increment(3)
-      assert 8 = Counter.Port.get_count()
-    end
-
-    test "expects take priority over stateful fallback" do
-      Handler.expect(Counter, :increment, fn [_] -> 999 end)
-      |> Handler.stub(
-        Counter,
-        fn
-          :increment, [n], count -> {count + n, count + n}
-          :get_count, [], count -> {count, count}
-        end,
-        0
-      )
-      |> Handler.install!()
-
-      # First increment: expect fires (returns 999), state unchanged
-      assert 999 = Counter.Port.increment(5)
-      # Second increment: expect consumed, falls through to stateful fallback
-      assert 3 = Counter.Port.increment(3)
-      assert 3 = Counter.Port.get_count()
-    end
-
-    test "per-op stubs take priority over stateful fallback" do
-      Handler.stub(Counter, :get_count, fn [] -> 42 end)
-      |> Handler.stub(
-        Counter,
-        fn
-          :increment, [n], count -> {count + n, count + n}
-          :get_count, [], count -> {count, count}
-        end,
-        0
-      )
-      |> Handler.install!()
-
-      assert 5 = Counter.Port.increment(5)
-      # get_count: per-op stub, not stateful fallback
-      assert 42 = Counter.Port.get_count()
-    end
-
-    test "error simulation — expect short-circuits before fallback" do
-      # The key use case: first call returns error, rest go through stateful fallback
-      Handler.expect(Counter, :increment, fn [_n] -> {:error, :overflow} end)
-      |> Handler.stub(
-        Counter,
-        fn
-          :increment, [n], count -> {count + n, count + n}
-          :get_count, [], count -> {count, count}
-        end,
-        0
-      )
-      |> Handler.install!()
-
-      # First increment: expect returns error, fallback state unchanged (still 0)
-      assert {:error, :overflow} = Counter.Port.increment(100)
-      # Second increment: falls through to fallback, state is still 0
-      assert 5 = Counter.Port.increment(5)
-      assert 5 = Counter.Port.get_count()
-    end
-
-    test "stateful fallback works with verify!" do
-      Handler.expect(Counter, :increment, fn [_] -> 999 end)
-      |> Handler.stub(
-        Counter,
-        fn
-          :increment, [n], count -> {count + n, count + n}
-          :get_count, [], count -> {count, count}
-        end,
-        0
-      )
-      |> Handler.install!()
-
-      Counter.Port.increment(5)
-
-      assert :ok = Handler.verify!()
-    end
-
-    test "full priority chain: expects > per-op stubs > stateful fallback" do
-      Handler.expect(Counter, :increment, fn [_] -> :expected end)
-      |> Handler.stub(Counter, :get_count, fn [] -> :stubbed end)
-      |> Handler.stub(
-        Counter,
-        fn
-          :increment, [n], count -> {count + n, count + n}
-          :get_count, [], count -> {count, count}
-        end,
-        0
-      )
-      |> Handler.install!()
-
-      # increment: expect first
-      assert :expected = Counter.Port.increment(5)
-      # get_count: per-op stub
-      assert :stubbed = Counter.Port.get_count()
-      # increment: expect consumed, stateful fallback
-      assert 3 = Counter.Port.increment(3)
-    end
-
-    test "FunctionClauseError in stateful fallback raises with descriptive error" do
-      # Stateful fallback only handles :increment
-      Handler.stub(
-        Counter,
-        fn :increment, [n], count -> {count + n, count + n} end,
-        0
-      )
-      |> Handler.install!()
-
-      assert 5 = Counter.Port.increment(5)
-
-      # get_count not handled by fallback
-      assert_raise RuntimeError, ~r/Unexpected call to.*get_count/, fn ->
-        Counter.Port.get_count()
-      end
-    end
-  end
-
-  describe "dispatch with :passthrough expects" do
-    test "passthrough delegates to fn fallback and consumes expect" do
-      Handler.expect(Greeter, :greet, :passthrough)
-      |> Handler.stub(Greeter, fn
-        :greet, [name] -> "fallback: #{name}"
-        :fetch_greeting, [name] -> {:ok, "fallback: #{name}"}
-      end)
-      |> Handler.install!()
-
-      assert "fallback: Alice" = Greeter.Port.greet("Alice")
-      assert :ok = Handler.verify!()
-    end
-
-    test "passthrough delegates to module fallback" do
-      Handler.expect(Greeter, :greet, :passthrough)
-      |> Handler.stub(Greeter, Greeter.Impl)
-      |> Handler.install!()
-
-      assert "Hello, Alice!" = Greeter.Port.greet("Alice")
-      assert :ok = Handler.verify!()
-    end
-
-    test "passthrough delegates to stateful fallback with state threading" do
-      Handler.expect(Counter, :increment, :passthrough)
-      |> Handler.expect(Counter, :increment, :passthrough)
-      |> Handler.stub(
-        Counter,
-        fn
-          :increment, [n], count -> {count + n, count + n}
-          :get_count, [], count -> {count, count}
-        end,
-        0
-      )
-      |> Handler.install!()
-
-      assert 5 = Counter.Port.increment(5)
-      assert 8 = Counter.Port.increment(3)
-      # State was threaded through both passthrough calls
-      assert 8 = Counter.Port.get_count()
-      assert :ok = Handler.verify!()
-    end
-
-    test "passthrough with times: n" do
-      Handler.expect(Greeter, :greet, :passthrough, times: 3)
-      |> Handler.stub(Greeter, Greeter.Impl)
-      |> Handler.install!()
-
-      assert "Hello, A!" = Greeter.Port.greet("A")
-      assert "Hello, B!" = Greeter.Port.greet("B")
-      assert "Hello, C!" = Greeter.Port.greet("C")
-      assert :ok = Handler.verify!()
-    end
-
-    test "passthrough consumed before fallback — counts for verify!" do
-      Handler.expect(Counter, :increment, :passthrough, times: 2)
-      |> Handler.stub(
-        Counter,
-        fn
-          :increment, [n], count -> {count + n, count + n}
-          :get_count, [], count -> {count, count}
-        end,
-        0
-      )
-      |> Handler.install!()
-
-      Counter.Port.increment(1)
-
-      # Only consumed 1 of 2 passthrough expects
-      assert_raise RuntimeError, ~r/expectations not fulfilled/, fn ->
-        Handler.verify!()
-      end
-    end
-
-    test "passthrough raises when no fallback configured" do
-      Handler.expect(Greeter, :greet, :passthrough)
-      |> Handler.install!()
-
-      assert_raise RuntimeError, ~r/Unexpected call to.*greet/, fn ->
-        Greeter.Port.greet("Alice")
-      end
-    end
-
-    test "mixed passthrough and function expects" do
-      Handler.expect(Greeter, :greet, :passthrough)
-      |> Handler.expect(Greeter, :greet, fn [_] -> "custom" end)
-      |> Handler.expect(Greeter, :greet, :passthrough)
-      |> Handler.stub(Greeter, Greeter.Impl)
-      |> Handler.install!()
-
-      # First: passthrough to Greeter.Impl
-      assert "Hello, A!" = Greeter.Port.greet("A")
-      # Second: custom function
-      assert "custom" = Greeter.Port.greet("B")
-      # Third: passthrough again
-      assert "Hello, C!" = Greeter.Port.greet("C")
-      assert :ok = Handler.verify!()
-    end
-  end
-
-  describe "dispatch with fallback stub" do
-    test "fallback stub handles operations without specific stubs" do
+    test "handles operations without specific stubs" do
       Handler.stub(Greeter, fn
         :greet, [name] -> "fallback: #{name}"
         :fetch_greeting, [name] -> {:ok, "fallback: #{name}"}
       end)
-      |> Handler.install!()
 
       assert "fallback: Alice" = Greeter.Port.greet("Alice")
       assert {:ok, "fallback: Bob"} = Greeter.Port.fetch_greeting("Bob")
     end
 
-    test "per-operation stub takes priority over fallback" do
-      Handler.stub(Greeter, :greet, fn [name] -> "per-op: #{name}" end)
-      |> Handler.stub(Greeter, fn _op, [name] -> "fallback: #{name}" end)
-      |> Handler.install!()
+    test "per-op stub takes priority over fallback" do
+      Greeter
+      |> Handler.stub(:greet, fn [name] -> "per-op: #{name}" end)
+      |> Handler.stub(fn _op, [name] -> "fallback: #{name}" end)
 
       assert "per-op: Alice" = Greeter.Port.greet("Alice")
     end
 
     test "expects take priority over fallback" do
-      Handler.expect(Greeter, :greet, fn [_] -> "expected" end)
-      |> Handler.stub(Greeter, fn _op, [name] -> "fallback: #{name}" end)
-      |> Handler.install!()
+      Greeter
+      |> Handler.stub(fn _op, [name] -> "fallback: #{name}" end)
+      |> Handler.expect(:greet, fn [_] -> "expected" end)
 
       assert "expected" = Greeter.Port.greet("Alice")
-      # After expect consumed, fallback takes over
       assert "fallback: Bob" = Greeter.Port.greet("Bob")
     end
 
-    test "full priority chain: expects > per-op stubs > fallback" do
-      Handler.expect(Greeter, :greet, fn [_] -> "expected" end)
-      |> Handler.stub(Greeter, :fetch_greeting, fn [name] -> {:ok, "per-op: #{name}"} end)
-      |> Handler.stub(Greeter, fn _op, [name] -> "fallback: #{name}" end)
-      |> Handler.install!()
-
-      # greet: expect first, then fallback
-      assert "expected" = Greeter.Port.greet("Alice")
-      assert "fallback: Bob" = Greeter.Port.greet("Bob")
-
-      # fetch_greeting: per-op stub (not fallback)
-      assert {:ok, "per-op: Carol"} = Greeter.Port.fetch_greeting("Carol")
-    end
-
-    test "FunctionClauseError in fallback raises with descriptive error" do
+    test "FunctionClauseError in fallback raises descriptive error" do
       Handler.stub(Greeter, fn
         :greet, [name] -> "only greet: #{name}"
       end)
-      |> Handler.install!()
 
-      # greet works
       assert "only greet: Alice" = Greeter.Port.greet("Alice")
 
-      # fetch_greeting raises FunctionClauseError in fallback -> deferred raise
       assert_raise RuntimeError, ~r/Unexpected call to.*fetch_greeting/, fn ->
         Greeter.Port.fetch_greeting("Bob")
       end
-    end
-
-    test "fallback stub works with verify!" do
-      Handler.expect(Greeter, :greet, fn [_] -> "expected" end)
-      |> Handler.stub(Greeter, fn _op, _args -> :fallback end)
-      |> Handler.install!()
-
-      Greeter.Port.greet("Alice")
-
-      assert :ok = Handler.verify!()
     end
 
     test "reuses set_fn_handler-style functions" do
@@ -605,105 +158,171 @@ defmodule HexPort.HandlerTest do
       end
 
       Handler.stub(Greeter, handler_fn)
-      |> Handler.install!()
 
       assert "handler: Alice" = Greeter.Port.greet("Alice")
       assert {:ok, "handler: Bob"} = Greeter.Port.fetch_greeting("Bob")
     end
   end
 
-  # ── install! tests ────────────────────────────────────────
+  describe "stub/2 module fallback" do
+    test "returns contract module for piping" do
+      result = Handler.stub(Greeter, Greeter.Impl)
+      assert result == Greeter
+    end
 
-  describe "install!/1" do
-    test "raises on empty accumulator" do
-      assert_raise ArgumentError, ~r/no expectations or stubs/, fn ->
-        Handler.install!(Handler.new())
+    test "delegates to module" do
+      Handler.stub(Greeter, Greeter.Impl)
+
+      assert "Hello, Alice!" = Greeter.Port.greet("Alice")
+      assert {:ok, "Hello, Bob!"} = Greeter.Port.fetch_greeting("Bob")
+    end
+
+    test "expects take priority" do
+      Greeter
+      |> Handler.stub(Greeter.Impl)
+      |> Handler.expect(:greet, fn [_] -> "expected" end)
+
+      assert "expected" = Greeter.Port.greet("Alice")
+      assert "Hello, Bob!" = Greeter.Port.greet("Bob")
+    end
+
+    test "per-op stubs take priority" do
+      Greeter
+      |> Handler.stub(Greeter.Impl)
+      |> Handler.stub(:greet, fn [name] -> "stubbed: #{name}" end)
+
+      assert "stubbed: Alice" = Greeter.Port.greet("Alice")
+      assert {:ok, "Hello, Bob!"} = Greeter.Port.fetch_greeting("Bob")
+    end
+
+    test "validates module at stub time — not loaded" do
+      assert_raise ArgumentError, ~r/not loaded/, fn ->
+        Handler.stub(Greeter, DoesNotExist.Module)
       end
     end
 
-    test "returns :ok on success" do
+    test "validates module at stub time — missing functions" do
+      assert_raise ArgumentError, ~r/missing functions/, fn ->
+        Handler.stub(Greeter, String)
+      end
+    end
+  end
+
+  describe "stub/3 stateful fallback" do
+    test "returns contract module for piping" do
       result =
-        Handler.stub(Greeter, :greet, fn [_] -> "hi" end)
-        |> Handler.install!()
+        Handler.stub(Counter, fn _op, _args, state -> {:ok, state} end, 0)
 
-      assert result == :ok
-    end
-  end
-
-  # ── Dispatch tests ────────────────────────────────────────
-
-  describe "dispatch with expects" do
-    test "expectations consumed in order" do
-      Handler.expect(Greeter, :greet, fn [_] -> "first" end)
-      |> Handler.expect(Greeter, :greet, fn [_] -> "second" end)
-      |> Handler.install!()
-
-      assert "first" = Greeter.Port.greet("Alice")
-      assert "second" = Greeter.Port.greet("Bob")
+      assert result == Counter
     end
 
-    test "times: n consumed across n calls" do
-      Handler.expect(Greeter, :greet, fn [name] -> "hi #{name}" end, times: 3)
-      |> Handler.install!()
+    test "handles operations with state threading" do
+      Handler.stub(
+        Counter,
+        fn
+          :increment, [n], count -> {count + n, count + n}
+          :get_count, [], count -> {count, count}
+        end,
+        0
+      )
 
-      assert "hi A" = Greeter.Port.greet("A")
-      assert "hi B" = Greeter.Port.greet("B")
-      assert "hi C" = Greeter.Port.greet("C")
+      assert 5 = Counter.Port.increment(5)
+      assert 8 = Counter.Port.increment(3)
+      assert 8 = Counter.Port.get_count()
     end
 
-    test "exhausted expects with no stub raises" do
-      Handler.expect(Greeter, :greet, fn [_] -> "once" end)
-      |> Handler.install!()
+    test "expects take priority, fallback state unchanged on expect" do
+      Counter
+      |> Handler.stub(
+        fn
+          :increment, [n], count -> {count + n, count + n}
+          :get_count, [], count -> {count, count}
+        end,
+        0
+      )
+      |> Handler.expect(:increment, fn [_] -> 999 end)
 
-      # First call succeeds
-      assert "once" = Greeter.Port.greet("Alice")
+      # First: expect fires, state unchanged (still 0)
+      assert 999 = Counter.Port.increment(5)
+      # Second: fallback, state is still 0
+      assert 3 = Counter.Port.increment(3)
+      assert 3 = Counter.Port.get_count()
+    end
 
-      # Second call raises — no expects left, no stub
-      assert_raise RuntimeError, ~r/Unexpected call to.*greet/, fn ->
-        Greeter.Port.greet("Bob")
+    test "error simulation — expect short-circuits before fallback" do
+      Counter
+      |> Handler.stub(
+        fn
+          :increment, [n], count -> {count + n, count + n}
+          :get_count, [], count -> {count, count}
+        end,
+        0
+      )
+      |> Handler.expect(:increment, fn [_n] -> {:error, :overflow} end)
+
+      assert {:error, :overflow} = Counter.Port.increment(100)
+      assert 5 = Counter.Port.increment(5)
+      assert 5 = Counter.Port.get_count()
+    end
+
+    test "full priority chain: expects > per-op stubs > stateful fallback" do
+      Counter
+      |> Handler.stub(
+        fn
+          :increment, [n], count -> {count + n, count + n}
+          :get_count, [], count -> {count, count}
+        end,
+        0
+      )
+      |> Handler.expect(:increment, fn [_] -> :expected end)
+      |> Handler.stub(:get_count, fn [] -> :stubbed end)
+
+      assert :expected = Counter.Port.increment(5)
+      assert :stubbed = Counter.Port.get_count()
+      assert 3 = Counter.Port.increment(3)
+    end
+
+    test "FunctionClauseError in stateful fallback raises" do
+      Handler.stub(
+        Counter,
+        fn :increment, [n], count -> {count + n, count + n} end,
+        0
+      )
+
+      assert 5 = Counter.Port.increment(5)
+
+      assert_raise RuntimeError, ~r/Unexpected call to.*get_count/, fn ->
+        Counter.Port.get_count()
       end
     end
   end
 
-  describe "dispatch with stubs" do
-    test "stub called any number of times" do
-      Handler.stub(Greeter, :greet, fn [name] -> "stub: #{name}" end)
-      |> Handler.install!()
+  # ── fallback mutual exclusivity ───────────────────────────
 
-      assert "stub: A" = Greeter.Port.greet("A")
-      assert "stub: B" = Greeter.Port.greet("B")
-      assert "stub: C" = Greeter.Port.greet("C")
+  describe "fallback mutual exclusivity" do
+    test "module replaces fn fallback" do
+      Greeter
+      |> Handler.stub(fn _op, _args -> :fn_fallback end)
+      |> Handler.stub(Greeter.Impl)
+
+      assert "Hello, Alice!" = Greeter.Port.greet("Alice")
     end
 
-    test "stub called zero times is valid" do
-      Handler.stub(Greeter, :greet, fn [_] -> "never called" end)
-      |> Handler.install!()
+    test "fn replaces module fallback" do
+      Greeter
+      |> Handler.stub(Greeter.Impl)
+      |> Handler.stub(fn :greet, [name] -> "fn: #{name}" end)
 
-      # Don't call it — verify should still pass
-      assert :ok = Handler.verify!()
-    end
-  end
-
-  describe "dispatch with expects + stubs" do
-    test "expects consumed first, then stub takes over" do
-      Handler.expect(Greeter, :greet, fn [_] -> "expected-1" end)
-      |> Handler.expect(Greeter, :greet, fn [_] -> "expected-2" end)
-      |> Handler.stub(Greeter, :greet, fn [name] -> "stub: #{name}" end)
-      |> Handler.install!()
-
-      assert "expected-1" = Greeter.Port.greet("A")
-      assert "expected-2" = Greeter.Port.greet("B")
-      assert "stub: C" = Greeter.Port.greet("C")
-      assert "stub: D" = Greeter.Port.greet("D")
+      assert "fn: Alice" = Greeter.Port.greet("Alice")
     end
   end
 
-  describe "dispatch with unexpected operations" do
-    test "operation with no expect or stub raises" do
+  # ── dispatch with unexpected operations ───────────────────
+
+  describe "unexpected operations" do
+    test "raises with descriptive error" do
       Handler.stub(Greeter, :greet, fn [_] -> "hi" end)
-      |> Handler.install!()
 
-      # fetch_greeting has no expect or stub
       assert_raise RuntimeError, ~r/Unexpected call to.*fetch_greeting/, fn ->
         Greeter.Port.fetch_greeting("Alice")
       end
@@ -711,10 +330,7 @@ defmodule HexPort.HandlerTest do
 
     test "error message includes remaining expectations" do
       Handler.expect(Greeter, :greet, fn [_] -> "hi" end)
-      |> Handler.install!()
 
-      # Call an operation that's not expected (fetch_greeting)
-      # while greet still has expectations remaining
       error =
         assert_raise RuntimeError, fn ->
           Greeter.Port.fetch_greeting("Alice")
@@ -725,16 +341,93 @@ defmodule HexPort.HandlerTest do
     end
   end
 
-  describe "multi-contract dispatch" do
-    test "each contract gets independent handler" do
-      Handler.expect(Greeter, :greet, fn [name] -> "greet: #{name}" end)
-      |> Handler.expect(Counter, :increment, fn [n] -> n * 10 end)
-      |> Handler.stub(Counter, :get_count, fn [] -> 99 end)
-      |> Handler.install!()
+  # ── :passthrough expects ──────────────────────────────────
 
-      assert "greet: Alice" = Greeter.Port.greet("Alice")
-      assert 50 = Counter.Port.increment(5)
-      assert 99 = Counter.Port.get_count()
+  describe ":passthrough expects" do
+    test "delegates to fn fallback" do
+      Greeter
+      |> Handler.stub(fn :greet, [name] -> "fallback: #{name}" end)
+      |> Handler.expect(:greet, :passthrough)
+
+      assert "fallback: Alice" = Greeter.Port.greet("Alice")
+      assert :ok = Handler.verify!()
+    end
+
+    test "delegates to module fallback" do
+      Greeter
+      |> Handler.stub(Greeter.Impl)
+      |> Handler.expect(:greet, :passthrough)
+
+      assert "Hello, Alice!" = Greeter.Port.greet("Alice")
+      assert :ok = Handler.verify!()
+    end
+
+    test "delegates to stateful fallback with state threading" do
+      Counter
+      |> Handler.stub(
+        fn
+          :increment, [n], count -> {count + n, count + n}
+          :get_count, [], count -> {count, count}
+        end,
+        0
+      )
+      |> Handler.expect(:increment, :passthrough)
+      |> Handler.expect(:increment, :passthrough)
+
+      assert 5 = Counter.Port.increment(5)
+      assert 8 = Counter.Port.increment(3)
+      assert 8 = Counter.Port.get_count()
+      assert :ok = Handler.verify!()
+    end
+
+    test "with times: n" do
+      Greeter
+      |> Handler.stub(Greeter.Impl)
+      |> Handler.expect(:greet, :passthrough, times: 3)
+
+      assert "Hello, A!" = Greeter.Port.greet("A")
+      assert "Hello, B!" = Greeter.Port.greet("B")
+      assert "Hello, C!" = Greeter.Port.greet("C")
+      assert :ok = Handler.verify!()
+    end
+
+    test "consumed for verify! counting" do
+      Counter
+      |> Handler.stub(
+        fn
+          :increment, [n], count -> {count + n, count + n}
+          :get_count, [], count -> {count, count}
+        end,
+        0
+      )
+      |> Handler.expect(:increment, :passthrough, times: 2)
+
+      Counter.Port.increment(1)
+
+      assert_raise RuntimeError, ~r/expectations not fulfilled/, fn ->
+        Handler.verify!()
+      end
+    end
+
+    test "raises when no fallback configured" do
+      Handler.expect(Greeter, :greet, :passthrough)
+
+      assert_raise RuntimeError, ~r/Unexpected call to.*greet/, fn ->
+        Greeter.Port.greet("Alice")
+      end
+    end
+
+    test "mixed passthrough and function expects" do
+      Greeter
+      |> Handler.stub(Greeter.Impl)
+      |> Handler.expect(:greet, :passthrough)
+      |> Handler.expect(:greet, fn [_] -> "custom" end)
+      |> Handler.expect(:greet, :passthrough)
+
+      assert "Hello, A!" = Greeter.Port.greet("A")
+      assert "custom" = Greeter.Port.greet("B")
+      assert "Hello, C!" = Greeter.Port.greet("C")
+      assert :ok = Handler.verify!()
     end
   end
 
@@ -743,7 +436,6 @@ defmodule HexPort.HandlerTest do
   describe "verify!/0" do
     test "passes when all expects consumed" do
       Handler.expect(Greeter, :greet, fn [_] -> "hi" end)
-      |> Handler.install!()
 
       Greeter.Port.greet("Alice")
 
@@ -752,9 +444,7 @@ defmodule HexPort.HandlerTest do
 
     test "raises when expects remain" do
       Handler.expect(Greeter, :greet, fn [_] -> "hi" end, times: 2)
-      |> Handler.install!()
 
-      # Only consume one
       Greeter.Port.greet("Alice")
 
       assert_raise RuntimeError, ~r/expectations not fulfilled/, fn ->
@@ -764,7 +454,6 @@ defmodule HexPort.HandlerTest do
 
     test "error message lists contract, operation, and count" do
       Handler.expect(Greeter, :greet, fn [_] -> "hi" end, times: 3)
-      |> Handler.install!()
 
       Greeter.Port.greet("Alice")
 
@@ -780,16 +469,14 @@ defmodule HexPort.HandlerTest do
 
     test "ignores stubs (zero calls OK)" do
       Handler.stub(Greeter, :greet, fn [_] -> "never" end)
-      |> Handler.stub(Counter, :get_count, fn [] -> 0 end)
-      |> Handler.install!()
+      Handler.stub(Counter, :get_count, fn [] -> 0 end)
 
       assert :ok = Handler.verify!()
     end
 
     test "works across multiple contracts" do
       Handler.expect(Greeter, :greet, fn [_] -> "hi" end)
-      |> Handler.expect(Counter, :increment, fn [_] -> 1 end)
-      |> Handler.install!()
+      Handler.expect(Counter, :increment, fn [_] -> 1 end)
 
       Greeter.Port.greet("Alice")
       Counter.Port.increment(1)
@@ -799,10 +486,8 @@ defmodule HexPort.HandlerTest do
 
     test "reports unconsumed expects across multiple contracts" do
       Handler.expect(Greeter, :greet, fn [_] -> "hi" end)
-      |> Handler.expect(Counter, :increment, fn [_] -> 1 end)
-      |> Handler.install!()
+      Handler.expect(Counter, :increment, fn [_] -> 1 end)
 
-      # Only consume Greeter, not Counter
       Greeter.Port.greet("Alice")
 
       error =
@@ -814,19 +499,18 @@ defmodule HexPort.HandlerTest do
       assert error.message =~ "increment"
     end
 
-    test "raises when called with no install" do
+    test "raises when called with no handlers" do
       assert_raise RuntimeError, ~r/no handlers were installed/, fn ->
         Handler.verify!()
       end
     end
   end
 
-  # ── verify!/1 (pid) tests ──────────────────────────────────
+  # ── verify!/1 (pid) tests ────────────────────────────────
 
   describe "verify!/1" do
     test "verifies expectations for a specific pid" do
       Handler.expect(Greeter, :greet, fn [_] -> "hi" end)
-      |> Handler.install!()
 
       Greeter.Port.greet("Alice")
 
@@ -835,7 +519,6 @@ defmodule HexPort.HandlerTest do
 
     test "raises when expectations remain for the given pid" do
       Handler.expect(Greeter, :greet, fn [_] -> "hi" end, times: 2)
-      |> Handler.install!()
 
       Greeter.Port.greet("Alice")
 
@@ -852,31 +535,24 @@ defmodule HexPort.HandlerTest do
       Handler.verify_on_exit!()
 
       Handler.expect(Greeter, :greet, fn [_] -> "hi" end)
-      |> Handler.install!()
 
       Greeter.Port.greet("Alice")
-
-      # on_exit will call verify! — test passes because expectations consumed
     end
 
     test "can be used as setup callback" do
-      # Simulate what `setup :verify_on_exit!` does
       Handler.verify_on_exit!(%{})
 
       Handler.stub(Greeter, :greet, fn [name] -> "stub: #{name}" end)
-      |> Handler.install!()
-
-      # Stubs don't need to be called — on_exit verify should pass
     end
   end
 
-  # ── Integration tests ─────────────────────────────────────
+  # ── integration tests ─────────────────────────────────────
 
   describe "full pipeline" do
-    test "expect → stub → install! → dispatch → verify!" do
-      Handler.expect(Greeter, :greet, fn [name] -> "expected: #{name}" end)
-      |> Handler.stub(Greeter, :fetch_greeting, fn [name] -> {:ok, "stub: #{name}"} end)
-      |> Handler.install!()
+    test "expect → stub → dispatch → verify" do
+      Greeter
+      |> Handler.expect(:greet, fn [name] -> "expected: #{name}" end)
+      |> Handler.stub(:fetch_greeting, fn [name] -> {:ok, "stub: #{name}"} end)
 
       assert "expected: Alice" = Greeter.Port.greet("Alice")
       assert {:ok, "stub: Bob"} = Greeter.Port.fetch_greeting("Bob")
@@ -886,9 +562,9 @@ defmodule HexPort.HandlerTest do
     end
 
     test "sequenced expectations with different return values" do
-      Handler.expect(Greeter, :fetch_greeting, fn [_] -> {:error, :not_found} end)
-      |> Handler.expect(Greeter, :fetch_greeting, fn [name] -> {:ok, "Hello, #{name}!"} end)
-      |> Handler.install!()
+      Greeter
+      |> Handler.expect(:fetch_greeting, fn [_] -> {:error, :not_found} end)
+      |> Handler.expect(:fetch_greeting, fn [name] -> {:ok, "Hello, #{name}!"} end)
 
       assert {:error, :not_found} = Greeter.Port.fetch_greeting("Alice")
       assert {:ok, "Hello, Bob!"} = Greeter.Port.fetch_greeting("Bob")
@@ -897,9 +573,9 @@ defmodule HexPort.HandlerTest do
     end
 
     test "times option with dispatch and verify" do
-      Handler.expect(Counter, :increment, fn [n] -> n end, times: 3)
-      |> Handler.stub(Counter, :get_count, fn [] -> 0 end)
-      |> Handler.install!()
+      Counter
+      |> Handler.expect(:increment, fn [n] -> n end, times: 3)
+      |> Handler.stub(:get_count, fn [] -> 0 end)
 
       Counter.Port.increment(1)
       Counter.Port.increment(2)
@@ -910,16 +586,28 @@ defmodule HexPort.HandlerTest do
     end
 
     test "mix of expects and stubs on same operation" do
-      Handler.expect(Greeter, :greet, fn [_] -> "first call" end)
-      |> Handler.expect(Greeter, :greet, fn [_] -> "second call" end)
-      |> Handler.stub(Greeter, :greet, fn [name] -> "stub: #{name}" end)
-      |> Handler.install!()
+      Greeter
+      |> Handler.expect(:greet, fn [_] -> "first call" end)
+      |> Handler.expect(:greet, fn [_] -> "second call" end)
+      |> Handler.stub(:greet, fn [name] -> "stub: #{name}" end)
 
       assert "first call" = Greeter.Port.greet("A")
       assert "second call" = Greeter.Port.greet("B")
       assert "stub: C" = Greeter.Port.greet("C")
       assert "stub: D" = Greeter.Port.greet("D")
-      assert "stub: E" = Greeter.Port.greet("E")
+
+      assert :ok = Handler.verify!()
+    end
+
+    test "full priority chain with all layers" do
+      Greeter
+      |> Handler.stub(Greeter.Impl)
+      |> Handler.stub(:fetch_greeting, fn [name] -> {:ok, "per-op: #{name}"} end)
+      |> Handler.expect(:greet, fn [_] -> "expected" end)
+
+      assert "expected" = Greeter.Port.greet("Alice")
+      assert "Hello, Bob!" = Greeter.Port.greet("Bob")
+      assert {:ok, "per-op: Carol"} = Greeter.Port.fetch_greeting("Carol")
 
       assert :ok = Handler.verify!()
     end

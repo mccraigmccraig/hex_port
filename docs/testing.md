@@ -87,20 +87,20 @@ need read-after-write consistency.
 For Ecto Repo operations specifically, HexPort ships ready-made
 stateful test doubles — see [Repo](repo.md).
 
-## Handler builder (expect/stub)
+## Handler (expect/stub)
 
 `HexPort.Handler` provides a Mox-style expect/stub API for declaring
-test handlers. It builds on `set_stateful_handler` internally, but
-offers a more declarative interface with ordered expectations,
-multi-contract chaining, and verification.
+test handlers. Each call writes directly to NimbleOwnership — no
+builder, no `install!` step. All functions return the contract module
+for piping.
 
 ### Basic usage
 
 ```elixir
 setup do
-  HexPort.Handler.expect(MyApp.Todos, :get_todo, fn [id] -> {:ok, %Todo{id: id}} end)
-  |> HexPort.Handler.stub(MyApp.Todos, :list_todos, fn [_] -> [] end)
-  |> HexPort.Handler.install!()
+  MyApp.Todos
+  |> HexPort.Handler.expect(:get_todo, fn [id] -> {:ok, %Todo{id: id}} end)
+  |> HexPort.Handler.stub(:list_todos, fn [_] -> [] end)
   :ok
 end
 
@@ -117,9 +117,9 @@ with no remaining expectations and no stub raises immediately.
 ### Sequenced expectations
 
 ```elixir
-HexPort.Handler.expect(MyApp.Todos, :get_todo, fn [_] -> {:error, :not_found} end)
-|> HexPort.Handler.expect(MyApp.Todos, :get_todo, fn [id] -> {:ok, %Todo{id: id}} end)
-|> HexPort.Handler.install!()
+MyApp.Todos
+|> HexPort.Handler.expect(:get_todo, fn [_] -> {:error, :not_found} end)
+|> HexPort.Handler.expect(:get_todo, fn [id] -> {:ok, %Todo{id: id}} end)
 
 # First call returns :not_found, second returns the todo
 ```
@@ -128,24 +128,23 @@ HexPort.Handler.expect(MyApp.Todos, :get_todo, fn [_] -> {:error, :not_found} en
 
 ```elixir
 HexPort.Handler.expect(MyApp.Todos, :get_todo, fn [id] -> {:ok, %Todo{id: id}} end, times: 3)
-|> HexPort.Handler.install!()
 ```
 
 ### Contract-wide fallback
 
 A fallback handles any operation without a specific expect or
-per-operation stub. Two forms are supported:
+per-operation stub. Three forms are supported:
 
 **Function fallback** — a 2-arity `fn operation, args -> result end`,
 the same signature as `set_fn_handler`:
 
 ```elixir
-HexPort.Handler.expect(MyApp.Todos, :create_todo, fn [p] -> {:ok, struct!(Todo, p)} end)
-|> HexPort.Handler.stub(MyApp.Todos, fn
+MyApp.Todos
+|> HexPort.Handler.stub(fn
   :list_todos, [_] -> []
   :get_todo, [id] -> {:ok, %Todo{id: id}}
 end)
-|> HexPort.Handler.install!()
+|> HexPort.Handler.expect(:create_todo, fn [p] -> {:ok, struct!(Todo, p)} end)
 ```
 
 **Stateful fallback** — a 3-arity `fn op, args, state -> {result, state}` with
@@ -155,11 +154,11 @@ operations with expects while the fake handles everything else:
 
 ```elixir
 # First insert fails with constraint error, rest go through InMemory
-HexPort.Handler.expect(RepoContract, :insert, fn [changeset] ->
+RepoContract
+|> HexPort.Handler.stub(&Repo.InMemory.handler/3, %{})
+|> HexPort.Handler.expect(:insert, fn [changeset] ->
   {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
 end)
-|> HexPort.Handler.stub(RepoContract, &Repo.InMemory.handler/3, %{})
-|> HexPort.Handler.install!()
 ```
 
 When an expect short-circuits (returns an error), the fallback
@@ -175,12 +174,12 @@ Override specific operations while the rest delegate to the real
 implementation:
 
 ```elixir
-HexPort.Handler.expect(MyApp.Todos, :create_todo, fn [_] -> {:error, :conflict} end)
-|> HexPort.Handler.stub(MyApp.Todos, MyApp.Todos.Ecto)
-|> HexPort.Handler.install!()
+MyApp.Todos
+|> HexPort.Handler.stub(MyApp.Todos.Ecto)
+|> HexPort.Handler.expect(:create_todo, fn [_] -> {:error, :conflict} end)
 ```
 
-The module is validated at `install!` time. Note: if the module's
+The module is validated at stub time. Note: if the module's
 `:bar` internally calls `:foo` and you've stubbed `:foo`, the module
 won't see your stub — it calls its own `:foo` directly. For stubs to
 be visible, the module must call through the facade.
@@ -194,9 +193,9 @@ function to delegate to the fallback while still consuming the
 expect for `verify!` counting:
 
 ```elixir
-HexPort.Handler.expect(MyApp.Todos, :get_todo, :passthrough, times: 2)
-|> HexPort.Handler.stub(MyApp.Todos, MyApp.Todos.Impl)
-|> HexPort.Handler.install!()
+MyApp.Todos
+|> HexPort.Handler.stub(MyApp.Todos.Impl)
+|> HexPort.Handler.expect(:get_todo, :passthrough, times: 2)
 
 # Both calls delegate to MyApp.Todos.Impl
 # verify! checks that get_todo was called exactly twice
@@ -208,12 +207,12 @@ be mixed with function expects for patterns like "first call
 succeeds through the fallback, second call returns an error":
 
 ```elixir
-HexPort.Handler.expect(RepoContract, :insert, :passthrough)
-|> HexPort.Handler.expect(RepoContract, :insert, fn [changeset] ->
+RepoContract
+|> HexPort.Handler.stub(&Repo.InMemory.handler/3, %{})
+|> HexPort.Handler.expect(:insert, :passthrough)
+|> HexPort.Handler.expect(:insert, fn [changeset] ->
   {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
 end)
-|> HexPort.Handler.stub(RepoContract, &Repo.InMemory.handler/3, %{})
-|> HexPort.Handler.install!()
 
 # First insert: passthrough to InMemory (writes to store)
 # Second insert: expect fires, returns error (store unchanged)
@@ -222,9 +221,10 @@ end)
 ### Multi-contract
 
 ```elixir
-HexPort.Handler.expect(MyApp.Todos, :create_todo, fn [p] -> {:ok, struct!(Todo, p)} end)
-|> HexPort.Handler.stub(HexPort.Repo.Contract, :one, fn [_] -> nil end)
-|> HexPort.Handler.install!()
+MyApp.Todos
+|> HexPort.Handler.expect(:create_todo, fn [p] -> {:ok, struct!(Todo, p)} end)
+
+HexPort.Handler.stub(HexPort.Repo.Contract, :one, fn [_] -> nil end)
 ```
 
 ### Verification
@@ -342,7 +342,6 @@ result inspection:
 ```elixir
 # Set up handlers
 HexPort.Handler.expect(MyContract, :create, fn [p] -> {:ok, struct!(Thing, p)} end)
-|> HexPort.Handler.install!()
 
 HexPort.Testing.enable_log(MyContract)
 
