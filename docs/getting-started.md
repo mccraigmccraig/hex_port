@@ -4,14 +4,13 @@
 
 ## Terminology
 
-DoubleDown uses terms from hexagonal architecture and testing theory.
+DoubleDown uses a few terms that are worth defining up front.
 If you're coming from Mox or standard Elixir, here's the mapping:
 
 | DoubleDown term | Familiar Elixir equivalent | Nuance |
 |---|---|---|
-| **Contract** | Behaviour (`@callback` specs) | The abstract interface an implementation must satisfy. Same sense of "contract" in [Mocks and explicit contracts](https://dashbit.co/blog/mocks-and-explicit-contracts). DoubleDown generates the `@behaviour` + `@callback` from `defcallback` — the contract is the source of truth. |
-| **Facade** | The proxy module you write by hand in Mox (`def foo(x), do: impl().foo(x)`) | The module callers use — dispatches to the configured implementation. DoubleDown generates this; with Mox you write it manually. |
-| **Port** | (hexagonal architecture term) | A boundary through which I/O operations pass. In practice, a contract + its facade. |
+| **Contract**    | Behaviour (`@callback` specs) | The abstract interface an implementation must satisfy. Same sense of "contract" in [Mocks and explicit contracts](https://dashbit.co/blog/mocks-and-explicit-contracts). DoubleDown generates the `@behaviour` + `@callback` from `defcallback` — the contract is the source of truth. |
+| **Facade**      | The proxy module you write by hand in Mox (`def foo(x), do: impl().foo(x)`) | The module callers use — dispatches to the configured implementation. DoubleDown generates this; with Mox you write it manually. |
 | **Test double** | Mock (but broader) | Any thing that stands in for a real implementation in tests. See [test double types](https://en.wikipedia.org/wiki/Test_double#Types). |
 
 ### Test double types
@@ -45,7 +44,7 @@ write but test less; fakes test more but require more upfront work
 
 ## Defining a contract
 
-A port contract declares the operations that cross a boundary. DoubleDown
+A contract declares the operations that cross a boundary. DoubleDown
 uses `defcallback` to capture typed signatures with parameter names,
 return types, and optional metadata — all available at compile time via
 `__callbacks__/0`.
@@ -223,12 +222,17 @@ Point the facade at its implementation via application config:
 config :my_app, MyApp.Todos, impl: MyApp.Todos.Ecto
 ```
 
-Different environments can use different implementations:
+For test environments, set `impl: nil` to enable the fail-fast
+pattern — any test that forgets to set a handler gets an immediate
+error instead of silently hitting a real implementation:
 
 ```elixir
 # config/test.exs
-config :my_app, MyApp.Todos, impl: MyApp.Todos.Mock
+config :my_app, MyApp.Todos, impl: nil
 ```
+
+See [Fail-fast configuration](testing.md#fail-fast-configuration) for
+details.
 
 ## Dispatch resolution
 
@@ -304,10 +308,6 @@ MyApp.Todos.__key__(:get_todo, "42")
 The `__key__` name follows the Elixir convention for generated
 introspection functions (like `__struct__`, `__schema__`), avoiding
 clashes with user-defined `defcallback key(...)` operations.
-
-These are used with Skuld's `Port.with_test_handler/2` for effectful
-testing. For plain DoubleDown testing, use the handler modes described
-in [Testing](testing.md).
 
 ## Why `defcallback` instead of plain `@callback`?
 
