@@ -12,10 +12,10 @@ The highest-impact, lowest-risk approach is:
 
 1. **Don't migrate existing tests.** They work, they have value, leave
    them on the Ecto sandbox.
-2. **Write new domain logic behind port contracts.** New contexts,
+2. **Write new domain logic behind contracts.** New contexts,
    new features, new orchestration functions.
 3. **Migrate existing code opportunistically.** When you're already
-   changing a function, wrap it in a port boundary.
+   changing a function, wrap it in a contract boundary.
 
 This means your test suite gradually shifts from slow DB-backed tests
 to fast in-memory tests as new code accumulates — without any
@@ -173,7 +173,7 @@ This test runs in < 1ms. No database, no sandbox, no factories.
 ## Coexisting with direct Ecto.Repo calls
 
 Code that hasn't been migrated continues to call `MyApp.EctoRepo`
-directly. Code behind port boundaries calls `MyApp.Repo` (the
+directly. Code behind contract boundaries calls `MyApp.Repo` (the
 facade). Both work in the same application — there's no conflict.
 
 In tests:
