@@ -107,11 +107,17 @@ defmodule DoubleDown.Dispatch do
   # -- Handler invocation --
 
   defp invoke_handler(%{type: :module, impl: impl}, _owner_pid, operation, args) do
-    apply(impl, operation, args)
+    case apply(impl, operation, args) do
+      %DoubleDown.Defer{fn: deferred_fn} -> deferred_fn.()
+      result -> result
+    end
   end
 
   defp invoke_handler(%{type: :fn, fun: fun}, _owner_pid, operation, args) do
-    fun.(operation, args)
+    case fun.(operation, args) do
+      %DoubleDown.Defer{fn: deferred_fn} -> deferred_fn.()
+      result -> result
+    end
   end
 
   defp invoke_handler(
@@ -123,15 +129,15 @@ defmodule DoubleDown.Dispatch do
     # Atomically read state, call handler, update state.
     # Must use owner_pid so allowed child processes can update state.
     #
-    # If the handler returns {:defer, deferred_fn}, we skip the state update
-    # and call deferred_fn outside the lock. This supports operations like
-    # `transact` whose body re-enters the dispatch system (which would
-    # otherwise deadlock on the NimbleOwnership GenServer).
+    # If the handler returns %DoubleDown.Defer{fn: deferred_fn}, we skip
+    # the state update and call deferred_fn outside the lock. This supports
+    # operations like `transact` whose body re-enters the dispatch system
+    # (which would otherwise deadlock on the NimbleOwnership GenServer).
     {:ok, result} =
       NimbleOwnership.get_and_update(@ownership_server, owner_pid, state_key, fn state ->
         case fun.(operation, args, state) do
-          {:defer, deferred_fn} when is_function(deferred_fn, 0) ->
-            {{:defer, deferred_fn}, state}
+          {%DoubleDown.Defer{} = defer, new_state} ->
+            {defer, new_state}
 
           {result, new_state} ->
             {result, new_state}
@@ -139,7 +145,7 @@ defmodule DoubleDown.Dispatch do
       end)
 
     case result do
-      {:defer, deferred_fn} -> deferred_fn.()
+      %DoubleDown.Defer{fn: deferred_fn} -> deferred_fn.()
       result -> result
     end
   end

@@ -169,12 +169,12 @@ if Code.ensure_loaded?(Ecto) do
     # -----------------------------------------------------------------
 
     defp dispatch(:transact, [fun, _opts], _fallback_fn) when is_function(fun, 0) do
-      fun.()
+      %DoubleDown.Defer{fn: fun}
     end
 
     defp dispatch(:transact, [%Ecto.Multi{} = multi, opts], _fallback_fn) do
       repo_facade = Keyword.get(opts, DoubleDown.Repo.Facade)
-      DoubleDown.Repo.MultiStepper.run(multi, repo_facade)
+      %DoubleDown.Defer{fn: fn -> DoubleDown.Repo.MultiStepper.run(multi, repo_facade) end}
     end
 
     # -----------------------------------------------------------------

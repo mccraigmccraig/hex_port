@@ -242,7 +242,7 @@ if Code.ensure_loaded?(Ecto) do
              |> Enum.filter(&is_integer/1)
            end) do
         {:error, {:no_autogenerate, message}} ->
-          {{:defer, fn -> raise ArgumentError, message end}, store}
+          {%DoubleDown.Defer{fn: fn -> raise ArgumentError, message end}, store}
 
         {id, record} ->
           {{:ok, record}, put_record(store, schema, id, record)}
@@ -330,7 +330,7 @@ if Code.ensure_loaded?(Ecto) do
     # Transaction Operations
     # -----------------------------------------------------------------
 
-    # transact uses {:defer, deferred_fn} to run the user's function
+    # transact uses %DoubleDown.Defer{} to run the user's function
     # outside the NimbleOwnership lock. Sub-operations (insert, get, etc.)
     # each acquire the lock individually. This avoids GenServer reentrancy
     # deadlock at the cost of not providing true transaction isolation —
@@ -338,14 +338,15 @@ if Code.ensure_loaded?(Ecto) do
     #
     # The facade's pre_dispatch wraps 1-arity fns into 0-arity thunks,
     # so implementations always receive a 0-arity fn or an Ecto.Multi.
-    def dispatch(:transact, [fun, _opts], _store) when is_function(fun, 0) do
-      {:defer, fun}
+    def dispatch(:transact, [fun, _opts], store) when is_function(fun, 0) do
+      {%DoubleDown.Defer{fn: fun}, store}
     end
 
-    def dispatch(:transact, [%Ecto.Multi{} = multi, opts], _store) do
+    def dispatch(:transact, [%Ecto.Multi{} = multi, opts], store) do
       repo_facade = Keyword.get(opts, DoubleDown.Repo.Facade)
 
-      {:defer, fn -> DoubleDown.Repo.MultiStepper.run(multi, repo_facade) end}
+      {%DoubleDown.Defer{fn: fn -> DoubleDown.Repo.MultiStepper.run(multi, repo_facade) end},
+       store}
     end
 
     # -----------------------------------------------------------------
@@ -353,8 +354,8 @@ if Code.ensure_loaded?(Ecto) do
     #
     # Because dispatch/3 runs inside NimbleOwnership.get_and_update
     # (a GenServer call), we must not raise here — that would crash
-    # the ownership server. Instead, we use {:defer, fn -> raise ... end}
-    # to move the raise outside the lock.
+    # the ownership server. Instead, we use %DoubleDown.Defer{} to
+    # move the raise outside the lock.
     # -----------------------------------------------------------------
 
     defp dispatch_via_fallback(operation, args, store) do
@@ -381,30 +382,31 @@ if Code.ensure_loaded?(Ecto) do
             # then defer the reraise to the calling test process.
             exception ->
               stacktrace = __STACKTRACE__
-              {{:defer, fn -> reraise exception, stacktrace end}, store}
+              {%DoubleDown.Defer{fn: fn -> reraise exception, stacktrace end}, store}
           end
       end
     end
 
     defp defer_raise_no_fallback(operation, args, store) do
-      {{:defer,
-        fn ->
-          raise ArgumentError, """
-          DoubleDown.Repo.InMemory cannot service :#{operation} with args #{inspect(args)}.
+      {%DoubleDown.Defer{
+         fn: fn ->
+           raise ArgumentError, """
+           DoubleDown.Repo.InMemory cannot service :#{operation} with args #{inspect(args)}.
 
-          The InMemory adapter can only answer authoritatively for:
-            - Write operations (insert, update, delete)
-            - PK-based reads (get, get!) when the record exists in state
+           The InMemory adapter can only answer authoritatively for:
+             - Write operations (insert, update, delete)
+             - PK-based reads (get, get!) when the record exists in state
 
-          For all other operations, register a fallback function:
+           For all other operations, register a fallback function:
 
-          DoubleDown.Repo.InMemory.new(
-            fallback_fn: fn
-              :#{operation}, #{inspect(args)}, _state -> # your result here
-            end
-          )
-          """
-        end}, store}
+           DoubleDown.Repo.InMemory.new(
+             fallback_fn: fn
+               :#{operation}, #{inspect(args)}, _state -> # your result here
+             end
+           )
+           """
+         end
+       }, store}
     end
 
     # -----------------------------------------------------------------

@@ -475,7 +475,7 @@ defmodule DoubleDown.Double do
     case state.fallback do
       nil ->
         msg = unexpected_call_message(state.contract, state, operation, args)
-        {{:defer, fn -> raise msg end}, state}
+        {%DoubleDown.Defer{fn: fn -> raise msg end}, state}
 
       {:fn, fallback_fn} ->
         invoke_fn_fallback(fallback_fn, state, operation, args)
@@ -494,7 +494,7 @@ defmodule DoubleDown.Double do
   rescue
     FunctionClauseError ->
       msg = unexpected_call_message(state.contract, state, operation, args)
-      {{:defer, fn -> reraise msg, __STACKTRACE__ end}, state}
+      {%DoubleDown.Defer{fn: fn -> reraise msg, __STACKTRACE__ end}, state}
   end
 
   defp invoke_stateful_fallback(fallback_fn, state, operation, args) do
@@ -503,7 +503,7 @@ defmodule DoubleDown.Double do
   rescue
     FunctionClauseError ->
       msg = unexpected_call_message(state.contract, state, operation, args)
-      {{:defer, fn -> reraise msg, __STACKTRACE__ end}, state}
+      {%DoubleDown.Defer{fn: fn -> reraise msg, __STACKTRACE__ end}, state}
   end
 
   defp invoke_module_fallback(module, state, operation, args) do
@@ -512,7 +512,7 @@ defmodule DoubleDown.Double do
   rescue
     UndefinedFunctionError ->
       msg = unexpected_call_message(state.contract, state, operation, args)
-      {{:defer, fn -> reraise msg, __STACKTRACE__ end}, state}
+      {%DoubleDown.Defer{fn: fn -> reraise msg, __STACKTRACE__ end}, state}
   end
 
   defp unexpected_call_message(contract, %{expects: expects}, operation, args) do

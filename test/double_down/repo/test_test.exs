@@ -591,4 +591,41 @@ defmodule DoubleDown.Repo.TestTest do
              ] = log
     end
   end
+
+  # -------------------------------------------------------------------
+  # Repo.Test via Double.stub (transact deadlock regression)
+  # -------------------------------------------------------------------
+
+  describe "Repo.Test via Double.stub" do
+    test "transact with 0-arity fun works via Double.stub (no deadlock)" do
+      DoubleDown.Double.stub(Repo, Repo.Test.new())
+
+      assert {:ok, :done} = Repo.Port.transact(fn -> {:ok, :done} end, [])
+    end
+
+    test "transact with nested Repo calls works via Double.stub" do
+      DoubleDown.Double.stub(Repo, Repo.Test.new())
+
+      result =
+        Repo.Port.transact(
+          fn repo ->
+            {:ok, user} = repo.insert(User.changeset(%{name: "Alice"}))
+            {:ok, user}
+          end,
+          []
+        )
+
+      assert {:ok, %User{name: "Alice"}} = result
+    end
+
+    test "transact with Ecto.Multi works via Double.stub" do
+      DoubleDown.Double.stub(Repo, Repo.Test.new())
+
+      multi =
+        Ecto.Multi.new()
+        |> Ecto.Multi.insert(:user, User.changeset(%{name: "Alice"}))
+
+      assert {:ok, %{user: %User{name: "Alice"}}} = Repo.Port.transact(multi, [])
+    end
+  end
 end
