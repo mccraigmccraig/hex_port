@@ -312,7 +312,10 @@ end)
 ```
 
 Matcher functions only need positive clauses — `FunctionClauseError`
-is caught and treated as "didn't match". No `_ -> false` needed.
+is caught and treated as "didn't match". No `_ -> false` catch-all
+needed, though returning `false` explicitly can be useful for
+excluding specific values that are hard to exclude with pattern
+matching alone.
 
 ### Counting occurrences
 
