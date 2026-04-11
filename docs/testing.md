@@ -436,7 +436,7 @@ defmodule MyApp.WorkerTest do
     %{worker: pid}
   end
 
-  test "worker fetches todo via port", %{worker: pid} do
+  test "worker fetches todo via contract", %{worker: pid} do
     assert {:ok, %Todo{id: "42"}} = MyApp.Worker.fetch(pid, "42")
   end
 end
