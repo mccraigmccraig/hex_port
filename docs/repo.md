@@ -63,18 +63,15 @@ and return `{:ok, struct}`, but nothing is stored. Read operations
 delegate to an optional fallback function, or raise with an actionable
 error message.
 
-`Repo.Test.new/1` returns a 2-arity function handler for use with
-`set_fn_handler`:
+`Repo.Test.new/1` returns a 2-arity function suitable for use as a
+`Double.stub` fallback:
 
 ```elixir
 # Writes only — reads will raise with a suggestion:
-DoubleDown.Testing.set_fn_handler(
-  DoubleDown.Repo,
-  DoubleDown.Repo.Test.new()
-)
+DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Test.new())
 
 # With fallback for reads:
-DoubleDown.Testing.set_fn_handler(
+DoubleDown.Double.stub(
   DoubleDown.Repo,
   DoubleDown.Repo.Test.new(
     fallback_fn: fn
@@ -127,7 +124,7 @@ needed:
 
 ```elixir
 setup do
-  DoubleDown.Testing.set_stateful_handler(
+  DoubleDown.Double.fake(
     DoubleDown.Repo,
     &DoubleDown.Repo.InMemory.dispatch/3,
     DoubleDown.Repo.InMemory.new()
@@ -205,7 +202,7 @@ setup do
     end
   )
 
-  DoubleDown.Testing.set_stateful_handler(
+  DoubleDown.Double.fake(
     DoubleDown.Repo,
     &DoubleDown.Repo.InMemory.dispatch/3,
     state
@@ -325,7 +322,7 @@ typically exercised in serial, single-process tests. If you need true
 transaction isolation, use the Ecto adapter with a real database and
 Ecto's sandbox.
 
-## Testing failure scenarios with Handler
+## Testing failure scenarios with Double
 
 `DoubleDown.Double` integrates with both Repo test doubles, letting you
 override specific operations to simulate failures while the rest of
@@ -334,7 +331,7 @@ the Repo behaves normally.
 ### Error simulation with `Repo.Test`
 
 Use a 2-arity function fallback (`Repo.Test.new/1` returns one) as
-the Handler's fallback stub, and add expects for the operations that
+the Double's fallback stub, and add expects for the operations that
 should fail:
 
 ```elixir
@@ -426,7 +423,7 @@ end)
 
 ### Combining with `DoubleDown.Log`
 
-Handler and Log complement each other — Handler for controlling return
+Double and Log complement each other — Double for controlling return
 values and counting calls, Log for asserting on what actually happened
 including computed results:
 
