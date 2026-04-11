@@ -138,11 +138,11 @@ defmodule DoubleDown.Contract do
 
     quote do
       @callback_operations (fn ->
-                          user_doc = Module.get_attribute(__MODULE__, :doc)
-                          op = %{unquote(escaped_op) | user_doc: user_doc}
-                          if user_doc, do: Module.delete_attribute(__MODULE__, :doc)
-                          op
-                        end).()
+                              user_doc = Module.get_attribute(__MODULE__, :doc)
+                              op = %{unquote(escaped_op) | user_doc: user_doc}
+                              if user_doc, do: Module.delete_attribute(__MODULE__, :doc)
+                              op
+                            end).()
     end
   end
 

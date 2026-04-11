@@ -3,7 +3,7 @@
   import_deps: [],
   plugins: [],
   locals_without_parens: [
-    defport: :*
+    defcallback: :*
   ],
   inputs: [
     "{mix,.formatter}.exs",
