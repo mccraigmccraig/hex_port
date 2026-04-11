@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0]
+
+### Changed
+
+- **Breaking:** Library renamed from `hex_port` / `HexPort` to
+  `double_down` / `DoubleDown`. All module names, app name, package
+  name, and GitHub URLs updated. The emphasis has shifted from
+  hexagonal architecture boundaries to the distinctive test double
+  capabilities.
+
 ## [0.23.0]
 
 ### Changed
@@ -365,7 +375,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `DoubleDown.Testing` with NimbleOwnership, `Repo.Test` stateless
   adapter, CI setup, Credo, Dialyzer.
 
-[Unreleased]: https://github.com/mccraigmccraig/double_down/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/mccraigmccraig/double_down/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/mccraigmccraig/double_down/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/mccraigmccraig/double_down/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/mccraigmccraig/double_down/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/mccraigmccraig/double_down/compare/v0.20.0...v0.21.0
