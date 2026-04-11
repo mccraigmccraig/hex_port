@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.0]
+
+### Added
+
+- `%DoubleDown.Defer{fn: fun}` struct — dedicated deferred execution
+  marker, replacing the `{:defer, fn}` tuple convention. Eliminates
+  clash risk with legitimate return values and enables deferred
+  execution in all dispatch paths (fn, module, stateful).
+- `Repo.Test` now returns `%Defer{}` for `transact` operations, so
+  `Double.stub(contract, Repo.Test.new())` works correctly with
+  transact — no NimbleOwnership deadlock.
+- Regression tests for transact-via-`Double.stub` scenario.
+
+### Changed
+
+- **Breaking:** `{:defer, fn}` tuple convention replaced by
+  `%DoubleDown.Defer{fn: fun}` throughout. Affects `Repo.Test`,
+  `Repo.InMemory`, `DoubleDown.Dispatch`, and `DoubleDown.Double`.
+  Only relevant if you were returning `{:defer, fn}` from custom
+  stateful handlers — replace with `%DoubleDown.Defer{fn: fun}`.
+
+### Fixed
+
+- NimbleOwnership deadlock when using `Double.stub(contract,
+  Repo.Test.new())` with contracts that include re-entrant operations
+  like `transact`.
+- Async test race condition: added `Code.ensure_loaded` before
+  `function_exported?` in contract tests.
+- Documentation: "contract behaviour" and "dispatch facade" compound
+  forms at first-mention points, intro paragraphs on all doc pages,
+  production Repo as zero-cost passthrough.
+
 ## [0.26.0]
 
 ### Changed
@@ -430,7 +462,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `DoubleDown.Testing` with NimbleOwnership, `Repo.Test` stateless
   adapter, CI setup, Credo, Dialyzer.
 
-[Unreleased]: https://github.com/mccraigmccraig/double_down/compare/v0.26.0...HEAD
+[Unreleased]: https://github.com/mccraigmccraig/double_down/compare/v0.27.0...HEAD
+[0.27.0]: https://github.com/mccraigmccraig/double_down/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/mccraigmccraig/double_down/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/mccraigmccraig/double_down/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/mccraigmccraig/double_down/compare/v0.23.0...v0.24.0
