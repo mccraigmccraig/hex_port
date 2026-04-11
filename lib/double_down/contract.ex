@@ -1,13 +1,13 @@
 defmodule DoubleDown.Contract do
   @moduledoc """
-  Macro for defining typed port contracts with `defport` declarations.
+  Macro for defining typed port contracts with `defcallback` declarations.
 
-  `use DoubleDown.Contract` imports the `defport` macro and registers a
+  `use DoubleDown.Contract` imports the `defcallback` macro and registers a
   `@before_compile` hook that generates:
 
     * `@callback` declarations on the contract module itself — the
       contract module *is* the behaviour
-    * `__port_operations__/0` — introspection metadata
+    * `__callbacks__/0` — introspection metadata
 
   Contracts are purely static interface definitions. They do **not**
   generate a dispatch facade (`.Port` module) — that is the concern of
@@ -19,14 +19,14 @@ defmodule DoubleDown.Contract do
       defmodule MyApp.Todos do
         use DoubleDown.Contract
 
-        defport get_todo(tenant_id :: String.t(), id :: String.t()) ::
+        defcallback get_todo(tenant_id :: String.t(), id :: String.t()) ::
           {:ok, Todo.t()} | {:error, term()}
 
-        defport list_todos(tenant_id :: String.t()) :: [Todo.t()]
+        defcallback list_todos(tenant_id :: String.t()) :: [Todo.t()]
       end
 
   This generates `@callback` declarations on `MyApp.Todos` and
-  `MyApp.Todos.__port_operations__/0`.
+  `MyApp.Todos.__callbacks__/0`.
 
   Implementations use `@behaviour MyApp.Todos` directly:
 
@@ -51,14 +51,14 @@ defmodule DoubleDown.Contract do
     quote do
       # import is always safe to repeat and must be at module scope
       # (imports inside blocks like `unless` are scoped to that block)
-      import DoubleDown.Contract, only: [defport: 1, defport: 2]
+      import DoubleDown.Contract, only: [defcallback: 1, defcallback: 2]
 
       # Guard the non-idempotent parts: registering the accumulator attribute
       # and the @before_compile hook. This makes `use DoubleDown.Contract`
       # idempotent, so a module can both `use DoubleDown.Contract` directly and
       # `use Skuld.Effects.Port.Contract` (which calls it internally).
-      unless Module.has_attribute?(__MODULE__, :port_operations) do
-        Module.register_attribute(__MODULE__, :port_operations, accumulate: true)
+      unless Module.has_attribute?(__MODULE__, :callback_operations) do
+        Module.register_attribute(__MODULE__, :callback_operations, accumulate: true)
         @before_compile DoubleDown.Contract
       end
     end
@@ -69,8 +69,8 @@ defmodule DoubleDown.Contract do
 
   ## Syntax
 
-      defport function_name(param :: type(), ...) :: return_type()
-      defport function_name(param :: type(), ...) :: return_type(), bang: option
+      defcallback function_name(param :: type(), ...) :: return_type()
+      defcallback function_name(param :: type(), ...) :: return_type(), bang: option
 
   ## Bang Options
 
@@ -87,18 +87,18 @@ defmodule DoubleDown.Contract do
       (possibly modified) args list. This is useful for injecting
       facade-specific context into arguments at the dispatch boundary.
   """
-  defmacro defport(spec, opts \\ [])
+  defmacro defcallback(spec, opts \\ [])
 
-  defmacro defport({:"::", _meta, [call_ast, return_type_ast]}, opts) do
+  defmacro defcallback({:"::", _meta, [call_ast, return_type_ast]}, opts) do
     bang_opt = Keyword.get(opts, :bang, :auto)
     pre_dispatch_opt = Keyword.get(opts, :pre_dispatch, nil)
-    build_defport_ast(call_ast, return_type_ast, bang_opt, pre_dispatch_opt, __CALLER__)
+    build_defcallback_ast(call_ast, return_type_ast, bang_opt, pre_dispatch_opt, __CALLER__)
   end
 
-  defmacro defport(other, _opts) do
+  defmacro defcallback(other, _opts) do
     raise CompileError,
       description:
-        "invalid defport syntax. Expected: defport name(param :: type(), ...) :: return_type()\n" <>
+        "invalid defcallback syntax. Expected: defcallback name(param :: type(), ...) :: return_type()\n" <>
           "Got: #{Macro.to_string(other)}",
       file: __CALLER__.file,
       line: __CALLER__.line
@@ -106,7 +106,7 @@ defmodule DoubleDown.Contract do
 
   # -- AST capture (at macro expansion time) --
 
-  defp build_defport_ast(call_ast, return_type_ast, bang_opt, pre_dispatch_opt, caller) do
+  defp build_defcallback_ast(call_ast, return_type_ast, bang_opt, pre_dispatch_opt, caller) do
     {name, params} = parse_call(call_ast, caller)
 
     param_names = Enum.map(params, &elem(&1, 0))
@@ -137,7 +137,7 @@ defmodule DoubleDown.Contract do
     escaped_op = Macro.escape(op_base)
 
     quote do
-      @port_operations (fn ->
+      @callback_operations (fn ->
                           user_doc = Module.get_attribute(__MODULE__, :doc)
                           op = %{unquote(escaped_op) | user_doc: user_doc}
                           if user_doc, do: Module.delete_attribute(__MODULE__, :doc)
@@ -150,12 +150,12 @@ defmodule DoubleDown.Contract do
 
   @doc false
   defmacro __before_compile__(env) do
-    operations = Module.get_attribute(env.module, :port_operations) |> Enum.reverse()
+    operations = Module.get_attribute(env.module, :callback_operations) |> Enum.reverse()
 
     if operations == [] do
       raise CompileError,
         description:
-          "#{inspect(env.module)} uses DoubleDown.Contract but has no defport declarations",
+          "#{inspect(env.module)} uses DoubleDown.Contract but has no defcallback declarations",
         file: env.file,
         line: 0
     end
@@ -185,7 +185,7 @@ defmodule DoubleDown.Contract do
         {:\\, _, _} ->
           raise CompileError,
             description:
-              "defport does not support default arguments (\\\\). " <>
+              "defcallback does not support default arguments (\\\\). " <>
                 "Use a wrapper function instead.",
             file: caller.file,
             line: caller.line
@@ -193,7 +193,7 @@ defmodule DoubleDown.Contract do
         other ->
           raise CompileError,
             description:
-              "defport parameters must be typed: `name :: type()`. Got: #{Macro.to_string(other)}",
+              "defcallback parameters must be typed: `name :: type()`. Got: #{Macro.to_string(other)}",
             file: caller.file,
             line: caller.line
       end)
@@ -203,7 +203,7 @@ defmodule DoubleDown.Contract do
 
   def parse_call(other, caller) do
     raise CompileError,
-      description: "invalid defport call syntax. Got: #{Macro.to_string(other)}",
+      description: "invalid defcallback call syntax. Got: #{Macro.to_string(other)}",
       file: caller.file,
       line: caller.line
   end
@@ -211,7 +211,7 @@ defmodule DoubleDown.Contract do
   # -- Type alias expansion --
   #
   # Walk a type AST and expand any {:__aliases__, _, _} nodes using the
-  # caller's alias environment.  This ensures that __port_operations__/0
+  # caller's alias environment.  This ensures that __callbacks__/0
   # always stores fully-qualified module names, so @spec annotations
   # generated in Port modules (which lack the contract's aliases) resolve
   # correctly for dialyzer.
@@ -275,7 +275,7 @@ defmodule DoubleDown.Contract do
 
     quote do
       @doc false
-      def __port_operations__ do
+      def __callbacks__ do
         unquote(op_maps)
       end
     end

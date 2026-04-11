@@ -4,7 +4,7 @@ defmodule DoubleDown.ContractTest do
   # ── Callback generation ──────────────────────────────────
 
   describe "callback generation" do
-    test "contract module declares @callbacks for each defport" do
+    test "contract module declares @callbacks for each defcallback" do
       {:ok, callbacks} = Code.Typespec.fetch_callbacks(DoubleDown.Test.Greeter)
       callback_names = Enum.map(callbacks, fn {name_arity, _} -> name_arity end)
 
@@ -51,7 +51,7 @@ defmodule DoubleDown.ContractTest do
                Code.ensure_loaded(DoubleDown.Test.Greeter.Port)
     end
 
-    test "Port defines functions matching each defport" do
+    test "Port defines functions matching each defcallback" do
       assert function_exported?(DoubleDown.Test.Greeter.Port, :greet, 1)
       assert function_exported?(DoubleDown.Test.Greeter.Port, :fetch_greeting, 1)
     end
@@ -256,18 +256,18 @@ defmodule DoubleDown.ContractTest do
     end
   end
 
-  # ── __port_operations__/0 introspection ───────────────────
+  # ── __callbacks__/0 introspection ───────────────────
 
-  describe "__port_operations__/0 introspection" do
+  describe "__callbacks__/0 introspection" do
     test "returns list of operation maps" do
-      ops = DoubleDown.Test.Greeter.__port_operations__()
+      ops = DoubleDown.Test.Greeter.__callbacks__()
 
       assert is_list(ops)
       assert length(ops) == 2
     end
 
     test "each operation has required keys" do
-      [op | _] = DoubleDown.Test.Greeter.__port_operations__()
+      [op | _] = DoubleDown.Test.Greeter.__callbacks__()
 
       assert Map.has_key?(op, :name)
       assert Map.has_key?(op, :params)
@@ -279,7 +279,7 @@ defmodule DoubleDown.ContractTest do
     end
 
     test "reports correct operation names" do
-      ops = DoubleDown.Test.Greeter.__port_operations__()
+      ops = DoubleDown.Test.Greeter.__callbacks__()
       names = Enum.map(ops, & &1.name)
 
       assert :greet in names
@@ -287,7 +287,7 @@ defmodule DoubleDown.ContractTest do
     end
 
     test "reports correct param names" do
-      ops = DoubleDown.Test.MultiParam.__port_operations__()
+      ops = DoubleDown.Test.MultiParam.__callbacks__()
       [find_op] = ops
 
       assert find_op.params == [:tenant, :type, :id]
@@ -295,7 +295,7 @@ defmodule DoubleDown.ContractTest do
     end
 
     test "reports correct bang_mode for auto-detected" do
-      ops = DoubleDown.Test.Greeter.__port_operations__()
+      ops = DoubleDown.Test.Greeter.__callbacks__()
       op_map = Map.new(ops, fn op -> {op.name, op} end)
 
       # greet has no {:ok, T} pattern → :none
@@ -305,7 +305,7 @@ defmodule DoubleDown.ContractTest do
     end
 
     test "reports correct bang_mode for explicit options" do
-      ops = DoubleDown.Test.BangVariants.__port_operations__()
+      ops = DoubleDown.Test.BangVariants.__callbacks__()
       op_map = Map.new(ops, fn op -> {op.name, op} end)
 
       assert op_map[:auto_bang].bang_mode == :standard
@@ -316,7 +316,7 @@ defmodule DoubleDown.ContractTest do
     end
 
     test "zero-arg operations report arity 0" do
-      ops = DoubleDown.Test.ZeroArg.__port_operations__()
+      ops = DoubleDown.Test.ZeroArg.__callbacks__()
       op_map = Map.new(ops, fn op -> {op.name, op} end)
 
       assert op_map[:health_check].arity == 0
@@ -373,8 +373,8 @@ defmodule DoubleDown.ContractTest do
           use DoubleDown.Contract
           use DoubleDown.Contract
 
-          defport hello(name :: String.t()) :: String.t()
-          defport ping() :: :pong
+          defcallback hello(name :: String.t()) :: String.t()
+          defcallback ping() :: :pong
         end
         """)
 
@@ -384,7 +384,7 @@ defmodule DoubleDown.ContractTest do
 
       # Operations are correct (not duplicated)
       mod = DoubleDown.Test.DoubleUse
-      ops = apply(mod, :__port_operations__, [])
+      ops = apply(mod, :__callbacks__, [])
       assert length(ops) == 2
       op_names = Enum.map(ops, & &1.name)
       assert :hello in op_names
@@ -402,8 +402,8 @@ defmodule DoubleDown.ContractTest do
           use DoubleDown.Contract
           use DoubleDown.Facade, contract: DoubleDown.Test.Combined, otp_app: :double_down_test
 
-          defport greet(name :: String.t()) :: String.t()
-          defport ping() :: :pong
+          defcallback greet(name :: String.t()) :: String.t()
+          defcallback ping() :: :pong
         end
         """)
 
@@ -417,8 +417,8 @@ defmodule DoubleDown.ContractTest do
       assert {:greet, 1} in callbacks
       assert {:ping, 0} in callbacks
 
-      # Has __port_operations__
-      ops = apply(mod, :__port_operations__, [])
+      # Has __callbacks__
+      ops = apply(mod, :__callbacks__, [])
       assert length(ops) == 2
 
       # Facade functions exist
@@ -431,8 +431,8 @@ defmodule DoubleDown.ContractTest do
       defmodule DoubleDown.Test.CombinedImplicit do
         use DoubleDown.Facade, otp_app: :double_down_test
 
-        defport greet(name :: String.t()) :: String.t()
-        defport ping() :: :pong
+        defcallback greet(name :: String.t()) :: String.t()
+        defcallback ping() :: :pong
       end
       """)
 
@@ -443,8 +443,8 @@ defmodule DoubleDown.ContractTest do
       assert {:greet, 1} in callbacks
       assert {:ping, 0} in callbacks
 
-      # Has __port_operations__
-      ops = apply(mod, :__port_operations__, [])
+      # Has __callbacks__
+      ops = apply(mod, :__callbacks__, [])
       assert length(ops) == 2
 
       # Facade functions exist
@@ -457,7 +457,7 @@ defmodule DoubleDown.ContractTest do
       defmodule DoubleDown.Test.CombinedDispatch do
         use DoubleDown.Facade, otp_app: :double_down_test
 
-        defport greet(name :: String.t()) :: String.t()
+        defcallback greet(name :: String.t()) :: String.t()
       end
       """)
 
@@ -479,7 +479,7 @@ defmodule DoubleDown.ContractTest do
         Code.compile_string("""
         defmodule DoubleDown.Test.BadUntyped do
           use DoubleDown.Contract
-          defport bad_op(name) :: String.t()
+          defcallback bad_op(name) :: String.t()
         end
         """)
       end
@@ -490,14 +490,14 @@ defmodule DoubleDown.ContractTest do
         Code.compile_string("""
         defmodule DoubleDown.Test.BadDefaults do
           use DoubleDown.Contract
-          defport bad_op(name :: String.t() \\\\ "default") :: String.t()
+          defcallback bad_op(name :: String.t() \\\\ "default") :: String.t()
         end
         """)
       end
     end
 
-    test "raises when no defport declarations" do
-      assert_raise CompileError, ~r/has no defport declarations/, fn ->
+    test "raises when no defcallback declarations" do
+      assert_raise CompileError, ~r/has no defcallback declarations/, fn ->
         Code.compile_string("""
         defmodule DoubleDown.Test.BadEmpty do
           use DoubleDown.Contract
@@ -507,11 +507,11 @@ defmodule DoubleDown.ContractTest do
     end
 
     test "raises on missing return type annotation" do
-      assert_raise CompileError, ~r/invalid defport syntax/, fn ->
+      assert_raise CompileError, ~r/invalid defcallback syntax/, fn ->
         Code.compile_string("""
         defmodule DoubleDown.Test.BadNoReturn do
           use DoubleDown.Contract
-          defport bad_op(name :: String.t())
+          defcallback bad_op(name :: String.t())
         end
         """)
       end
@@ -521,8 +521,8 @@ defmodule DoubleDown.ContractTest do
   # ── Type alias expansion ──────────────────────────────────
 
   describe "type alias expansion" do
-    test "param_types in __port_operations__ contain fully-qualified module names" do
-      ops = DoubleDown.Test.AliasedTypes.__port_operations__()
+    test "param_types in __callbacks__ contain fully-qualified module names" do
+      ops = DoubleDown.Test.AliasedTypes.__callbacks__()
       op_map = Map.new(ops, fn op -> {op.name, op} end)
 
       # list_widgets has param type Widget.t() — should be expanded to
@@ -536,8 +536,8 @@ defmodule DoubleDown.ContractTest do
       refute type_string =~ ~r/(?<!\.)Widget\.t/
     end
 
-    test "return_type in __port_operations__ contains fully-qualified module names" do
-      ops = DoubleDown.Test.AliasedTypes.__port_operations__()
+    test "return_type in __callbacks__ contains fully-qualified module names" do
+      ops = DoubleDown.Test.AliasedTypes.__callbacks__()
       op_map = Map.new(ops, fn op -> {op.name, op} end)
 
       # get_widget returns {:ok, Widget.t()} | {:error, term()}

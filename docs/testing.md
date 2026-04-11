@@ -528,7 +528,7 @@ intentional, rather than an accident of config inheritance.
 
 ## Mox compatibility
 
-Because `defport` generates standard `@callback` declarations, the
+Because `defcallback` generates standard `@callback` declarations, the
 contract module works as a Mox behaviour out of the box:
 
 ```elixir

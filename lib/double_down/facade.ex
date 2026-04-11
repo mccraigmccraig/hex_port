@@ -2,7 +2,7 @@ defmodule DoubleDown.Facade do
   @moduledoc """
   Generates a dispatch facade for a `DoubleDown.Contract`.
 
-  `use DoubleDown.Facade` reads a contract's `__port_operations__/0` metadata
+  `use DoubleDown.Facade` reads a contract's `__callbacks__/0` metadata
   and generates facade functions, bang variants, and key helpers that
   dispatch via `DoubleDown.Dispatch`.
 
@@ -15,11 +15,11 @@ defmodule DoubleDown.Facade do
       defmodule MyApp.Todos do
         use DoubleDown.Facade, otp_app: :my_app
 
-        defport get_todo(id :: String.t()) :: {:ok, Todo.t()} | {:error, term()}
-        defport list_todos() :: [Todo.t()]
+        defcallback get_todo(id :: String.t()) :: {:ok, Todo.t()} | {:error, term()}
+        defcallback list_todos() :: [Todo.t()]
       end
 
-  `MyApp.Todos` is both the contract (has `@callback`s, `__port_operations__/0`)
+  `MyApp.Todos` is both the contract (has `@callback`s, `__callbacks__/0`)
   and the dispatch facade.
 
   ## Separate contract and facade
@@ -33,7 +33,7 @@ defmodule DoubleDown.Facade do
   ## Options
 
     * `:contract` — the contract module that defines port operations via
-      `use DoubleDown.Contract` and `defport` declarations. Defaults to
+      `use DoubleDown.Contract` and `defcallback` declarations. Defaults to
       `__MODULE__` (combined contract + facade).
     * `:otp_app` (required) — the OTP application name for config-based dispatch.
       Implementations are resolved from `Application.get_env(otp_app, contract)[:impl]`.
@@ -157,7 +157,7 @@ defmodule DoubleDown.Facade do
 
   # -- Code Generation: Port facade functions --
   #
-  # Note: operations come from __port_operations__/0 which stores
+  # Note: operations come from __callbacks__/0 which stores
   # param_types and return_type as AST tuples (runtime data).
   # We splice them directly with unquote — Elixir treats 3-tuples as AST.
 
@@ -192,13 +192,13 @@ defmodule DoubleDown.Facade do
         end
       end
 
-    # param_types and return_type are AST tuples from __port_operations__/0.
+    # param_types and return_type are AST tuples from __callbacks__/0.
     # We splice them directly — unquote treats 3-tuples as AST.
     #
-    # When a pre_dispatch function is declared on a defport, it is applied
+    # When a pre_dispatch function is declared on a defcallback, it is applied
     # to the args list before dispatch. The function receives (args, facade_module)
     # and returns the (possibly modified) args list. The pre_dispatch value
-    # is AST (double-escaped through __port_operations__/0) and is spliced
+    # is AST (double-escaped through __callbacks__/0) and is spliced
     # directly into the generated function body.
     dispatch_args =
       if pre_dispatch do
@@ -311,12 +311,12 @@ defmodule DoubleDown.Facade do
       # Code.ensure_loaded? and function_exported? won't work, but
       # Module.defines? checks functions defined earlier in this
       # compilation (by a prior @before_compile hook).
-      unless Module.defines?(env.module, {:__port_operations__, 0}) do
+      unless Module.defines?(env.module, {:__callbacks__, 0}) do
         raise CompileError,
           description:
-            "#{inspect(contract)} does not define __port_operations__/0. " <>
+            "#{inspect(contract)} does not define __callbacks__/0. " <>
               "Ensure `use DoubleDown.Contract` appears before `use DoubleDown.Facade` " <>
-              "and add `defport` declarations.",
+              "and add `defcallback` declarations.",
           file: env.file,
           line: 0
       end
@@ -324,7 +324,7 @@ defmodule DoubleDown.Facade do
       # We validate via Module.defines? (the output), but must read
       # the raw attribute for data since the function can't be called
       # on a module that's still being compiled.
-      Module.get_attribute(env.module, :port_operations)
+      Module.get_attribute(env.module, :callback_operations)
       |> Enum.reverse()
       |> Enum.map(&operation_to_introspection/1)
     else
@@ -338,21 +338,21 @@ defmodule DoubleDown.Facade do
           line: 0
       end
 
-      unless function_exported?(contract, :__port_operations__, 0) do
+      unless function_exported?(contract, :__callbacks__, 0) do
         raise CompileError,
           description:
-            "#{inspect(contract)} does not define __port_operations__/0. " <>
-              "Did you `use DoubleDown.Contract` and add `defport` declarations?",
+            "#{inspect(contract)} does not define __callbacks__/0. " <>
+              "Did you `use DoubleDown.Contract` and add `defcallback` declarations?",
           file: env.file,
           line: 0
       end
 
-      contract.__port_operations__()
+      contract.__callbacks__()
     end
   end
 
-  # Convert the raw @port_operations attribute format to the public
-  # __port_operations__/0 format (matching what generate_introspection
+  # Convert the raw @callback_operations attribute format to the public
+  # __callbacks__/0 format (matching what generate_introspection
   # in DoubleDown.Contract produces).
   defp operation_to_introspection(%{
          name: name,

@@ -127,7 +127,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** Renamed generated key helper from `key/N` to `__key__/N`
   on facade modules, following the Elixir convention for generated
   introspection functions. This avoids clashes with user-defined
-  `defport key(...)` operations.
+  `defcallback key(...)` operations.
 
 ### Fixed
 
@@ -165,7 +165,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `pre_dispatch` option for `defport` — a generic mechanism for
+- `pre_dispatch` option for `defcallback` — a generic mechanism for
   transforming arguments before dispatch. Accepts a function
   `(args, facade_module) -> args` declared at the contract level,
   spliced into the generated facade function as AST.
@@ -185,7 +185,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `pre_dispatch` wrapping) or `Ecto.Multi` structs.
 - The hardcoded `:transact` special-case in `DoubleDown.Facade` has been
   removed. The Repo-specific facade injection is now declared on the
-  `defport` in `DoubleDown.Repo.Contract` using the generic
+  `defcallback` in `DoubleDown.Repo.Contract` using the generic
   `pre_dispatch` mechanism.
 
 ### Fixed
@@ -284,7 +284,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `Facade` without implicit `Contract` — `use DoubleDown.Facade` with
   an explicit `:contract` option for separate contract modules.
-- Documentation explaining why `defport` is used instead of standard
+- Documentation explaining why `defcallback` is used instead of standard
   `@callback` declarations.
 
 ## [0.9.0]
@@ -349,14 +349,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Expand type aliases at macro time in `defport` to resolve
+- Expand type aliases at macro time in `defcallback` to resolve
   Dialyzer `unknown_type` errors.
 
 ## [0.3.0]
 
 ### Added
 
-- `transact` defport with `{:defer, fn}` support for stateful
+- `transact` defcallback with `{:defer, fn}` support for stateful
   dispatch — avoids NimbleOwnership deadlocks.
 - `Repo.transact!` for `Ecto.Multi` operations.
 
@@ -371,7 +371,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Initial release — `defport` macro, `DoubleDown.Contract`,
+- Initial release — `defcallback` macro, `DoubleDown.Contract`,
   `DoubleDown.Testing` with NimbleOwnership, `Repo.Test` stateless
   adapter, CI setup, Credo, Dialyzer.
 

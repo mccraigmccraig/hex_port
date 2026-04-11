@@ -1,6 +1,6 @@
 # Repo contract for common Ecto Repo operations.
 #
-# Provides a built-in set of defport declarations so that every domain
+# Provides a built-in set of defcallback declarations so that every domain
 # using DoubleDown for DB operations doesn't need to redeclare insert/update/
 # delete/get/all etc. with identical boilerplate.
 #
@@ -22,7 +22,7 @@ if Code.ensure_loaded?(Ecto) do
     @moduledoc """
     Repo contract for common Ecto Repo operations.
 
-    Provides `defport` declarations for the standard write and read operations
+    Provides `defcallback` declarations for the standard write and read operations
     from `Ecto.Repo`, so that code using `DoubleDown` for database access doesn't
     need to redeclare these with identical boilerplate.
 
@@ -65,15 +65,15 @@ if Code.ensure_loaded?(Ecto) do
     # -----------------------------------------------------------------
 
     @doc "Insert a new record from a changeset."
-    defport insert(changeset :: Ecto.Changeset.t()) ::
+    defcallback insert(changeset :: Ecto.Changeset.t()) ::
               {:ok, struct()} | {:error, Ecto.Changeset.t()}
 
     @doc "Update an existing record from a changeset."
-    defport update(changeset :: Ecto.Changeset.t()) ::
+    defcallback update(changeset :: Ecto.Changeset.t()) ::
               {:ok, struct()} | {:error, Ecto.Changeset.t()}
 
     @doc "Delete a record."
-    defport delete(record :: struct()) ::
+    defcallback delete(record :: struct()) ::
               {:ok, struct()} | {:error, Ecto.Changeset.t()}
 
     # -----------------------------------------------------------------
@@ -81,21 +81,21 @@ if Code.ensure_loaded?(Ecto) do
     # -----------------------------------------------------------------
 
     @doc "Insert all entries into a schema or source at once."
-    defport insert_all(
+    defcallback insert_all(
               source :: Ecto.Queryable.t() | binary(),
               entries :: [map() | keyword()],
               opts :: keyword()
             ) :: {non_neg_integer(), nil | list()}
 
     @doc "Update all records matching a queryable."
-    defport update_all(
+    defcallback update_all(
               queryable :: Ecto.Queryable.t(),
               updates :: keyword(),
               opts :: keyword()
             ) :: {non_neg_integer(), nil | list()}
 
     @doc "Delete all records matching a queryable."
-    defport delete_all(queryable :: Ecto.Queryable.t(), opts :: keyword()) ::
+    defcallback delete_all(queryable :: Ecto.Queryable.t(), opts :: keyword()) ::
               {non_neg_integer(), nil | list()}
 
     # -----------------------------------------------------------------
@@ -103,17 +103,17 @@ if Code.ensure_loaded?(Ecto) do
     # -----------------------------------------------------------------
 
     @doc "Fetch a single record by primary key. Returns `nil` if not found."
-    defport get(queryable :: Ecto.Queryable.t(), id :: term()) :: struct() | nil
+    defcallback get(queryable :: Ecto.Queryable.t(), id :: term()) :: struct() | nil
 
     @doc """
     Fetch a single record by primary key, or raise if not found.
 
     Mirrors `Ecto.Repo.get!/2`.
     """
-    defport get!(queryable :: Ecto.Queryable.t(), id :: term()) :: struct(), bang: false
+    defcallback get!(queryable :: Ecto.Queryable.t(), id :: term()) :: struct(), bang: false
 
     @doc "Fetch a single record by the given clauses. Returns `nil` if not found."
-    defport get_by(queryable :: Ecto.Queryable.t(), clauses :: keyword() | map()) ::
+    defcallback get_by(queryable :: Ecto.Queryable.t(), clauses :: keyword() | map()) ::
               struct() | nil
 
     @doc """
@@ -121,27 +121,27 @@ if Code.ensure_loaded?(Ecto) do
 
     Mirrors `Ecto.Repo.get_by!/2`.
     """
-    defport get_by!(queryable :: Ecto.Queryable.t(), clauses :: keyword() | map()) :: struct(),
+    defcallback get_by!(queryable :: Ecto.Queryable.t(), clauses :: keyword() | map()) :: struct(),
       bang: false
 
     @doc "Fetch a single result from a query. Returns `nil` if no result."
-    defport one(queryable :: Ecto.Queryable.t()) :: struct() | nil
+    defcallback one(queryable :: Ecto.Queryable.t()) :: struct() | nil
 
     @doc """
     Fetch a single result from a query, or raise if no result.
 
     Mirrors `Ecto.Repo.one!/1`.
     """
-    defport one!(queryable :: Ecto.Queryable.t()) :: struct(), bang: false
+    defcallback one!(queryable :: Ecto.Queryable.t()) :: struct(), bang: false
 
     @doc "Fetch all records matching a queryable."
-    defport all(queryable :: Ecto.Queryable.t()) :: list(struct())
+    defcallback all(queryable :: Ecto.Queryable.t()) :: list(struct())
 
     @doc "Check whether any record matching the queryable exists."
-    defport exists?(queryable :: Ecto.Queryable.t()) :: boolean()
+    defcallback exists?(queryable :: Ecto.Queryable.t()) :: boolean()
 
     @doc "Calculate an aggregate over the given field."
-    defport aggregate(queryable :: Ecto.Queryable.t(), aggregate :: atom(), field :: atom()) ::
+    defcallback aggregate(queryable :: Ecto.Queryable.t(), aggregate :: atom(), field :: atom()) ::
               term()
 
     # -----------------------------------------------------------------
@@ -182,7 +182,7 @@ if Code.ensure_loaded?(Ecto) do
     key so that test adapters can pass it to `DoubleDown.Repo.MultiStepper`
     for `:run` callbacks.
     """
-    defport transact(fun_or_multi :: term(), opts :: keyword()) ::
+    defcallback transact(fun_or_multi :: term(), opts :: keyword()) ::
               {:ok, term()} | {:error, term()},
             bang: false,
             pre_dispatch: fn args, facade_mod ->

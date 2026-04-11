@@ -9,7 +9,7 @@ If you're coming from Mox or standard Elixir, here's the mapping:
 
 | DoubleDown term | Familiar Elixir equivalent | Nuance |
 |---|---|---|
-| **Contract** | Behaviour (`@callback` specs) | The abstract interface an implementation must satisfy. Same sense of "contract" in [Mocks and explicit contracts](https://dashbit.co/blog/mocks-and-explicit-contracts). DoubleDown generates the `@behaviour` + `@callback` from `defport` — the contract is the source of truth. |
+| **Contract** | Behaviour (`@callback` specs) | The abstract interface an implementation must satisfy. Same sense of "contract" in [Mocks and explicit contracts](https://dashbit.co/blog/mocks-and-explicit-contracts). DoubleDown generates the `@behaviour` + `@callback` from `defcallback` — the contract is the source of truth. |
 | **Facade** | The proxy module you write by hand in Mox (`def foo(x), do: impl().foo(x)`) | The module callers use — dispatches to the configured implementation. DoubleDown generates this; with Mox you write it manually. |
 | **Port** | (hexagonal architecture term) | A boundary through which I/O operations pass. In practice, a contract + its facade. |
 | **Test double** | Mock (but broader) | Any thing that stands in for a real implementation in tests. See [test double types](https://en.wikipedia.org/wiki/Test_double#Types). |
@@ -46,9 +46,9 @@ write but test less; fakes test more but require more upfront work
 ## Defining a contract
 
 A port contract declares the operations that cross a boundary. DoubleDown
-uses `defport` to capture typed signatures with parameter names,
+uses `defcallback` to capture typed signatures with parameter names,
 return types, and optional metadata — all available at compile time via
-`__port_operations__/0`.
+`__callbacks__/0`.
 
 ### Combined contract + facade (recommended)
 
@@ -60,19 +60,19 @@ it implicitly sets up the contract in the same module:
 defmodule MyApp.Todos do
   use DoubleDown.Facade, otp_app: :my_app
 
-  defport create_todo(params :: map()) ::
+  defcallback create_todo(params :: map()) ::
     {:ok, Todo.t()} | {:error, Ecto.Changeset.t()}
 
-  defport get_todo(id :: String.t()) ::
+  defcallback get_todo(id :: String.t()) ::
     {:ok, Todo.t()} | {:error, :not_found}
 
-  defport list_todos(tenant_id :: String.t()) :: [Todo.t()]
+  defcallback list_todos(tenant_id :: String.t()) :: [Todo.t()]
 end
 ```
 
 This module is now three things at once:
 
-1. **Contract** — `@callback` declarations and `__port_operations__/0`
+1. **Contract** — `@callback` declarations and `__callbacks__/0`
 2. **Behaviour** — implementations use `@behaviour MyApp.Todos`
 3. **Facade** — caller functions like `MyApp.Todos.create_todo/1` that
    dispatch to the configured implementation
@@ -86,10 +86,10 @@ across multiple apps with different facades, define them separately:
 defmodule MyApp.Todos.Contract do
   use DoubleDown.Contract
 
-  defport create_todo(params :: map()) ::
+  defcallback create_todo(params :: map()) ::
     {:ok, Todo.t()} | {:error, Ecto.Changeset.t()}
 
-  defport get_todo(id :: String.t()) ::
+  defcallback get_todo(id :: String.t()) ::
     {:ok, Todo.t()} | {:error, :not_found}
 end
 ```
@@ -105,10 +105,10 @@ This is how the built-in `DoubleDown.Repo.Contract` works — it defines
 the contract, and your app creates a facade that binds it to your
 `otp_app`. See [Repo](repo.md).
 
-## `defport` syntax
+## `defcallback` syntax
 
 ```elixir
-defport function_name(param :: type(), ...) :: return_type(), opts
+defcallback function_name(param :: type(), ...) :: return_type(), opts
 ```
 
 The return type and parameter types are captured as typespecs on the
@@ -116,7 +116,7 @@ generated `@callback` declarations.
 
 ### Bang variants
 
-`defport` auto-generates bang variants (`name!`) for operations whose
+`defcallback` auto-generates bang variants (`name!`) for operations whose
 return type contains `{:ok, T} | {:error, ...}`. The bang unwraps
 `{:ok, value}` and raises on `{:error, reason}`.
 
@@ -132,13 +132,13 @@ Control this with the `:bang` option:
 Example — a function that already raises, so no bang is needed:
 
 ```elixir
-defport get_todo!(id :: String.t()) :: Todo.t(), bang: false
+defcallback get_todo!(id :: String.t()) :: Todo.t(), bang: false
 ```
 
 Example — custom unwrap for a non-standard return shape:
 
 ```elixir
-defport fetch(key :: atom()) :: {:found, term()} | :missing,
+defcallback fetch(key :: atom()) :: {:found, term()} | :missing,
   bang: fn
     {:found, v} -> v
     :missing -> raise "not found"
@@ -159,7 +159,7 @@ canonical example is `DoubleDown.Repo.Contract`, which uses it to wrap
 facade module:
 
 ```elixir
-defport transact(fun_or_multi :: term(), opts :: keyword()) ::
+defcallback transact(fun_or_multi :: term(), opts :: keyword()) ::
           {:ok, term()} | {:error, term()},
         bang: false,
         pre_dispatch: fn args, facade_mod ->
@@ -289,13 +289,13 @@ MyApp.Todos.__key__(:get_todo, "42")
 
 The `__key__` name follows the Elixir convention for generated
 introspection functions (like `__struct__`, `__schema__`), avoiding
-clashes with user-defined `defport key(...)` operations.
+clashes with user-defined `defcallback key(...)` operations.
 
 These are used with Skuld's `Port.with_test_handler/2` for effectful
 testing. For plain DoubleDown testing, use the handler modes described
 in [Testing](testing.md).
 
-## Why `defport` instead of plain `@callback`?
+## Why `defcallback` instead of plain `@callback`?
 
 DoubleDown could in principle generate a facade from any Elixir behaviour,
 but there are practical limitations:
@@ -305,13 +305,13 @@ but there are practical limitations:
 - **`Code.Typespec.fetch_callbacks/1` has limitations.** It only works
   on compiled modules with beam files on disk, not on modules being
   compiled in the same project.
-- **No place for additional metadata.** `defport` supports options like
+- **No place for additional metadata.** `defcallback` supports options like
   `bang:` (bang variant generation) and `pre_dispatch:` (argument
   transforms before dispatch). Plain `@callback` has no mechanism for
   this.
 
-`defport` captures all metadata at macro expansion time in a
-structured form (`__port_operations__/0`), avoiding these limitations.
+`defcallback` captures all metadata at macro expansion time in a
+structured form (`__callbacks__/0`), avoiding these limitations.
 
 ---
 

@@ -185,7 +185,7 @@ defmodule DoubleDown.TestDispatchTest do
       defmodule DoubleDown.Test.CombinedConfigOnly do
         use DoubleDown.Facade, otp_app: :double_down_combined, test_dispatch?: false
 
-        defport greet(name :: String.t()) :: String.t()
+        defcallback greet(name :: String.t()) :: String.t()
       end
       """)
 
@@ -208,7 +208,7 @@ defmodule DoubleDown.TestDispatchTest do
       defmodule DoubleDown.Test.CombinedTestDispatch do
         use DoubleDown.Facade, otp_app: :double_down_combined, test_dispatch?: true
 
-        defport greet(name :: String.t()) :: String.t()
+        defcallback greet(name :: String.t()) :: String.t()
       end
       """)
 

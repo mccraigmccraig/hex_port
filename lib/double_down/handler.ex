@@ -586,8 +586,8 @@ defmodule DoubleDown.Handler do
 
     Code.ensure_loaded(contract)
 
-    if function_exported?(contract, :__port_operations__, 0) do
-      operations = contract.__port_operations__()
+    if function_exported?(contract, :__callbacks__, 0) do
+      operations = contract.__callbacks__()
 
       missing =
         Enum.reject(operations, fn %{name: name, arity: arity} ->

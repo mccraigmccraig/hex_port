@@ -35,7 +35,7 @@ DoubleDown handles these with two contracts:
 
 - **`DoubleDown.Repo.Contract`** — ships with DoubleDown, covers all
   generic Repo operations. One facade per app, shared by all features.
-- **A per-feature Queries contract** — you define this with `defport`
+- **A per-feature Queries contract** — you define this with `defcallback`
   for each feature's domain-specific reads.
 
 ### Example: wrapping a context function
@@ -69,7 +69,7 @@ config :my_app, DoubleDown.Repo.Contract, impl: nil
 defmodule MyApp.Billing.Queries do
   use DoubleDown.Facade, otp_app: :my_app
 
-  defport get_payment_method(customer_id :: integer()) ::
+  defcallback get_payment_method(customer_id :: integer()) ::
     {:ok, PaymentMethod.t()} | {:error, :not_found}
 end
 ```

@@ -84,16 +84,16 @@ defmodule DoubleDown.RepoTest do
     end
 
     test "read bang operations are separate ports (not auto-generated bangs)" do
-      ops = Repo.Contract.__port_operations__() |> Enum.map(& &1.name)
+      ops = Repo.Contract.__callbacks__() |> Enum.map(& &1.name)
 
-      # These are declared as defport with bang: false
+      # These are declared as defcallback with bang: false
       assert :get! in ops
       assert :get_by! in ops
       assert :one! in ops
     end
 
-    test "__port_operations__ lists all 16 operations" do
-      ops = Repo.Contract.__port_operations__()
+    test "__callbacks__ lists all 16 operations" do
+      ops = Repo.Contract.__callbacks__()
 
       assert length(ops) == 16
 

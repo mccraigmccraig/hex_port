@@ -1,6 +1,6 @@
 # Port facades for test contracts.
 # These are in a separate file from the contracts so that the contracts
-# are fully compiled before the Port modules try to read __port_operations__/0.
+# are fully compiled before the Port modules try to read __callbacks__/0.
 
 defmodule DoubleDown.Test.Greeter.Port do
   use DoubleDown.Facade, contract: DoubleDown.Test.Greeter, otp_app: :double_down

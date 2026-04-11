@@ -5,7 +5,7 @@
 [![Documentation](https://img.shields.io/badge/documentation-gray)](https://hexdocs.pm/double_down/)
 
 Builds on the Mox pattern — generates behaviours and dispatch facades
-from `defport` declarations — and adds stateful test doubles powerful
+from `defcallback` declarations — and adds stateful test doubles powerful
 enough to test Ecto.Repo operations without a database.
 
 ## Why DoubleDown?
@@ -18,11 +18,11 @@ DoubleDown builds on the familiar Mox pattern and extends it:
   Explicit contracts make dependencies visible, isolate components
   so that changing an implementation doesn't break unrelated tests,
   and push complexity to where it can be managed. DoubleDown makes
-  this easier: `defport` declares the contract, and the behaviour,
+  this easier: `defcallback` declares the contract, and the behaviour,
   facade, and typespecs are generated automatically.
 - **Boilerplate & consistency** — the Mox pattern requires a
   behaviour, a dispatch facade, and config wiring for
-  each boundary. `defport` generates all three from a single
+  each boundary. `defcallback` generates all three from a single
   declaration — the behaviour and facade are always in sync.
 - **Stubs are not always enough** — modelling stateful dependencies
   like a database with plain mocks is verbose and fragile, so most
@@ -49,7 +49,7 @@ DoubleDown builds on the familiar Mox pattern and extends it:
 
 | Feature                | Description                                                     |
 |------------------------|-----------------------------------------------------------------|
-| `defport` declarations | Typed function signatures with parameter names and return types |
+| `defcallback` declarations | Typed function signatures with parameter names and return types |
 | Behaviour generation   | Standard `@behaviour` + `@callback` — Mox-compatible            |
 | Dispatch facades       | Config-dispatched caller functions, generated automatically     |
 | LSP-friendly           | `@doc` and `@spec` on every generated function                  |
@@ -76,13 +76,13 @@ Define a contract and facade in one module:
 defmodule MyApp.Todos do
   use DoubleDown.Facade, otp_app: :my_app
 
-  defport create_todo(params :: map()) ::
+  defcallback create_todo(params :: map()) ::
     {:ok, Todo.t()} | {:error, Ecto.Changeset.t()}
 
-  defport get_todo(id :: String.t()) ::
+  defcallback get_todo(id :: String.t()) ::
     {:ok, Todo.t()} | {:error, :not_found}
 
-  defport list_todos(tenant_id :: String.t()) :: [Todo.t()]
+  defcallback list_todos(tenant_id :: String.t()) :: [Todo.t()]
 end
 ```
 
