@@ -179,9 +179,10 @@ defmodule DoubleDown.Log do
       must be matched by some matcher. Unmatched entries cause
       verification to fail. Default `false` (loose mode).
 
-  Returns `:ok` if all expectations are satisfied.
+  Returns `{:ok, log}` where `log` is the full dispatch log for the
+  contract — useful in the REPL for inspecting what happened.
   """
-  @spec verify!(t(), module(), keyword()) :: :ok
+  @spec verify!(t(), module(), keyword()) :: {:ok, list()}
   def verify!(acc, contract, opts \\ [])
 
   def verify!(%__MODULE__{expectations: []}, _contract, _opts) do
@@ -224,7 +225,7 @@ defmodule DoubleDown.Log do
       verify_strict(log, matched_index_set, contract)
     end
 
-    :ok
+    {:ok, log}
   end
 
   # -- Internal: match verification --
@@ -235,13 +236,13 @@ defmodule DoubleDown.Log do
     {_remaining_log, matched_indices} =
       Enum.reduce(matches, {indexed_log, []}, fn
         {:match, operation, matcher_fn, times}, {remaining, acc} ->
-          find_n_matches(remaining, contract, operation, matcher_fn, times, acc)
+          find_n_matches(remaining, contract, operation, matcher_fn, times, acc, log)
       end)
 
     matched_indices
   end
 
-  defp find_n_matches(remaining_log, contract, operation, matcher_fn, times, acc_indices) do
+  defp find_n_matches(remaining_log, contract, operation, matcher_fn, times, acc_indices, log) do
     Enum.reduce(1..times, {remaining_log, acc_indices}, fn n, {remaining, indices} ->
       case find_next_match(remaining, contract, operation, matcher_fn) do
         {:ok, index, rest} ->
@@ -258,6 +259,9 @@ defmodule DoubleDown.Log do
           Tip: check that the handler produced the expected result and that
           the matcher function's pattern matches the log entry shape
           {contract, operation, args, result}.
+
+          Full log for #{inspect(contract)}:
+          #{format_log(log)}
           """
       end
     end)
@@ -281,6 +285,14 @@ defmodule DoubleDown.Log do
     FunctionClauseError -> false
   end
 
+  defp format_log([]), do: "  (empty)"
+
+  defp format_log(log) do
+    Enum.map_join(log, "\n", fn {c, op, args, result} ->
+      "  #{inspect(c)}.#{op} args=#{inspect(args)} result=#{inspect(result)}"
+    end)
+  end
+
   # -- Internal: reject verification --
 
   defp verify_rejects(rejects, log, contract) do
@@ -300,6 +312,9 @@ defmodule DoubleDown.Log do
 
           Args: #{inspect(args)}
           Result: #{inspect(result)}
+
+        Full log for #{inspect(contract)}:
+        #{format_log(log)}
         """
       end
     end)
@@ -307,7 +322,7 @@ defmodule DoubleDown.Log do
 
   # -- Internal: strict mode --
 
-  defp verify_strict(log, matched_index_set, _contract) do
+  defp verify_strict(log, matched_index_set, contract) do
     unmatched =
       log
       |> Enum.with_index()
@@ -323,6 +338,9 @@ defmodule DoubleDown.Log do
       DoubleDown.Log strict verification failed — unmatched log entries:
 
       #{details}
+
+      Full log for #{inspect(contract)}:
+      #{format_log(log)}
       """
     end
   end

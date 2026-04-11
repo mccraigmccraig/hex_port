@@ -88,7 +88,7 @@ defmodule DoubleDown.LogTest do
         Greeter.Port.greet("Alice")
       end)
 
-      assert :ok =
+      assert {:ok, _} =
                Log.match(:greet, fn
                  {Greeter, :greet, ["Alice"], "Hi, Alice!"} -> true
                end)
@@ -108,7 +108,7 @@ defmodule DoubleDown.LogTest do
         end
       )
 
-      assert :ok =
+      assert {:ok, _} =
                Log.match(:greet, fn
                  {_, :greet, ["Alice"], _} -> true
                end)
@@ -126,7 +126,7 @@ defmodule DoubleDown.LogTest do
       end)
 
       # Match first and third, skip second
-      assert :ok =
+      assert {:ok, _} =
                Log.match(:greet, fn
                  {_, _, ["Alice"], _} -> true
                end)
@@ -143,7 +143,7 @@ defmodule DoubleDown.LogTest do
         Greeter.Port.greet("C")
       end)
 
-      assert :ok =
+      assert {:ok, _} =
                Log.match(:greet, fn {_, :greet, _, _} -> true end, times: 3)
                |> Log.verify!(Greeter)
     end
@@ -153,7 +153,7 @@ defmodule DoubleDown.LogTest do
         Greeter.Port.greet("Alice")
       end)
 
-      assert :ok =
+      assert {:ok, _} =
                Log.match(:greet, fn
                  {_, _, [name], _} when is_binary(name) -> true
                end)
@@ -165,7 +165,7 @@ defmodule DoubleDown.LogTest do
         Greeter.Port.fetch_greeting("Alice")
       end)
 
-      assert :ok =
+      assert {:ok, _} =
                Log.match(:fetch_greeting, fn
                  {_, _, _, {:ok, greeting}} when is_binary(greeting) -> true
                end)
@@ -177,7 +177,7 @@ defmodule DoubleDown.LogTest do
         Greeter.Port.greet("Alice")
       end)
 
-      assert :ok =
+      assert {:ok, _} =
                Log.match(:greet, fn
                  {_, _, ["Bob"], _} -> true
                  {_, _, ["Alice"], _} -> true
@@ -192,7 +192,7 @@ defmodule DoubleDown.LogTest do
       end)
 
       # Matcher only matches Bob — should skip Alice (FunctionClauseError) and find Bob
-      assert :ok =
+      assert {:ok, _} =
                Log.match(:greet, fn
                  {_, _, ["Bob"], _} -> true
                end)
@@ -232,7 +232,7 @@ defmodule DoubleDown.LogTest do
 
       # greet declared first but appears second in log —
       # loose-partial: each operation scans independently
-      assert :ok =
+      assert {:ok, _} =
                Log.match(:greet, fn {_, _, ["Alice"], _} -> true end)
                |> Log.match(:fetch_greeting, fn {_, _, ["Bob"], _} -> true end)
                |> Log.verify!(Greeter)
@@ -247,7 +247,7 @@ defmodule DoubleDown.LogTest do
         Greeter.Port.greet("Alice")
       end)
 
-      assert :ok =
+      assert {:ok, _} =
                Log.match(:greet, fn _ -> true end)
                |> Log.reject(:fetch_greeting)
                |> Log.verify!(Greeter)
@@ -288,7 +288,7 @@ defmodule DoubleDown.LogTest do
         Greeter.Port.greet("Bob")
       end)
 
-      assert :ok =
+      assert {:ok, _} =
                Log.match(:greet, fn _ -> true end, times: 2)
                |> Log.verify!(Greeter, strict: true)
     end
@@ -351,7 +351,7 @@ defmodule DoubleDown.LogTest do
       Greeter.Port.greet("Alice")
       Greeter.Port.fetch_greeting("Bob")
 
-      assert :ok =
+      assert {:ok, _} =
                Log.match(:greet, fn {_, _, ["Alice"], _} -> true end)
                |> Log.match(:fetch_greeting, fn {_, _, ["Bob"], {:ok, _}} -> true end)
                |> Log.verify!(Greeter)
@@ -376,11 +376,11 @@ defmodule DoubleDown.LogTest do
       Counter.Port.increment(5)
       Counter.Port.get_count()
 
-      assert :ok =
+      assert {:ok, _} =
                Log.match(:greet, fn {_, _, ["Alice"], _} -> true end)
                |> Log.verify!(Greeter)
 
-      assert :ok =
+      assert {:ok, _} =
                Log.match(:increment, fn {_, _, [5], 5} -> true end)
                |> Log.match(:get_count, fn {_, _, [], 5} -> true end)
                |> Log.verify!(Counter)
@@ -391,7 +391,7 @@ defmodule DoubleDown.LogTest do
         Greeter.Port.greet("Alice")
       end)
 
-      assert :ok =
+      assert {:ok, _} =
                Log.match(:greet, fn _ -> true end)
                |> Log.reject(:fetch_greeting)
                |> Log.verify!(Greeter)
@@ -413,7 +413,7 @@ defmodule DoubleDown.LogTest do
       DoubleDown.Handler.verify!()
 
       # Also verify log expectations
-      assert :ok =
+      assert {:ok, _} =
                Log.match(:greet, fn {_, _, ["Alice"], _} -> true end)
                |> Log.match(:fetch_greeting, fn {_, _, ["Bob"], {:ok, _}} -> true end)
                |> Log.verify!(Greeter)
