@@ -2,6 +2,14 @@
 
 [< Getting Started](getting-started.md) | [Up: README](../README.md) | [Repo >](repo.md)
 
+DoubleDown provides Mox/Mimic-style `expect`, `stub`, and `verify!`
+APIs via `DoubleDown.Double`, extended with stateful fakes that model
+real dependencies like Ecto.Repo. Layering expectations on top of
+stateful fakes allows compact, less fragile tests for failure
+scenarios — without a database. Dispatch logging and structured log
+matching (`DoubleDown.Log`) let you assert on computed results, not
+just call counts.
+
 DoubleDown's testing system is built on
 [NimbleOwnership](https://hex.pm/packages/nimble_ownership) — the same
 ownership library that Mox uses internally. Each test process gets its

@@ -2,11 +2,12 @@
 
 [< Testing](testing.md) | [Up: README](../README.md) | [Migration >](migration.md)
 
-DoubleDown ships a ready-made 16-operation Ecto Repo contract behaviour with three
-implementations: one for production and two test doubles. The test
-doubles — especially the stateful in-memory adapter — let you test
-Ecto-heavy domain logic without a database, at speeds suitable for
-property-based testing.
+DoubleDown ships a ready-made 16-operation Ecto Repo contract behaviour
+with three implementations: one for production and two test doubles.
+The test doubles are sophisticated enough to support `Ecto.Multi`
+transactions and read-after-write consistency — making it realistic to
+test Ecto-heavy domain logic, including multi-step transaction code,
+without a database and at speeds suitable for property-based testing.
 
 ## The contract
 
