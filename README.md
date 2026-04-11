@@ -12,16 +12,24 @@ enough to test Ecto.Repo operations without a database.
 
 DoubleDown builds on the familiar Mox pattern and extends it:
 
-- **Boilerplate & consistency** — `defport` generates the behaviour,
-  callbacks, dispatch facade, and typespecs from a single declaration.
-  The behaviour and facade are always in sync — no hand-maintained
-  boilerplate to drift.
+- **Explicit contracts at system boundaries** — Jose Valim's
+  [Mocks and explicit contracts](https://dashbit.co/blog/mocks-and-explicit-contracts)
+  makes the case for defining clear boundaries between components.
+  Explicit contracts make dependencies visible, isolate components
+  so that changing an implementation doesn't break unrelated tests,
+  and push complexity to where it can be managed. DoubleDown makes
+  this easier: `defport` declares the contract, and the behaviour,
+  facade, and typespecs are generated automatically.
+- **Boilerplate & consistency** — the Mox pattern requires a
+  behaviour, a dispatch facade, and config wiring for
+  each boundary. `defport` generates all three from a single
+  declaration — the behaviour and facade are always in sync.
 - **Stubs are not always enough** — modelling stateful dependencies
   like a database with plain mocks is verbose and fragile, so most
   projects just hit the real DB and accept the speed penalty.
-  DoubleDown's stateful handlers maintain in-memory state with atomic
-  updates, giving you read-after-write consistency without a database
-  — fast enough for property-based testing.
+  DoubleDown's stateful handlers - fakes - maintain in-memory state
+  with atomic updates, enabling read-after-write consistency without
+  a database — fast enough for property-based testing.
 - **Fakes with expectations** — testing "what happens when the second
   insert fails with a constraint violation?" means either a real DB
   or a mock that responds to each Repo call individually — verbose and
