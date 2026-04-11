@@ -45,9 +45,11 @@ write but test less; fakes test more but require more upfront work
 ## Defining a contract
 
 A contract declares the operations that cross a boundary. DoubleDown
-uses `defcallback` to capture typed signatures with parameter names,
-return types, and optional metadata — all available at compile time via
-`__callbacks__/0`.
+uses `defcallback` rather than plain `@callback` to capture typed
+signatures with parameter names, return types, and optional metadata
+— all available at compile time via `__callbacks__/0`. See
+[Why `defcallback` instead of plain `@callback`?](#why-defcallback-instead-of-plain-callback)
+for the rationale.
 
 ### Combined contract + facade (recommended)
 
@@ -323,6 +325,13 @@ but there are practical limitations:
   `bang:` (bang variant generation) and `pre_dispatch:` (argument
   transforms before dispatch). Plain `@callback` has no mechanism for
   this.
+- **LSP-friendly docs on facade calls.** When using the combined
+  contract + facade pattern (recommended), `@doc` comments placed
+  above a `defcallback` resolve on both the declaration itself and on
+  any call site that goes through the facade. This means hovering
+  over `MyApp.Todos.get_todo(id)` in your editor shows the
+  documentation — making code browsing significantly nicer than a
+  hand-written facade where the docs would need to be duplicated.
 
 `defcallback` captures all metadata at macro expansion time in a
 structured form (`__callbacks__/0`), avoiding these limitations.
