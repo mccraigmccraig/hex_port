@@ -5,8 +5,9 @@
 DoubleDown generates Mox-compatible contract behaviours and dispatch
 facades from `defcallback` declarations — less boilerplate, always in
 sync. The test double system goes beyond Mox with stateful fakes and
-structured log assertions, making it realistic to introduce boundaries
-into existing code and test Ecto-heavy domain logic without a database.
+structured log assertions, making it easy to introduce boundaries
+into existing code and realistic to test Ecto-heavy domain logic without
+a database.
 
 ## Terminology
 
