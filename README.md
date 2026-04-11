@@ -21,7 +21,7 @@ DoubleDown extends the Mox pattern:
   this easier: `defcallback` declares the contract, and the behaviour,
   facade, and typespecs are generated automatically.
 - **Boilerplate & consistency** — the Mox pattern requires a
-  behaviour, a dispatch facade, and config wiring for
+  contract behaviour, a dispatch facade, and config wiring for
   each boundary. `defcallback` generates all three from a single
   declaration — the behaviour and facade are always in sync.
 - **Stubs are not always enough** — modelling stateful dependencies
@@ -50,7 +50,7 @@ DoubleDown extends the Mox pattern:
 | Feature                | Description                                                     |
 |------------------------|-----------------------------------------------------------------|
 | `defcallback` declarations | Typed function signatures with parameter names and return types |
-| Behaviour generation   | Standard `@behaviour` + `@callback` — Mox-compatible            |
+| Behaviour generation   | Standard `@behaviour` + `@callback` — fully Mox-compatible            |
 | Dispatch facades       | Config-dispatched caller functions, generated automatically     |
 | LSP-friendly           | `@doc` and `@spec` on every generated function                  |
 
@@ -70,7 +70,7 @@ DoubleDown extends the Mox pattern:
 
 ## Quick example
 
-Define a contract and facade in one module:
+Define a contract behaviour and dispatch facade in one module:
 
 ```elixir
 defmodule MyApp.Todos do

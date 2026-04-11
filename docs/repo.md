@@ -2,7 +2,7 @@
 
 [< Testing](testing.md) | [Up: README](../README.md) | [Migration >](migration.md)
 
-DoubleDown ships a ready-made 16-operation Ecto Repo contract with three
+DoubleDown ships a ready-made 16-operation Ecto Repo contract behaviour with three
 implementations: one for production and two test doubles. The test
 doubles — especially the stateful in-memory adapter — let you test
 Ecto-heavy domain logic without a database, at speeds suitable for
@@ -27,7 +27,7 @@ they mirror Ecto's raise-on-not-found semantics directly.
 
 ## Creating a Repo facade
 
-Your app creates a facade module that binds the contract to your
+Your app creates a dispatch facade module that binds the contract to your
 `otp_app`:
 
 ```elixir

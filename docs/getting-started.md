@@ -44,7 +44,7 @@ write but test less; fakes test more but require more upfront work
 
 ## Defining a contract
 
-A contract declares the operations that cross a boundary. DoubleDown
+A contract behaviour declares the operations that cross a boundary. DoubleDown
 uses `defcallback` rather than plain `@callback` to capture typed
 signatures with parameter names, return types, and optional metadata
 — all available at compile time via `__callbacks__/0`. See
