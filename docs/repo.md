@@ -120,7 +120,7 @@ function, or raises a clear error.
 | **PK reads** | `get`, `get!` | Check state first. If found, return it. If not, fallback or error. |
 | **Non-PK reads** | `get_by`, `one`, `all`, `exists?`, `aggregate`, ... | Always fallback or error |
 | **Bulk** | `insert_all`, `update_all`, `delete_all` | Always fallback or error |
-| **Transactions** | `transact` | Delegates to sub-operations |
+| **Transactions** | `transact`, `rollback` | Delegates to sub-operations; rollback throws to unwind |
 
 #### Basic usage — writes and PK reads
 
@@ -268,9 +268,12 @@ end, [])
 ```
 
 The function must return `{:ok, result}` or `{:error, reason}`.
-It can also accept a 1-arity form where the argument is the Repo
-facade module (in test adapters) or the underlying Ecto Repo module
-(in the Ecto adapter).
+Alternatively, call `repo.rollback(value)` to abort the transaction
+— `transact` will return `{:error, value}`.
+
+The function can also accept a 1-arity form where the argument is
+the Repo facade module (in test adapters) or the underlying Ecto
+Repo module (in the Ecto adapter).
 
 ### With `Ecto.Multi`
 
@@ -302,6 +305,36 @@ the fallback function or raise in test adapters.
 Both `Repo.Test` and `Repo.InMemory` share a `MultiStepper` module
 that walks through Multi operations without a real database.
 
+### Rollback
+
+`rollback/1` mirrors `Ecto.Repo.rollback/1` — it aborts the current
+transaction and causes `transact` to return `{:error, value}`:
+
+```elixir
+MyApp.Repo.transact(fn repo ->
+  {:ok, user} = repo.insert(user_changeset)
+
+  if some_condition do
+    repo.rollback(:constraint_violated)
+  end
+
+  {:ok, user}
+end, [])
+# Returns {:error, :constraint_violated} if rollback was called
+```
+
+Internally, `rollback` throws `{:rollback, value}`, which is caught
+by `transact`. This matches the Ecto.Repo pattern. Code after
+`rollback` is not executed.
+
+**Limitation:** In the test adapters, `rollback` does not undo state
+mutations from earlier operations within the transaction. If `insert`
+was called before `rollback`, the record remains in the InMemory
+store. This is a consequence of the deferred execution model — each
+sub-operation runs independently outside the lock. For tests that
+need true rollback semantics, use the Ecto adapter with a real
+database.
+
 ## Concurrency limitations of test adapters
 
 The **Ecto adapter** provides real database transactions with full
@@ -311,14 +344,14 @@ The **Test** and **InMemory** adapters do **not** provide true
 transaction isolation:
 
 - `Repo.Test` calls the function directly without any locking.
-- `Repo.InMemory` uses a `{:defer, fn}` mechanism to avoid
-  NimbleOwnership deadlocks — the function runs outside the lock,
-  and each sub-operation acquires the lock individually.
+- `Repo.InMemory` uses `%DoubleDown.Defer{}` to run the transaction
+  function outside the NimbleOwnership lock — each sub-operation
+  acquires the lock individually.
 
 This means:
 
-- No rollback on error — side effects from earlier operations are not
-  undone.
+- `rollback/1` is supported as an API (returns `{:error, value}` from
+  `transact`), but does not undo state mutations from earlier operations.
 - Concurrent writes within a transaction are not isolated from each
   other.
 
