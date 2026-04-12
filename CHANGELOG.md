@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.28.0]
+
+### Added
+
+- `rollback/1` added to `DoubleDown.Repo` contract (now 17 operations).
+  Throws `{:rollback, value}` via `%Defer{}`, caught by `transact`
+  which returns `{:error, value}`. Matches `Ecto.Repo.rollback/1` API.
+  Both `Repo.Test` and `Repo.InMemory` support rollback — state
+  mutations from earlier operations are not undone (documented
+  limitation).
+- Nested transact tests for both `Repo.Test` and `Repo.InMemory`,
+  including via `Double.stub` and `Double.fake`.
+
 ## [0.27.0]
 
 ### Added
@@ -462,7 +475,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `DoubleDown.Testing` with NimbleOwnership, `Repo.Test` stateless
   adapter, CI setup, Credo, Dialyzer.
 
-[Unreleased]: https://github.com/mccraigmccraig/double_down/compare/v0.27.0...HEAD
+[Unreleased]: https://github.com/mccraigmccraig/double_down/compare/v0.28.0...HEAD
+[0.28.0]: https://github.com/mccraigmccraig/double_down/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/mccraigmccraig/double_down/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/mccraigmccraig/double_down/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/mccraigmccraig/double_down/compare/v0.24.0...v0.25.0
