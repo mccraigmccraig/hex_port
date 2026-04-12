@@ -1,8 +1,9 @@
 # Stateful in-memory Repo implementation for tests.
 #
-# Provides read-after-write consistency for PK-based lookups. Non-PK reads
-# (get_by, all, one, exists?, aggregate, etc.) go through an optional
-# fallback function, or raise if no fallback is registered.
+# Provides read-after-write consistency for PK-based lookups. get_by/get_by!
+# also use PK lookup when clauses include all PK fields. Other non-PK reads
+# (all, one, exists?, aggregate, etc.) go through an optional fallback
+# function, or raise if no fallback is registered.
 #
 # ## Usage
 #
@@ -54,8 +55,17 @@ if Code.ensure_loaded?(Ecto) do
     adapter cannot know whether the record exists in the _logical_ store —
     it falls through to the fallback function, or raises.
 
-    For all other reads (`get_by`, `one`, `all`, `exists?`, `aggregate`, etc.)
-    the state is never authoritative — these always go through the fallback
+    `get_by` and `get_by!` use 3-stage dispatch when the queryable is a bare
+    schema module (atom) and the clauses include all primary key fields. The
+    PK is used for a direct map lookup in state. If found, any additional
+    non-PK clauses are verified against the record (returning `nil` on
+    mismatch). If not found in state, the adapter falls through to the
+    fallback function. When the clauses do not include the PK, or the
+    queryable is an `Ecto.Query`, `get_by`/`get_by!` delegate directly to
+    the fallback function as before.
+
+    For all other reads (`one`, `all`, `exists?`, `aggregate`, etc.) the
+    state is never authoritative — these always go through the fallback
     function, or raise.
 
     The dispatch stages are:
@@ -136,7 +146,12 @@ if Code.ensure_loaded?(Ecto) do
       by the state
     - **PK reads (3-stage):** `get`, `get!` — check state first, then fallback,
       then error
-    - **Non-PK reads (2-stage):** `get_by`, `get_by!`, `one`, `one!`, `all`,
+    - **get_by / get_by! (3-stage when PK in clauses):** when the queryable is
+      a bare schema and clauses include all PK fields, uses PK lookup in state
+      then verifies remaining clauses. Falls through to fallback when PK not in
+      state. Delegates directly to fallback when clauses don't include PK or
+      queryable is an `Ecto.Query`.
+    - **Non-PK reads (2-stage):** `one`, `one!`, `all`,
       `exists?`, `aggregate` — fallback or error
     - **Bulk (2-stage):** `update_all`, `delete_all` — fallback or error
     - **Transactions:** `transact` — delegates to sub-operations
@@ -289,14 +304,25 @@ if Code.ensure_loaded?(Ecto) do
     end
 
     # -----------------------------------------------------------------
-    # Non-PK reads — 2-stage: fallback -> error
+    # get_by / get_by! — 3-stage when clauses include PK, else fallback
+    #
+    # When the queryable is a bare schema (atom) and the clauses contain
+    # all primary key fields, we can do a direct map lookup in state.
+    # If found, we verify any additional clauses match the record.
+    # If not found in state, we delegate to the fallback (absence is
+    # not authoritative — the store is incomplete).
+    #
+    # When the queryable is an Ecto.Query, or the clauses don't include
+    # the PK, we delegate directly to the fallback as before.
     # -----------------------------------------------------------------
 
-    def dispatch(:get_by, args, store),
-      do: dispatch_via_fallback(:get_by, args, store)
+    def dispatch(:get_by, [queryable, clauses] = args, store) do
+      dispatch_get_by(:get_by, queryable, clauses, args, store)
+    end
 
-    def dispatch(:get_by!, args, store),
-      do: dispatch_via_fallback(:get_by!, args, store)
+    def dispatch(:get_by!, [queryable, clauses] = args, store) do
+      dispatch_get_by(:get_by!, queryable, clauses, args, store)
+    end
 
     def dispatch(:one, args, store),
       do: dispatch_via_fallback(:one, args, store)
@@ -360,6 +386,89 @@ if Code.ensure_loaded?(Ecto) do
       fun.()
     catch
       {:rollback, value} -> {:error, value}
+    end
+
+    # -----------------------------------------------------------------
+    # get_by PK-inclusive dispatch
+    #
+    # Attempts a state lookup when the queryable is a bare schema and
+    # the clauses include all PK fields. Falls through to the fallback
+    # for non-PK clauses, Ecto.Query queryables, or when the PK is
+    # not found in state.
+    # -----------------------------------------------------------------
+
+    defp dispatch_get_by(operation, queryable, clauses, args, store)
+         when is_atom(queryable) and not is_nil(queryable) do
+      clauses_kw = normalize_clauses(clauses)
+
+      case extract_pk_from_clauses(queryable, clauses_kw) do
+        {:ok, pk_value, remaining_clauses} ->
+          case get_record(store, queryable, pk_value) do
+            nil ->
+              # Not in state — absence is not authoritative, delegate to fallback
+              try_fallback(store, operation, args)
+
+            record ->
+              if fields_match?(record, remaining_clauses) do
+                {record, store}
+              else
+                {nil, store}
+              end
+          end
+
+        :not_pk_inclusive ->
+          dispatch_via_fallback(operation, args, store)
+      end
+    end
+
+    defp dispatch_get_by(operation, _queryable, _clauses, args, store) do
+      # Ecto.Query or other non-atom queryable — delegate to fallback
+      dispatch_via_fallback(operation, args, store)
+    end
+
+    defp normalize_clauses(clauses) when is_map(clauses), do: Enum.to_list(clauses)
+    defp normalize_clauses(clauses) when is_list(clauses), do: clauses
+
+    # Check if the clauses contain all PK fields for the schema.
+    # Returns {:ok, pk_value, remaining_clauses} or :not_pk_inclusive.
+    defp extract_pk_from_clauses(schema, clauses_kw) do
+      if function_exported?(schema, :__schema__, 1) do
+        case schema.__schema__(:primary_key) do
+          [] ->
+            :not_pk_inclusive
+
+          [pk_field] ->
+            case Keyword.fetch(clauses_kw, pk_field) do
+              {:ok, pk_value} ->
+                remaining = Keyword.delete(clauses_kw, pk_field)
+                {:ok, pk_value, remaining}
+
+              :error ->
+                :not_pk_inclusive
+            end
+
+          pk_fields when is_list(pk_fields) ->
+            pk_values = Enum.map(pk_fields, &Keyword.fetch(clauses_kw, &1))
+
+            if Enum.all?(pk_values, &match?({:ok, _}, &1)) do
+              pk_value = pk_values |> Enum.map(fn {:ok, v} -> v end) |> List.to_tuple()
+              remaining = Enum.reject(clauses_kw, fn {k, _v} -> k in pk_fields end)
+              {:ok, pk_value, remaining}
+            else
+              :not_pk_inclusive
+            end
+        end
+      else
+        :not_pk_inclusive
+      end
+    end
+
+    defp fields_match?(_record, []), do: true
+
+    defp fields_match?(record, clauses) do
+      Enum.all?(clauses, fn {field, value} ->
+        Map.get(record, field) == value
+      end)
     end
 
     # -----------------------------------------------------------------

@@ -118,7 +118,8 @@ function, or raises a clear error.
 |----------|-----------|-----------|
 | **Writes** | `insert`, `update`, `delete` | Always handled by state |
 | **PK reads** | `get`, `get!` | Check state first. If found, return it. If not, fallback or error. |
-| **Non-PK reads** | `get_by`, `one`, `all`, `exists?`, `aggregate`, ... | Always fallback or error |
+| **get_by** | `get_by`, `get_by!` | When queryable is a bare schema and clauses include all PK fields: PK lookup in state, then fallback on miss. Otherwise: fallback or error. |
+| **Non-PK reads** | `one`, `all`, `exists?`, `aggregate`, ... | Always fallback or error |
 | **Bulk** | `insert_all`, `update_all`, `delete_all` | Always fallback or error |
 | **Transactions** | `transact`, `rollback` | Delegates to sub-operations; rollback throws to unwind |
 
@@ -141,10 +142,18 @@ test "insert then get by PK" do
   {:ok, user} = MyApp.Repo.insert(User.changeset(%{name: "Alice"}))
   assert ^user = MyApp.Repo.get(User, user.id)
 end
+
+test "insert then get_by with PK in clauses" do
+  {:ok, user} = MyApp.Repo.insert(User.changeset(%{name: "Alice"}))
+  assert ^user = MyApp.Repo.get_by(User, id: user.id)
+  assert ^user = MyApp.Repo.get_by(User, id: user.id, name: "Alice")
+end
 ```
 
 `insert` applies the changeset, autogenerates the primary key if
-nil, and stores the record. `get` finds it by PK.
+nil, and stores the record. `get` finds it by PK. `get_by` also
+uses PK lookup when the clauses include all primary key fields —
+any additional clauses are verified against the found record.
 
 Primary key autogeneration uses Ecto's schema metadata to handle
 all common PK configurations:
@@ -187,11 +196,16 @@ are available for PK reads immediately.
 
 #### Fallback function for non-PK reads
 
-For operations the state cannot answer — anything that isn't a PK
-lookup — supply a `fallback_fn`. It receives
-`(operation, args, state)` where `state` is the clean store map
-(internal keys stripped), so the fallback can compose canned data
-with records inserted during the test:
+For operations the state cannot answer — reads where the clauses
+don't include the primary key, `Ecto.Query`-based reads, and
+operations like `one`, `all`, `exists?`, `aggregate` — supply a
+`fallback_fn`. The fallback is also used for `get_by` when the PK
+is in the clauses but the record is not found in state (absence is
+not authoritative — the store is incomplete).
+
+The fallback receives `(operation, args, state)` where `state` is
+the clean store map (internal keys stripped), so it can compose
+canned data with records inserted during the test:
 
 ```elixir
 setup do

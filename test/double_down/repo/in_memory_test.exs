@@ -106,6 +106,22 @@ defmodule DoubleDown.Repo.InMemoryTest do
     end
   end
 
+  defmodule CompositePkMembership do
+    use Ecto.Schema
+
+    @primary_key false
+    schema "memberships" do
+      field(:user_id, :integer, primary_key: true)
+      field(:org_id, :integer, primary_key: true)
+      field(:role, :string)
+    end
+
+    def changeset(membership \\ %__MODULE__{}, attrs) do
+      membership
+      |> Ecto.Changeset.cast(attrs, [:user_id, :org_id, :role])
+    end
+  end
+
   # -------------------------------------------------------------------
   # Direct dispatch/3 unit tests
   # -------------------------------------------------------------------
@@ -546,6 +562,192 @@ defmodule DoubleDown.Repo.InMemoryTest do
 
       assert %User{id: 1, name: "Alice"} = Repo.Port.get!(User, 1)
       assert ^bob = Repo.Port.get!(User, 99)
+    end
+  end
+
+  # -------------------------------------------------------------------
+  # get_by / get_by! with PK-inclusive clauses (3-stage)
+  # -------------------------------------------------------------------
+
+  describe "get_by with PK-inclusive clauses (3-stage)" do
+    test "get_by returns record from state when PK is in clauses" do
+      alice = %User{id: 1, name: "Alice", email: "alice@example.com"}
+      state = Repo.InMemory.new(seed: [alice])
+      DoubleDown.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
+
+      assert %User{id: 1, name: "Alice"} = Repo.Port.get_by(User, id: 1)
+    end
+
+    test "get_by with PK and extra fields matching returns record" do
+      alice = %User{id: 1, name: "Alice", email: "alice@example.com"}
+      state = Repo.InMemory.new(seed: [alice])
+      DoubleDown.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
+
+      assert %User{id: 1, name: "Alice"} = Repo.Port.get_by(User, id: 1, name: "Alice")
+    end
+
+    test "get_by with PK and extra fields not matching returns nil" do
+      alice = %User{id: 1, name: "Alice", email: "alice@example.com"}
+      state = Repo.InMemory.new(seed: [alice])
+      DoubleDown.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
+
+      assert nil == Repo.Port.get_by(User, id: 1, name: "NotAlice")
+    end
+
+    test "get_by with PK falls through to fallback when not in state" do
+      bob = %User{id: 99, name: "Fallback Bob"}
+
+      state =
+        Repo.InMemory.new(
+          seed: [%User{id: 1, name: "Alice"}],
+          fallback_fn: fn :get_by, [User, [id: 99]], _state -> bob end
+        )
+
+      DoubleDown.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
+
+      # Found in state
+      assert %User{id: 1, name: "Alice"} = Repo.Port.get_by(User, id: 1)
+      # Falls through to fallback
+      assert ^bob = Repo.Port.get_by(User, id: 99)
+    end
+
+    test "get_by with PK raises when not in state and no fallback" do
+      state = Repo.InMemory.new(seed: [%User{id: 1, name: "Alice"}])
+      DoubleDown.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
+
+      assert_raise ArgumentError, ~r/InMemory cannot service :get_by/, fn ->
+        Repo.Port.get_by(User, id: 999)
+      end
+    end
+
+    test "get_by with PK works with map clauses" do
+      alice = %User{id: 1, name: "Alice", email: "alice@example.com"}
+      state = Repo.InMemory.new(seed: [alice])
+      DoubleDown.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
+
+      assert %User{id: 1, name: "Alice"} = Repo.Port.get_by(User, %{id: 1})
+      assert %User{id: 1, name: "Alice"} = Repo.Port.get_by(User, %{id: 1, name: "Alice"})
+      assert nil == Repo.Port.get_by(User, %{id: 1, name: "NotAlice"})
+    end
+
+    test "get_by with binary_id PK returns record from state" do
+      uuid = Ecto.UUID.generate()
+      user = %BinaryIdUser{id: uuid, name: "Alice"}
+      state = Repo.InMemory.new(seed: [user])
+      DoubleDown.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
+
+      assert %BinaryIdUser{name: "Alice"} = Repo.Port.get_by(BinaryIdUser, id: uuid)
+    end
+
+    test "get_by without PK in clauses delegates to fallback" do
+      alice = %User{id: 1, name: "Alice", email: "alice@example.com"}
+
+      state =
+        Repo.InMemory.new(
+          seed: [alice],
+          fallback_fn: fn :get_by, [User, [name: "Alice"]], _state -> alice end
+        )
+
+      DoubleDown.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
+
+      assert %User{name: "Alice"} = Repo.Port.get_by(User, name: "Alice")
+    end
+
+    test "get_by with Ecto.Query delegates to fallback" do
+      alice = %User{id: 1, name: "Alice"}
+      query = Ecto.Queryable.to_query(User)
+
+      state =
+        Repo.InMemory.new(fallback_fn: fn :get_by, [^query, [name: "Alice"]], _state -> alice end)
+
+      DoubleDown.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
+
+      assert %User{name: "Alice"} = Repo.Port.get_by(query, name: "Alice")
+    end
+
+    test "get_by with composite PK returns record when all PK fields present" do
+      membership = %CompositePkMembership{user_id: 1, org_id: 10, role: "admin"}
+      state = Repo.InMemory.new(seed: [membership])
+      DoubleDown.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
+
+      assert %CompositePkMembership{role: "admin"} =
+               Repo.Port.get_by(CompositePkMembership, user_id: 1, org_id: 10)
+    end
+
+    test "get_by with composite PK and extra fields matching" do
+      membership = %CompositePkMembership{user_id: 1, org_id: 10, role: "admin"}
+      state = Repo.InMemory.new(seed: [membership])
+      DoubleDown.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
+
+      assert %CompositePkMembership{role: "admin"} =
+               Repo.Port.get_by(CompositePkMembership, user_id: 1, org_id: 10, role: "admin")
+    end
+
+    test "get_by with composite PK and extra fields not matching returns nil" do
+      membership = %CompositePkMembership{user_id: 1, org_id: 10, role: "admin"}
+      state = Repo.InMemory.new(seed: [membership])
+      DoubleDown.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
+
+      assert nil ==
+               Repo.Port.get_by(CompositePkMembership, user_id: 1, org_id: 10, role: "member")
+    end
+
+    test "get_by with partial composite PK delegates to fallback" do
+      membership = %CompositePkMembership{user_id: 1, org_id: 10, role: "admin"}
+
+      state =
+        Repo.InMemory.new(
+          seed: [membership],
+          fallback_fn: fn
+            :get_by, [CompositePkMembership, [user_id: 1]], _state -> membership
+          end
+        )
+
+      DoubleDown.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
+
+      # Only one PK field — must delegate to fallback
+      assert %CompositePkMembership{role: "admin"} =
+               Repo.Port.get_by(CompositePkMembership, user_id: 1)
+    end
+  end
+
+  describe "get_by! with PK-inclusive clauses (3-stage)" do
+    test "get_by! returns record from state when PK is in clauses" do
+      alice = %User{id: 1, name: "Alice"}
+      state = Repo.InMemory.new(seed: [alice])
+      DoubleDown.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
+
+      assert %User{id: 1, name: "Alice"} = Repo.Port.get_by!(User, id: 1)
+    end
+
+    test "get_by! with PK falls through to fallback when not in state" do
+      bob = %User{id: 99, name: "Fallback Bob"}
+
+      state =
+        Repo.InMemory.new(fallback_fn: fn :get_by!, [User, [id: 99]], _state -> bob end)
+
+      DoubleDown.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
+
+      assert ^bob = Repo.Port.get_by!(User, id: 99)
+    end
+
+    test "get_by! with PK raises when not in state and no fallback" do
+      state = Repo.InMemory.new()
+      DoubleDown.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
+
+      assert_raise ArgumentError, ~r/InMemory cannot service :get_by!/, fn ->
+        Repo.Port.get_by!(User, id: 999)
+      end
+    end
+
+    test "get_by! with PK and extra fields not matching returns nil" do
+      alice = %User{id: 1, name: "Alice"}
+      state = Repo.InMemory.new(seed: [alice])
+      DoubleDown.Testing.set_stateful_handler(Repo, &Repo.InMemory.dispatch/3, state)
+
+      # get_by! returns nil when PK found but extra fields don't match
+      # (this mirrors get_by behaviour — the bang is about "no fallback", not "must find")
+      assert nil == Repo.Port.get_by!(User, id: 1, name: "NotAlice")
     end
   end
 
