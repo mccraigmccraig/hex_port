@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.0]
+
+### Added
+
+- `get_by`/`get_by!` in `Repo.InMemory` now use 3-stage dispatch
+  (state → fallback → error) when the queryable is a bare schema
+  module and the clauses include all primary key fields. PK lookup
+  uses the existing store index — no scan required. If found, any
+  additional non-PK clauses are verified against the record. If not
+  found in state, falls through to the fallback function (absence is
+  not authoritative). Non-PK clauses, `Ecto.Query` queryables, and
+  partial composite PKs still delegate to the fallback as before.
+- Composite PK support in `get_by`/`get_by!` — all PK fields must
+  be present in the clauses for a direct state lookup.
+
 ## [0.28.1]
 
 ### Changed
