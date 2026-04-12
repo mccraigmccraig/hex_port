@@ -1162,4 +1162,102 @@ defmodule DoubleDown.Repo.InMemoryTest do
       end
     end
   end
+
+  # -------------------------------------------------------------------
+  # Nested transact
+  # -------------------------------------------------------------------
+
+  describe "nested transact" do
+    setup do
+      DoubleDown.Testing.set_stateful_handler(
+        Repo,
+        &Repo.InMemory.dispatch/3,
+        Repo.InMemory.new()
+      )
+
+      :ok
+    end
+
+    test "nested transact with inner function" do
+      result =
+        Repo.Port.transact(
+          fn repo ->
+            repo.transact(fn -> {:ok, :inner_done} end, [])
+          end,
+          []
+        )
+
+      assert {:ok, :inner_done} = result
+    end
+
+    test "nested transact with read-after-write across nesting" do
+      result =
+        Repo.Port.transact(
+          fn repo ->
+            {:ok, user} = repo.insert(User.changeset(%User{}, %{name: "Alice"}))
+
+            {:ok, found} =
+              repo.transact(
+                fn ->
+                  found = repo.get(User, user.id)
+                  {:ok, found}
+                end,
+                []
+              )
+
+            {:ok, {user, found}}
+          end,
+          []
+        )
+
+      assert {:ok, {%User{name: "Alice"}, %User{name: "Alice"}}} = result
+    end
+
+    test "nested transact with inner Multi" do
+      result =
+        Repo.Port.transact(
+          fn repo ->
+            multi =
+              Ecto.Multi.new()
+              |> Ecto.Multi.insert(:user, User.changeset(%User{}, %{name: "Alice"}))
+
+            repo.transact(multi, [])
+          end,
+          []
+        )
+
+      assert {:ok, %{user: %User{name: "Alice"}}} = result
+    end
+  end
+
+  describe "nested transact via Double.fake" do
+    test "nested transact works via Double.fake (no deadlock)" do
+      DoubleDown.Double.fake(
+        Repo,
+        &Repo.InMemory.dispatch/3,
+        Repo.InMemory.new()
+      )
+
+      result =
+        Repo.Port.transact(
+          fn repo ->
+            {:ok, user} = repo.insert(User.changeset(%User{}, %{name: "Alice"}))
+
+            {:ok, found} =
+              repo.transact(
+                fn ->
+                  found = repo.get(User, user.id)
+                  {:ok, found}
+                end,
+                []
+              )
+
+            {:ok, {user, found}}
+          end,
+          []
+        )
+
+      assert {:ok, {%User{name: "Alice"}, %User{name: "Alice"}}} = result
+    end
+  end
 end

@@ -628,4 +628,86 @@ defmodule DoubleDown.Repo.TestTest do
       assert {:ok, %{user: %User{name: "Alice"}}} = Repo.Port.transact(multi, [])
     end
   end
+
+  # -------------------------------------------------------------------
+  # Nested transact
+  # -------------------------------------------------------------------
+
+  describe "nested transact" do
+    setup do
+      DoubleDown.Testing.set_fn_handler(Repo, Repo.Test.new())
+      :ok
+    end
+
+    test "nested transact with inner Multi" do
+      result =
+        Repo.Port.transact(
+          fn repo ->
+            multi =
+              Ecto.Multi.new()
+              |> Ecto.Multi.put(:val, 42)
+
+            repo.transact(multi, [])
+          end,
+          []
+        )
+
+      assert {:ok, %{val: 42}} = result
+    end
+
+    test "nested transact with inner function" do
+      result =
+        Repo.Port.transact(
+          fn repo ->
+            repo.transact(fn -> {:ok, :inner_done} end, [])
+          end,
+          []
+        )
+
+      assert {:ok, :inner_done} = result
+    end
+
+    test "nested transact with insert in outer and inner" do
+      result =
+        Repo.Port.transact(
+          fn repo ->
+            {:ok, user} = repo.insert(User.changeset(%{name: "Alice"}))
+
+            {:ok, inner} =
+              repo.transact(
+                fn ->
+                  {:ok, post} = repo.insert(Post.changeset(%{title: "Hello"}))
+                  {:ok, {user, post}}
+                end,
+                []
+              )
+
+            {:ok, inner}
+          end,
+          []
+        )
+
+      assert {:ok, {%User{name: "Alice"}, %Post{title: "Hello"}}} = result
+    end
+  end
+
+  describe "nested transact via Double.stub" do
+    test "nested transact works via Double.stub (no deadlock)" do
+      DoubleDown.Double.stub(Repo, Repo.Test.new())
+
+      result =
+        Repo.Port.transact(
+          fn repo ->
+            multi =
+              Ecto.Multi.new()
+              |> Ecto.Multi.put(:val, 42)
+
+            repo.transact(multi, [])
+          end,
+          []
+        )
+
+      assert {:ok, %{val: 42}} = result
+    end
+  end
 end
