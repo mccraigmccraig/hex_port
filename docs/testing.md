@@ -78,7 +78,7 @@ DoubleDown.Double.expect(MyApp.Todos, :get_todo, fn [id] -> {:ok, %Todo{id: id}}
 A fallback handles any operation without a specific expect or
 per-operation stub. Three forms are supported:
 
-**Function fallback** — a stateless 2-arity
+**Stateless stub** — a 2-arity
 `fn operation, args -> result end`:
 
 ```elixir
