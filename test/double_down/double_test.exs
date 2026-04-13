@@ -373,6 +373,29 @@ defmodule DoubleDown.DoubleTest do
       assert {:ok, "Hello, Bob!"} = Greeter.Port.fetch_greeting("Bob")
     end
 
+    test "module fake runs in the calling process, not the NimbleOwnership GenServer" do
+      # This is critical for Ecto sandbox compatibility — the module's
+      # functions must run in the test process (which has a sandbox checkout),
+      # not in the NimbleOwnership GenServer process.
+      test_pid = self()
+
+      defmodule PidCapturingImpl do
+        @behaviour DoubleDown.Test.Greeter
+
+        @impl true
+        def greet(_name), do: self()
+
+        @impl true
+        def fetch_greeting(_name), do: {:ok, self()}
+      end
+
+      Double.fake(Greeter, PidCapturingImpl)
+
+      caller_pid = Greeter.Port.greet("Alice")
+      assert caller_pid == test_pid
+      refute caller_pid == GenServer.whereis(DoubleDown.Dispatch.Ownership)
+    end
+
     test "validates module at stub time — not loaded" do
       assert_raise ArgumentError, ~r/not loaded/, fn ->
         Double.fake(Greeter, DoesNotExist.Module)
