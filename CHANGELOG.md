@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.37.0]
+
+### Added
+
+- `DoubleDown.Dispatch.StubHandler` behaviour for stateless stub
+  handler modules. Implement `new/2` to make a stub usable by module
+  name in `Double.stub`:
+
+      Double.stub(Repo, Repo.Test)
+      Double.stub(Repo, Repo.Test, fn :all, [User] -> [] end)
+
+- `Repo.Test` implements `StubHandler`. `new/2` accepts a fallback
+  function as the first arg and opts as the second. The legacy
+  `new(fallback_fn: fn ...)` keyword form is still supported.
+- `Double.stub/2` auto-detects StubHandler modules. `Double.stub/3`
+  disambiguates StubHandler modules from per-operation stubs by
+  checking if the second arg is a loaded module implementing the
+  behaviour.
+
 ## [0.36.0]
 
 ### Added
