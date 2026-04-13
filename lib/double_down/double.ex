@@ -416,7 +416,7 @@ defmodule DoubleDown.Double do
       _ ->
         # First touch — install the canonical handler fn.
         # Always 4-arity so dispatch passes the global state snapshot,
-        # which is forwarded to stateful fakes that need it.
+        # which is forwarded to 4-arity stateful fakes that need it.
         DoubleDown.Testing.set_stateful_handler(
           contract,
           &canonical_handler/4,
