@@ -368,4 +368,55 @@ defmodule DoubleDown.TestDispatchTest do
       assert "test-handler: Alice" = apply(mod, :greet, ["Alice"])
     end
   end
+
+  # ── Stateful handler exception safety ──────────────────────
+
+  describe "stateful handler exceptions don't crash the ownership server" do
+    test "raise inside stateful handler is transported to calling process" do
+      handler = fn :greet, [_name], state ->
+        raise RuntimeError, "boom from handler"
+        {nil, state}
+      end
+
+      DoubleDown.Testing.set_stateful_handler(Greeter, handler, %{})
+
+      assert_raise RuntimeError, ~r/boom from handler/, fn ->
+        Greeter.Port.greet("Alice")
+      end
+
+      # Ownership server is still alive — subsequent calls work
+      DoubleDown.Testing.set_fn_handler(Greeter, fn :greet, [name] -> "Hello #{name}" end)
+      assert "Hello Bob" = Greeter.Port.greet("Bob")
+    end
+
+    test "throw inside stateful handler is transported to calling process" do
+      handler = fn :greet, [_name], state ->
+        throw(:boom_throw)
+        {nil, state}
+      end
+
+      DoubleDown.Testing.set_stateful_handler(Greeter, handler, %{})
+
+      assert catch_throw(Greeter.Port.greet("Alice")) == :boom_throw
+
+      # Ownership server is still alive
+      DoubleDown.Testing.set_fn_handler(Greeter, fn :greet, [name] -> "Hello #{name}" end)
+      assert "Hello Bob" = Greeter.Port.greet("Bob")
+    end
+
+    test "exit inside stateful handler is transported to calling process" do
+      handler = fn :greet, [_name], state ->
+        exit(:boom_exit)
+        {nil, state}
+      end
+
+      DoubleDown.Testing.set_stateful_handler(Greeter, handler, %{})
+
+      assert catch_exit(Greeter.Port.greet("Alice")) == :boom_exit
+
+      # Ownership server is still alive
+      DoubleDown.Testing.set_fn_handler(Greeter, fn :greet, [name] -> "Hello #{name}" end)
+      assert "Hello Bob" = Greeter.Port.greet("Bob")
+    end
+  end
 end

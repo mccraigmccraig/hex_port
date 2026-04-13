@@ -133,14 +133,34 @@ defmodule DoubleDown.Dispatch do
     # the state update and call deferred_fn outside the lock. This supports
     # operations like `transact` whose body re-enters the dispatch system
     # (which would otherwise deadlock on the NimbleOwnership GenServer).
+    #
+    # IMPORTANT: The handler function runs inside NimbleOwnership.get_and_update,
+    # which executes in the NimbleOwnership GenServer's handle_call. If the
+    # handler raises (e.g. a module fallback hits a dead Ecto sandbox connection
+    # during test teardown), it would crash the GenServer — a named singleton
+    # that lives for the entire test run. We rescue any exception and wrap it
+    # in a %Defer{} so it re-raises in the calling process (outside the lock),
+    # where ExUnit can handle it normally.
     {:ok, result} =
       NimbleOwnership.get_and_update(@ownership_server, owner_pid, state_key, fn state ->
-        case fun.(operation, args, state) do
-          {%DoubleDown.Defer{} = defer, new_state} ->
-            {defer, new_state}
+        try do
+          case fun.(operation, args, state) do
+            {%DoubleDown.Defer{} = defer, new_state} ->
+              {defer, new_state}
 
-          {result, new_state} ->
-            {result, new_state}
+            {result, new_state} ->
+              {result, new_state}
+          end
+        rescue
+          exception ->
+            stacktrace = __STACKTRACE__
+            {%DoubleDown.Defer{fn: fn -> reraise exception, stacktrace end}, state}
+        catch
+          :throw, value ->
+            {%DoubleDown.Defer{fn: fn -> throw(value) end}, state}
+
+          :exit, reason ->
+            {%DoubleDown.Defer{fn: fn -> exit(reason) end}, state}
         end
       end)
 
