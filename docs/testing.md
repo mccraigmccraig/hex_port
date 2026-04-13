@@ -91,7 +91,10 @@ end)
 ```
 
 **Stateful fake** — a 3-arity `fn op, args, state -> {result, state}`
-with initial state. Fakes like `Repo.InMemory` integrate directly.
+or 4-arity `fn op, args, state, all_states -> {result, state}` with
+initial state. Fakes like `Repo.InMemory` integrate directly.
+4-arity fakes receive a read-only snapshot of all contract states
+for [cross-contract state access](#cross-contract-state-access).
 Override specific operations with expects while the fake handles
 everything else:
 
@@ -510,6 +513,31 @@ the sentinel is detected and a clear error is raised.
   a point-in-time view, not a live reference
 - The handler return must be `{result, new_own_state}` — returning
   the global map raises `ArgumentError`
+
+4-arity handlers work with both `DoubleDown.Double.fake/3` and
+`DoubleDown.Testing.set_stateful_handler/3`:
+
+```elixir
+# With Double.fake — supports expects and stubs alongside the 4-arity fake
+MyApp.Queries
+|> DoubleDown.Double.fake(
+  fn operation, args, state, all_states ->
+    repo_state = Map.get(all_states, DoubleDown.Repo, %{})
+    # ... query the repo state ...
+    {result, state}
+  end,
+  %{}
+)
+
+# With set_stateful_handler — lower-level, no expect/stub support
+DoubleDown.Testing.set_stateful_handler(
+  MyApp.Queries,
+  fn operation, args, state, all_states ->
+    {result, state}
+  end,
+  %{}
+)
+```
 
 See [Cross-contract state with Repo](repo.md#cross-contract-state-access)
 for a worked example of a Queries handler reading the Repo InMemory

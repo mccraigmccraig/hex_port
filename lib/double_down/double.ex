@@ -69,8 +69,11 @@ defmodule DoubleDown.Double do
   ### Stateful fake
 
   A 3-arity `fn operation, args, state -> {result, new_state} end`
+  or 4-arity `fn operation, args, state, all_states -> {result, new_state} end`
   with real logic and state. Integrates fakes like `Repo.InMemory`
-  while allowing expects to override specific calls:
+  while allowing expects to override specific calls. 4-arity fakes
+  receive a read-only snapshot of all contract states for
+  cross-contract state access:
 
       # First insert fails, rest go through InMemory
       DoubleDown.Repo
@@ -132,7 +135,7 @@ defmodule DoubleDown.Double do
   | `expect(Mock, :fn, n, fun)` | `expect(Contract, :fn, fun, times: n)` |
   | `stub(Mock, :fn, fun)` | `stub(Contract, :fn, fun)` — per-operation |
   | (no equivalent) | `stub(Contract, fn op, args -> ... end)` — function fallback |
-  | (no equivalent) | `fake(Contract, fn op, args, state -> ... end, init)` — stateful fake |
+  | (no equivalent) | `fake(Contract, fn op, args, state -> ... end, init)` — stateful fake (3 or 4-arity) |
   | (no equivalent) | `fake(Contract, ImplModule)` — module fake |
   | `verify!()` | `verify!()` |
   | `verify_on_exit!()` | `verify_on_exit!()` |

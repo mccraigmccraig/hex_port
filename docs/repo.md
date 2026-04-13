@@ -534,18 +534,18 @@ end
 ```
 
 ```elixir
-# In tests, set up Repo with InMemory and Queries with a 4-arity handler
+# In tests, set up Repo with InMemory and Queries with a 4-arity fake
 setup do
   # Repo uses InMemory — writes land here
-  DoubleDown.Double.fake(
-    DoubleDown.Repo,
+  DoubleDown.Repo
+  |> DoubleDown.Double.fake(
     &DoubleDown.Repo.InMemory.dispatch/3,
     DoubleDown.Repo.InMemory.new()
   )
 
-  # Queries reads from Repo's InMemory state via the global snapshot
-  DoubleDown.Testing.set_stateful_handler(
-    MyApp.UserQueries,
+  # Queries uses a 4-arity fake that reads Repo's InMemory state
+  MyApp.UserQueries
+  |> DoubleDown.Double.fake(
     fn operation, args, state, all_states ->
       # Extract Repo's InMemory store from the global snapshot
       repo_state = Map.get(all_states, DoubleDown.Repo, %{})
@@ -576,6 +576,15 @@ test "queries see records written through Repo" do
   assert [%User{name: "Alice"}] = MyApp.UserQueries.Port.active_users()
   assert %User{email: "alice@co.com"} = MyApp.UserQueries.Port.user_by_email("alice@co.com")
 end
+```
+
+Because the Queries handler is set up via `Double.fake`, you can
+layer expects on top for error simulation:
+
+```elixir
+MyApp.UserQueries
+|> DoubleDown.Double.fake(queries_handler_fn, %{})
+|> DoubleDown.Double.expect(:user_by_email, fn [_] -> nil end)
 ```
 
 The `all_states` map contains the Repo's InMemory store keyed by
