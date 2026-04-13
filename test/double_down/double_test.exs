@@ -473,6 +473,18 @@ defmodule DoubleDown.DoubleTest do
         Counter.Port.get_count()
       end
     end
+
+    test "stateful fallback returning bare value raises descriptive error" do
+      Double.fake(
+        Counter,
+        fn :increment, [_n], _count -> 42 end,
+        0
+      )
+
+      assert_raise ArgumentError, ~r/must return \{result, new_state\}/, fn ->
+        Counter.Port.increment(5)
+      end
+    end
   end
 
   # ── fake/3 with 4-arity stateful fake ──────────────────────
