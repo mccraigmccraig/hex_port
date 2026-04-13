@@ -426,7 +426,8 @@ defmodule DoubleDown.Double do
   end
 
   defp stub_handler?(module) do
-    Code.ensure_loaded?(module) and function_exported?(module, :new, 2)
+    Code.ensure_loaded?(module) and
+      implements_behaviour?(module, DoubleDown.Dispatch.StubHandler)
   end
 
   # -- Public API: fake --
@@ -557,8 +558,7 @@ defmodule DoubleDown.Double do
 
   defp fake_handler?(module) do
     Code.ensure_loaded?(module) and
-      function_exported?(module, :new, 2) and
-      (function_exported?(module, :dispatch, 3) or function_exported?(module, :dispatch, 4))
+      implements_behaviour?(module, DoubleDown.Dispatch.FakeHandler)
   end
 
   # Prefer dispatch/4 (cross-contract) over dispatch/3
