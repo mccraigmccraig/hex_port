@@ -419,4 +419,113 @@ defmodule DoubleDown.TestDispatchTest do
       assert "Hello Bob" = Greeter.Port.greet("Bob")
     end
   end
+
+  # ── 4-arity stateful handlers (global state access) ────────
+
+  describe "4-arity stateful handlers" do
+    alias DoubleDown.Test.Counter
+
+    test "4-arity handler receives global state snapshot" do
+      # Set up Greeter with a 3-arity handler
+      DoubleDown.Testing.set_stateful_handler(
+        Greeter,
+        fn :greet, [name], state -> {"Hello #{name}", state} end,
+        %{greeter: true}
+      )
+
+      # Set up Counter with a 4-arity handler that reads Greeter's state
+      DoubleDown.Testing.set_stateful_handler(
+        Counter,
+        fn :get_count, [], state, all_states ->
+          greeter_state = Map.get(all_states, Greeter)
+          {greeter_state, state}
+        end,
+        %{counter: true}
+      )
+
+      result = Counter.Port.get_count()
+      assert result == %{greeter: true}
+    end
+
+    test "global state contains sentinel key" do
+      DoubleDown.Testing.set_stateful_handler(
+        Greeter,
+        fn :greet, [_name], _state, all_states ->
+          {all_states, %{}}
+        end,
+        %{}
+      )
+
+      result = Greeter.Port.greet("Alice")
+      assert Map.has_key?(result, DoubleDown.Contract.GlobalState)
+      assert result[DoubleDown.Contract.GlobalState] == true
+    end
+
+    test "global state includes this contract's own state" do
+      DoubleDown.Testing.set_stateful_handler(
+        Greeter,
+        fn :greet, [_name], _state, all_states ->
+          {Map.get(all_states, Greeter), %{}}
+        end,
+        %{my_data: 42}
+      )
+
+      assert %{my_data: 42} = Greeter.Port.greet("Alice")
+    end
+
+    test "3-arity handlers still work unchanged" do
+      DoubleDown.Testing.set_stateful_handler(
+        Greeter,
+        fn :greet, [name], state ->
+          {"Hello #{name}", Map.put(state, :called, true)}
+        end,
+        %{}
+      )
+
+      assert "Hello Alice" = Greeter.Port.greet("Alice")
+    end
+
+    test "raises when handler returns global state map (sentinel detection)" do
+      DoubleDown.Testing.set_stateful_handler(
+        Greeter,
+        fn :greet, [_name], _state, all_states ->
+          # Accidentally return all_states instead of own state
+          {"oops", all_states}
+        end,
+        %{}
+      )
+
+      assert_raise ArgumentError, ~r/returned the global state map/, fn ->
+        Greeter.Port.greet("Alice")
+      end
+    end
+
+    test "cross-contract state read: Queries handler reads Repo InMemory state" do
+      alias DoubleDown.Repo
+      alias DoubleDown.Test.SimpleUser
+
+      # Set up Repo with InMemory — insert a user
+      DoubleDown.Testing.set_stateful_handler(
+        Repo,
+        &Repo.InMemory.dispatch/3,
+        Repo.InMemory.new()
+      )
+
+      {:ok, _user} = Repo.Port.insert(SimpleUser.changeset(%{name: "Alice"}))
+
+      # Set up Greeter with a 4-arity handler that reads Repo's InMemory state
+      DoubleDown.Testing.set_stateful_handler(
+        Greeter,
+        fn :greet, [_name], state, all_states ->
+          repo_state = Map.get(all_states, Repo, %{})
+          users = repo_state |> Map.get(SimpleUser, %{}) |> Map.values()
+          {users, state}
+        end,
+        %{}
+      )
+
+      users = Greeter.Port.greet("ignored")
+      assert [%SimpleUser{name: "Alice"}] = users
+    end
+  end
 end

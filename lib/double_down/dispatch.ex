@@ -141,14 +141,34 @@ defmodule DoubleDown.Dispatch do
     # that lives for the entire test run. We rescue any exception and wrap it
     # in a %Defer{} so it re-raises in the calling process (outside the lock),
     # where ExUnit can handle it normally.
+    #
+    # 4-arity handlers receive a read-only snapshot of all contract states
+    # as the 4th argument. This is fetched before entering get_and_update
+    # to avoid re-entrant GenServer calls.
+    all_states =
+      if is_function(fun, 4) do
+        build_global_state(owner_pid)
+      else
+        nil
+      end
+
     {:ok, result} =
       NimbleOwnership.get_and_update(@ownership_server, owner_pid, state_key, fn state ->
         try do
-          case fun.(operation, args, state) do
+          handler_result =
+            if all_states do
+              fun.(operation, args, state, all_states)
+            else
+              fun.(operation, args, state)
+            end
+
+          case handler_result do
             {%DoubleDown.Defer{} = defer, new_state} ->
+              validate_not_global_state!(new_state)
               {defer, new_state}
 
             {result, new_state} ->
+              validate_not_global_state!(new_state)
               {result, new_state}
           end
         rescue
@@ -169,6 +189,45 @@ defmodule DoubleDown.Dispatch do
       result -> result
     end
   end
+
+  # -- Global state for 4-arity handlers --
+
+  @global_state_sentinel DoubleDown.Contract.GlobalState
+
+  # Build a read-only snapshot of all contract states for the given owner.
+  # Keyed by contract module, with a sentinel key to detect accidental return.
+  # Internal keys (handler metadata, state refs, log keys) are filtered out.
+  defp build_global_state(owner_pid) do
+    owned = NimbleOwnership.get_owned(@ownership_server, owner_pid)
+
+    # Find all stateful handlers and map contract => state.
+    # Seed with sentinel key so accidental return of global map is detectable.
+    owned
+    |> Enum.reduce(%{@global_state_sentinel => true}, fn
+      {contract, %{type: :stateful, state_key: state_key}}, acc ->
+        case Map.get(owned, state_key) do
+          nil -> acc
+          state -> Map.put(acc, contract, state)
+        end
+
+      _, acc ->
+        acc
+    end)
+  end
+
+  # Raise if the handler accidentally returned the global state map.
+  defp validate_not_global_state!(new_state) when is_map(new_state) do
+    if Map.has_key?(new_state, @global_state_sentinel) do
+      raise ArgumentError, """
+      Stateful handler returned the global state map instead of its own contract state.
+
+      A 4-arity handler receives (operation, args, contract_state, all_states).
+      The return value must be {result, new_contract_state} — not {result, all_states}.
+      """
+    end
+  end
+
+  defp validate_not_global_state!(_new_state), do: :ok
 
   # -- Dispatch logging --
 

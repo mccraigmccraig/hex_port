@@ -27,3 +27,16 @@ end
 defmodule DoubleDown.Test.SpecImpl.NoSpec do
   def greet(name), do: {:ok, "Hello #{name}"}
 end
+
+# Simple Ecto schema for cross-contract state tests.
+defmodule DoubleDown.Test.SimpleUser do
+  use Ecto.Schema
+
+  schema "users" do
+    field(:name, :string)
+  end
+
+  def changeset(user \\ %__MODULE__{}, attrs) do
+    user |> Ecto.Changeset.cast(attrs, [:name])
+  end
+end
