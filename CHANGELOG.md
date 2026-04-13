@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.36.0]
+
+### Added
+
+- `DoubleDown.Dispatch.FakeHandler` behaviour for stateful fake
+  handler modules. Implement `new/2` and `dispatch/3` (or `/4`) to
+  make a fake usable by module name in `Double.fake`:
+
+      Double.fake(Repo, Repo.InMemory)
+      Double.fake(Repo, Repo.InMemory, [%User{id: 1}])
+      Double.fake(Repo, Repo.InMemory, [%User{id: 1}], fallback_fn: fn ...)
+
+- `Repo.InMemory` implements `FakeHandler`. `new/2` accepts seed
+  data as the first arg (list of structs or pre-built store map)
+  and opts as the second. The legacy `new(seed: [...], fallback_fn: ...)`
+  keyword form is still supported.
+- `Double.fake/2` auto-detects FakeHandler modules — if the module
+  implements the behaviour, it's used as a stateful fake with default
+  state. Non-FakeHandler modules are still treated as module fakes.
+
 ## [0.35.0]
 
 ### Added
