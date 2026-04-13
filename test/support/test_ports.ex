@@ -17,10 +17,6 @@ defmodule DoubleDown.Test.Counter.Port do
   use DoubleDown.Facade, contract: DoubleDown.Test.Counter, otp_app: :double_down
 end
 
-defmodule DoubleDown.Test.BangVariants.Port do
-  use DoubleDown.Facade, contract: DoubleDown.Test.BangVariants, otp_app: :double_down
-end
-
 defmodule DoubleDown.Test.ZeroArg.Port do
   use DoubleDown.Facade, contract: DoubleDown.Test.ZeroArg, otp_app: :double_down
 end

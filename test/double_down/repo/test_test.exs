@@ -131,11 +131,6 @@ defmodule DoubleDown.Repo.TestTest do
       assert {:ok, ^record} = Repo.Port.delete(record)
     end
 
-    test "insert! unwraps the result" do
-      cs = User.changeset(%{name: "Alice"})
-      assert %User{name: "Alice"} = Repo.Port.insert!(cs)
-    end
-
     test "insert returns {:error, changeset} for invalid changeset" do
       cs =
         %User{}
@@ -152,17 +147,6 @@ defmodule DoubleDown.Repo.TestTest do
         |> Ecto.Changeset.add_error(:name, "is invalid")
 
       assert {:error, %Ecto.Changeset{valid?: false}} = Repo.Port.update(cs)
-    end
-
-    test "insert! raises for invalid changeset" do
-      cs =
-        %User{}
-        |> Ecto.Changeset.cast(%{name: "Alice"}, [:name])
-        |> Ecto.Changeset.add_error(:name, "is invalid")
-
-      assert_raise RuntimeError, fn ->
-        Repo.Port.insert!(cs)
-      end
     end
 
     test "insert populates inserted_at and updated_at for schemas with timestamps" do

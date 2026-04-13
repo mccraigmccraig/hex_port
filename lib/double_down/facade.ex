@@ -3,7 +3,7 @@ defmodule DoubleDown.Facade do
   Generates a dispatch facade for a `DoubleDown.Contract`.
 
   `use DoubleDown.Facade` reads a contract's `__callbacks__/0` metadata
-  and generates facade functions, bang variants, and key helpers that
+  and generates facade functions and key helpers that
   dispatch via `DoubleDown.Dispatch`.
 
   ## Combined contract + facade (simplest)
@@ -195,11 +195,6 @@ defmodule DoubleDown.Facade do
         &generate_facade(&1, contract, otp_app, test_dispatch?, static_impl)
       )
 
-    bangs =
-      operations
-      |> Enum.filter(fn op -> op.bang_mode != :none end)
-      |> Enum.map(&generate_bang/1)
-
     key_helpers = Enum.map(operations, &generate_key_helper(&1, contract))
 
     quote do
@@ -213,7 +208,6 @@ defmodule DoubleDown.Facade do
       """
 
       unquote_splicing(facades)
-      unquote_splicing(bangs)
       unquote_splicing(key_helpers)
     end
   end
@@ -338,67 +332,6 @@ defmodule DoubleDown.Facade do
     end
   end
 
-  # -- Code Generation: Bang variants --
-
-  defp generate_bang(%{
-         name: name,
-         params: param_names,
-         param_types: param_types,
-         return_type: return_type,
-         bang_mode: bang_mode
-       }) do
-    bang_name = :"#{name}!"
-    param_vars = Enum.map(param_names, fn pname -> {pname, [], nil} end)
-    unwrapped = DoubleDown.Contract.extract_success_type(return_type)
-
-    {doc_string, body_ast} =
-      case bang_mode do
-        :standard ->
-          doc =
-            "Like `#{name}/#{length(param_names)}` but unwraps `{:ok, value}` or raises on error.\n"
-
-          # Use apply(__MODULE__, ...) to call the non-bang. This prevents
-          # the compiler from inferring the return type through an inlined
-          # non-bang function, which would cause "clause will never match"
-          # warnings on the {:error, reason} branch when the impl's @spec
-          # doesn't include an error return.
-          body =
-            quote do
-              case apply(__MODULE__, unquote(name), unquote(param_vars)) do
-                {:ok, value} -> value
-                {:error, reason} -> raise "#{unquote(name)} failed: #{inspect(reason)}"
-              end
-            end
-
-          {doc, body}
-
-        {:custom, unwrap_fn_ast} ->
-          doc =
-            "Like `#{name}/#{length(param_names)}` but applies a custom unwrap, then unwraps `{:ok, value}` or raises.\n"
-
-          body =
-            quote do
-              result = apply(__MODULE__, unquote(name), unquote(param_vars))
-
-              case unquote(unwrap_fn_ast).(result) do
-                {:ok, value} -> value
-                {:error, reason} -> raise "#{unquote(name)} failed: #{inspect(reason)}"
-              end
-            end
-
-          {doc, body}
-      end
-
-    # param_types, unwrapped are AST tuples — splice directly.
-    quote do
-      @doc unquote(doc_string)
-      @spec unquote(bang_name)(unquote_splicing(param_types)) :: unquote(unwrapped)
-      def unquote(bang_name)(unquote_splicing(param_vars)) do
-        unquote(body_ast)
-      end
-    end
-  end
-
   # -- Code Generation: Key helpers --
 
   defp generate_key_helper(%{name: name, params: param_names}, contract) do
@@ -473,7 +406,6 @@ defmodule DoubleDown.Facade do
          param_names: param_names,
          param_types: param_types,
          return_type: return_type,
-         bang_mode: bang_mode,
          pre_dispatch: pre_dispatch,
          warn_on_typespec_mismatch?: warn_on_typespec_mismatch?,
          user_doc: user_doc
@@ -483,7 +415,6 @@ defmodule DoubleDown.Facade do
       params: param_names,
       param_types: param_types,
       return_type: return_type,
-      bang_mode: bang_mode,
       pre_dispatch: pre_dispatch,
       warn_on_typespec_mismatch?: warn_on_typespec_mismatch?,
       user_doc: user_doc,

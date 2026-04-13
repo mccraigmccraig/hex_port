@@ -99,9 +99,8 @@ defmodule DoubleDown.Contract do
       that goes through the facade.
 
     * **Additional metadata.** `defcallback` supports options like
-      `bang:` (bang variant generation) and `pre_dispatch:` (argument
-      transforms before dispatch). Plain `@callback` has no mechanism
-      for this.
+      `pre_dispatch:` (argument transforms before dispatch). Plain
+      `@callback` has no mechanism for this.
 
   See [Why `defcallback` instead of plain `@callback`?](docs/getting-started.md#why-defcallback-instead-of-plain-callback)
   in the Getting Started guide for the full rationale.
@@ -112,13 +111,6 @@ defmodule DoubleDown.Contract do
       defcallback function_name(param :: type(), ...) :: return_type(), opts
 
   ## Options
-
-  ### Bang variants (`:bang`)
-
-    * **omitted** — auto-detect: generate bang only if return type contains `{:ok, T}`
-    * **`true`** — force standard `{:ok, v}` / `{:error, r}` unwrapping
-    * **`false`** — suppress bang generation
-    * **`unwrap_fn`** — generate bang using custom unwrap function
 
   ### Pre-dispatch transform (`:pre_dispatch`)
 
@@ -143,14 +135,12 @@ defmodule DoubleDown.Contract do
   defmacro defcallback(spec, opts \\ [])
 
   defmacro defcallback({:"::", _meta, [call_ast, return_type_ast]}, opts) do
-    bang_opt = Keyword.get(opts, :bang, :auto)
     pre_dispatch_opt = Keyword.get(opts, :pre_dispatch, nil)
     warn_on_typespec_mismatch? = Keyword.get(opts, :warn_on_typespec_mismatch?, false)
 
     build_defcallback_ast(
       call_ast,
       return_type_ast,
-      bang_opt,
       pre_dispatch_opt,
       warn_on_typespec_mismatch?,
       __CALLER__
@@ -171,7 +161,6 @@ defmodule DoubleDown.Contract do
   defp build_defcallback_ast(
          call_ast,
          return_type_ast,
-         bang_opt,
          pre_dispatch_opt,
          warn_on_typespec_mismatch?,
          caller
@@ -185,20 +174,11 @@ defmodule DoubleDown.Contract do
 
     return_type_ast = expand_type_aliases(return_type_ast, caller)
 
-    bang_mode =
-      case bang_opt do
-        :auto -> if has_ok_error_pattern?(return_type_ast), do: :standard, else: :none
-        true -> :standard
-        false -> :none
-        custom_fn_ast -> {:custom, custom_fn_ast}
-      end
-
     op_base = %{
       name: name,
       param_names: param_names,
       param_types: param_types,
       return_type: return_type_ast,
-      bang_mode: bang_mode,
       pre_dispatch: pre_dispatch_opt,
       warn_on_typespec_mismatch?: warn_on_typespec_mismatch?,
       user_doc: nil
@@ -325,7 +305,6 @@ defmodule DoubleDown.Contract do
                                 param_names: param_names,
                                 param_types: param_types,
                                 return_type: return_type,
-                                bang_mode: bang_mode,
                                 pre_dispatch: pre_dispatch,
                                 warn_on_typespec_mismatch?: warn_on_typespec_mismatch?,
                                 user_doc: user_doc
@@ -336,7 +315,6 @@ defmodule DoubleDown.Contract do
             params: unquote(param_names),
             param_types: unquote(Macro.escape(param_types)),
             return_type: unquote(Macro.escape(return_type)),
-            bang_mode: unquote(Macro.escape(bang_mode)),
             pre_dispatch: unquote(Macro.escape(pre_dispatch)),
             warn_on_typespec_mismatch?: unquote(warn_on_typespec_mismatch?),
             user_doc: unquote(Macro.escape(user_doc)),
@@ -352,31 +330,4 @@ defmodule DoubleDown.Contract do
       end
     end
   end
-
-  # -- Type Extraction --
-
-  @doc false
-  def has_ok_error_pattern?(return_type_ast) do
-    extract_from_union(return_type_ast) != nil
-  end
-
-  @doc false
-  def extract_success_type(return_type_ast) do
-    case extract_from_union(return_type_ast) do
-      nil -> {:term, [], []}
-      type -> type
-    end
-  end
-
-  defp extract_from_union({:|, _, [left, right]}) do
-    extract_from_ok_tuple(left) || extract_from_union(right)
-  end
-
-  defp extract_from_union(type) do
-    extract_from_ok_tuple(type)
-  end
-
-  defp extract_from_ok_tuple({:{}, _, [:ok, inner_type]}), do: inner_type
-  defp extract_from_ok_tuple({:ok, inner_type}), do: inner_type
-  defp extract_from_ok_tuple(_), do: nil
 end

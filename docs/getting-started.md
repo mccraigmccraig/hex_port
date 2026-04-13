@@ -136,37 +136,6 @@ defcallback function_name(param :: type(), ...) :: return_type(), opts
 The return type and parameter types are captured as typespecs on the
 generated `@callback` declarations.
 
-### Bang variants
-
-`defcallback` auto-generates bang variants (`name!`) for operations whose
-return type contains `{:ok, T} | {:error, ...}`. The bang unwraps
-`{:ok, value}` and raises on `{:error, reason}`.
-
-Control this with the `:bang` option:
-
-| Value | Behaviour |
-|-------|-----------|
-| *(omitted)* | Auto-detect: generate bang if return type has `{:ok, T}` |
-| `true` | Force standard `{:ok, v}` / `{:error, r}` unwrapping |
-| `false` | Suppress bang generation |
-| `unwrap_fn` | Generate bang using a custom unwrap function |
-
-Example — a function that already raises, so no bang is needed:
-
-```elixir
-defcallback get_todo!(id :: String.t()) :: Todo.t(), bang: false
-```
-
-Example — custom unwrap for a non-standard return shape:
-
-```elixir
-defcallback fetch(key :: atom()) :: {:found, term()} | :missing,
-  bang: fn
-    {:found, v} -> v
-    :missing -> raise "not found"
-  end
-```
-
 ### Pre-dispatch transforms
 
 The `:pre_dispatch` option lets a contract declare a function that
@@ -183,8 +152,7 @@ facade module:
 ```elixir
 defcallback transact(fun_or_multi :: term(), opts :: keyword()) ::
           {:ok, term()} | {:error, term()},
-        bang: false,
-        pre_dispatch: fn args, facade_mod ->
+         pre_dispatch: fn args, facade_mod ->
           case args do
             [fun, opts] when is_function(fun, 1) ->
               [fn -> fun.(facade_mod) end, opts]
@@ -346,9 +314,8 @@ but there are practical limitations:
   separate, pre-compiled module, which also means the LSP-friendly
   `@doc` hover docs described above are never available.
 - **No place for additional metadata.** `defcallback` supports options like
-  `bang:` (bang variant generation) and `pre_dispatch:` (argument
-  transforms before dispatch). Plain `@callback` has no mechanism for
-  this.
+  `pre_dispatch:` (argument transforms before dispatch). Plain `@callback`
+  has no mechanism for this.
 - **LSP-friendly docs on facade calls.** Plain `@callback`
   declarations don't support `@doc` at all — the best you can do is
   `#` comments that won't appear in hover docs. With the combined

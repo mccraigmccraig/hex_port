@@ -66,21 +66,6 @@ defmodule DoubleDown.TestDispatchTest do
       key = apply(mod, :__key__, [:greet, "world"])
       assert key == {Greeter, :greet, ["world"]}
     end
-
-    test "bang variants are still generated" do
-      Code.compile_string("""
-      defmodule DoubleDown.Test.ConfigOnlyBang do
-        use DoubleDown.Facade,
-          contract: DoubleDown.Test.Greeter,
-          otp_app: :double_down,
-          test_dispatch?: false
-      end
-      """)
-
-      mod = DoubleDown.Test.ConfigOnlyBang
-
-      assert function_exported?(mod, :fetch_greeting!, 1)
-    end
   end
 
   # ── test_dispatch?: true ──────────────────────────────────

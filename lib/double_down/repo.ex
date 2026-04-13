@@ -11,7 +11,7 @@
 #       use DoubleDown.Facade, contract: DoubleDown.Repo, otp_app: :my_app
 #     end
 #
-#     MyApp.Repo.insert!(changeset)
+#     {:ok, user} = MyApp.Repo.insert(changeset)
 #
 # ## Configuration
 #
@@ -39,14 +39,12 @@ if Code.ensure_loaded?(Ecto) do
 
     ## Write Operations
 
-    Write operations return `{:ok, struct()} | {:error, Ecto.Changeset.t()}`
-    and auto-generate bang variants (`insert!`, `update!`, `delete!`) that
-    unwrap the success value or raise on error.
+    Write operations return `{:ok, struct()} | {:error, Ecto.Changeset.t()}`.
 
     ## Bulk Operations
 
     `update_all/3` and `delete_all/2` follow Ecto's return convention of
-    `{count, nil | list}`. No bang variants are generated for these.
+    `{count, nil | list}`.
 
     ## Read Operations
 
@@ -54,8 +52,8 @@ if Code.ensure_loaded?(Ecto) do
     return `nil` on not-found; `all/1` returns a list; `exists?/1` returns
     a boolean; `aggregate/3` returns a term.
 
-    Bang read variants (`get!/2`, `get_by!/2`, `one!/1`) are provided as
-    separate port operations that mirror Ecto's raise-on-not-found semantics.
+    Raise-on-not-found variants (`get!/2`, `get_by!/2`, `one!/1`) mirror
+    Ecto's semantics.
     """
 
     use DoubleDown.Contract
@@ -126,11 +124,10 @@ if Code.ensure_loaded?(Ecto) do
 
     Mirrors `Ecto.Repo.get!/2`.
     """
-    defcallback get!(queryable :: Ecto.Queryable.t(), id :: term()) :: struct(), bang: false
+    defcallback get!(queryable :: Ecto.Queryable.t(), id :: term()) :: struct()
 
     @doc "Fetch a single record by primary key with options, or raise if not found."
-    defcallback get!(queryable :: Ecto.Queryable.t(), id :: term(), opts :: keyword()) :: struct(),
-      bang: false
+    defcallback get!(queryable :: Ecto.Queryable.t(), id :: term(), opts :: keyword()) :: struct()
 
     @doc "Fetch a single record by the given clauses. Returns `nil` if not found."
     defcallback get_by(queryable :: Ecto.Queryable.t(), clauses :: keyword() | map()) ::
@@ -148,16 +145,14 @@ if Code.ensure_loaded?(Ecto) do
 
     Mirrors `Ecto.Repo.get_by!/2`.
     """
-    defcallback get_by!(queryable :: Ecto.Queryable.t(), clauses :: keyword() | map()) :: struct(),
-      bang: false
+    defcallback get_by!(queryable :: Ecto.Queryable.t(), clauses :: keyword() | map()) :: struct()
 
     @doc "Fetch a single record by the given clauses with options, or raise if not found."
     defcallback get_by!(
                   queryable :: Ecto.Queryable.t(),
                   clauses :: keyword() | map(),
                   opts :: keyword()
-                ) :: struct(),
-                bang: false
+                ) :: struct()
 
     @doc "Fetch a single result from a query. Returns `nil` if no result."
     defcallback one(queryable :: Ecto.Queryable.t()) :: struct() | nil
@@ -170,10 +165,10 @@ if Code.ensure_loaded?(Ecto) do
 
     Mirrors `Ecto.Repo.one!/1`.
     """
-    defcallback one!(queryable :: Ecto.Queryable.t()) :: struct(), bang: false
+    defcallback one!(queryable :: Ecto.Queryable.t()) :: struct()
 
     @doc "Fetch a single result from a query with options, or raise if not found."
-    defcallback one!(queryable :: Ecto.Queryable.t(), opts :: keyword()) :: struct(), bang: false
+    defcallback one!(queryable :: Ecto.Queryable.t(), opts :: keyword()) :: struct()
 
     @doc "Fetch all records matching a queryable."
     defcallback all(queryable :: Ecto.Queryable.t()) :: list(struct())
@@ -239,7 +234,6 @@ if Code.ensure_loaded?(Ecto) do
     """
     defcallback transact(fun_or_multi :: term(), opts :: keyword()) ::
                   {:ok, term()} | {:error, term()} | {:error, term(), term(), term()},
-                bang: false,
                 pre_dispatch: fn args, facade_mod ->
                   case args do
                     [fun, opts] when is_function(fun, 1) ->
@@ -267,6 +261,6 @@ if Code.ensure_loaded?(Ecto) do
     Must be called from within a `transact` callback. Calling outside
     a transaction raises.
     """
-    defcallback rollback(value :: term()) :: no_return(), bang: false
+    defcallback rollback(value :: term()) :: no_return()
   end
 end

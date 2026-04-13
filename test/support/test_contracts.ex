@@ -24,35 +24,6 @@ defmodule DoubleDown.Test.Counter do
   defcallback get_count() :: integer()
 end
 
-# -- Contract for bang variant testing --
-
-defmodule DoubleDown.Test.BangVariants do
-  use DoubleDown.Contract
-
-  # Auto-detected bang (return type has {:ok, T})
-  defcallback auto_bang(id :: String.t()) ::
-                {:ok, String.t()} | {:error, term()}
-
-  # Forced bang even though no {:ok, T} in return type
-  defcallback forced_bang(id :: String.t()) :: String.t() | nil,
-    bang: true
-
-  # Suppressed bang even though return type has {:ok, T}
-  defcallback suppressed_bang(id :: String.t()) ::
-                {:ok, String.t()} | {:error, term()},
-              bang: false
-
-  # Custom unwrap function
-  defcallback custom_bang(id :: String.t()) :: String.t() | nil,
-    bang: fn
-      nil -> {:error, :not_found}
-      value -> {:ok, value}
-    end
-
-  # No bang (return type has no {:ok, T})
-  defcallback no_bang(id :: String.t()) :: String.t()
-end
-
 # -- Contract for zero-arg testing --
 
 defmodule DoubleDown.Test.ZeroArg do

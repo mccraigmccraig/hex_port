@@ -23,10 +23,9 @@ and at speeds suitable for property-based testing.
 | **Non-PK reads** | `get_by/2`, `get_by!/2`, `one/1`, `one!/1`, `all/1`, `exists?/1`, `aggregate/3` |
 | **Transactions** | `transact/2`, `rollback/1`                                                      |
 
-Write operations return `{:ok, struct} | {:error, changeset}` and
-auto-generate bang variants. Bang read variants (`get!`, `get_by!`,
-`one!`) are declared as separate operations with `bang: false` —
-they mirror Ecto's raise-on-not-found semantics directly.
+Write operations return `{:ok, struct} | {:error, changeset}`.
+Raise-on-not-found variants (`get!`, `get_by!`, `one!`) are
+separate contract operations mirroring Ecto's semantics.
 
 ## Creating a Repo facade
 

@@ -290,11 +290,6 @@ defmodule DoubleDown.Repo.InMemoryTest do
       assert {:ok, %User{id: 6, name: "New"}} = Repo.Port.insert(User.changeset(%{name: "New"}))
     end
 
-    test "insert! unwraps the result" do
-      cs = User.changeset(%{name: "Alice"})
-      assert %User{name: "Alice"} = Repo.Port.insert!(cs)
-    end
-
     test "update updates an existing record in store" do
       Repo.Port.insert(User.changeset(%User{id: 1}, %{name: "Alice", email: "old@example.com"}))
       cs = User.changeset(%User{id: 1, name: "Alice"}, %{email: "new@example.com"})
@@ -337,17 +332,6 @@ defmodule DoubleDown.Repo.InMemoryTest do
 
       # Store is unchanged — original record preserved
       assert %User{id: 1, name: "Alice"} = Repo.Port.get(User, 1)
-    end
-
-    test "insert! raises for invalid changeset" do
-      cs =
-        %User{}
-        |> Ecto.Changeset.cast(%{name: "Alice"}, [:name])
-        |> Ecto.Changeset.add_error(:name, "is invalid")
-
-      assert_raise RuntimeError, fn ->
-        Repo.Port.insert!(cs)
-      end
     end
 
     test "insert populates inserted_at and updated_at for schemas with timestamps" do

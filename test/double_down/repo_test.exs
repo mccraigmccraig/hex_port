@@ -97,24 +97,9 @@ defmodule DoubleDown.RepoTest do
       assert function_exported?(Repo.Port, :aggregate, 4)
     end
 
-    test "Port facade has bang variants for write operations" do
-      {:module, _} = Code.ensure_loaded(Repo.Port)
-
-      # Auto-generated bangs from {:ok, T} return types
-      assert function_exported?(Repo.Port, :insert!, 1)
-      assert function_exported?(Repo.Port, :update!, 1)
-      assert function_exported?(Repo.Port, :delete!, 1)
-
-      # Opts-accepting bang variants
-      assert function_exported?(Repo.Port, :insert!, 2)
-      assert function_exported?(Repo.Port, :update!, 2)
-      assert function_exported?(Repo.Port, :delete!, 2)
-    end
-
-    test "read bang operations are separate ports (not auto-generated bangs)" do
+    test "raise-on-not-found read operations are regular contract operations" do
       ops = Repo.__callbacks__() |> Enum.map(& &1.name)
 
-      # These are declared as defcallback with bang: false
       assert :get! in ops
       assert :get_by! in ops
       assert :one! in ops
@@ -249,22 +234,6 @@ defmodule DoubleDown.RepoTest do
 
     test "delete_all delegates to mock Repo" do
       assert {5, nil} = Repo.Port.delete_all(User, [])
-    end
-
-    test "bang variant unwraps {:ok, value}" do
-      cs = User.changeset(%{name: "Alice"})
-      assert %User{name: "Alice"} = Repo.Port.insert!(cs)
-    end
-
-    test "bang variant raises on {:error, reason}" do
-      # Override with an fn handler that returns an error
-      DoubleDown.Testing.set_fn_handler(Repo, fn
-        :insert, [_cs] -> {:error, :validation_failed}
-      end)
-
-      assert_raise RuntimeError, ~r/insert failed/, fn ->
-        Repo.Port.insert!(User.changeset(%{name: "bad"}))
-      end
     end
 
     test "transact with 0-arity fun delegates to mock Repo" do
