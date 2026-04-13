@@ -25,9 +25,10 @@ Start the ownership server once in `test/test_helper.exs`:
 
 This starts a `NimbleOwnership` GenServer used for process-scoped test
 handler isolation. In production, facades compiled with the default
-`:test_dispatch?` setting use `DoubleDown.Dispatch.call_config/4`, which
-doesn't reference NimbleOwnership at all — the test dispatch code path
-is absent from the compiled beam files. See
+`:static_dispatch?` setting generate inlined direct calls to the
+configured implementation — no NimbleOwnership, no `Application.get_env`,
+zero dispatch overhead. The test dispatch code path is absent from the
+compiled beam files entirely. See
 [Dispatch resolution](getting-started.md#dispatch-resolution) for
 details.
 
