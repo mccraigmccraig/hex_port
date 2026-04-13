@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.35.0]
+
+### Added
+
+- Stateful per-operation stubs. `DoubleDown.Double.stub/3` now accepts
+  2-arity and 3-arity responder functions that can read and update the
+  fake's state, with the same semantics as stateful expect responders.
+  All arities can return `Double.passthrough()` to conditionally
+  delegate to the fallback/fake. This enables the pattern "intercept
+  every call, decide per-call whether to handle or delegate, without
+  knowing the call count."
+
 ## [0.34.0]
 
 ### Added
