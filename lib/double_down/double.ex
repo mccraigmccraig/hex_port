@@ -82,15 +82,24 @@ defmodule DoubleDown.Double do
         {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
       end)
 
-  When an expect short-circuits (e.g. returning an error), the fake
-  state is unchanged — correct for error simulation.
+  When a 1-arity expect short-circuits (e.g. returning an error), the
+  fake state is unchanged — correct for error simulation.
 
-  **Limitation: no inline passthrough.** Expects and per-operation
-  stubs cannot delegate to a stateful fake inline — they produce
-  return values directly without access to the fake's state.
-  Threading mutable state through a user-provided callback requires
-  a complex API and seems of limited value given that the main use
-  case — error simulation — doesn't need it.
+  Expects can also be stateful — 2-arity and 3-arity responders
+  receive the fake's state and can update it:
+
+      # 2-arity: access and update the fake's state
+      |> DoubleDown.Double.expect(:insert, fn [changeset], state ->
+        {result, new_state}
+      end)
+
+      # 3-arity: cross-contract state access too
+      |> DoubleDown.Double.expect(:insert, fn [changeset], state, all_states ->
+        {result, new_state}
+      end)
+
+  Stateful responders require `fake/3` to be called first (the fake
+  provides the state). They must return `{result, new_state}`.
 
   ### Module fake
 
@@ -157,7 +166,15 @@ defmodule DoubleDown.Double do
   @doc """
   Add an expectation for a contract operation.
 
-  The function receives the argument list and returns the result.
+  The responder function may be:
+
+    * **1-arity** `fn [args] -> result end` — stateless, returns a bare result
+    * **2-arity** `fn [args], state -> {result, new_state} end` — reads and
+      updates the stateful fake's state. Requires `fake/3` first.
+    * **3-arity** `fn [args], state, all_states -> {result, new_state} end` —
+      same as 2-arity plus a read-only snapshot of all contract states for
+      cross-contract access. Requires `fake/3` first.
+
   Expectations are consumed in order — the first `expect` for an
   operation handles the first call, the second handles the second,
   and so on.
@@ -177,7 +194,9 @@ defmodule DoubleDown.Double do
   def expect(contract, operation, fun_or_passthrough, opts \\ [])
 
   def expect(contract, operation, fun, opts)
-      when is_atom(contract) and is_atom(operation) and is_function(fun, 1) and is_list(opts) do
+      when is_atom(contract) and is_atom(operation) and
+             (is_function(fun, 1) or is_function(fun, 2) or is_function(fun, 3)) and
+             is_list(opts) do
     do_expect(contract, operation, fun, opts)
   end
 
@@ -197,12 +216,40 @@ defmodule DoubleDown.Double do
 
     ensure_handler_installed(contract)
 
+    # Stateful responders (2-arity, 3-arity) require a stateful fake
+    # to be configured first, so there's a fallback_state to pass.
+    if is_function(fun_or_passthrough) and
+         not is_function(fun_or_passthrough, 1) do
+      validate_stateful_fake_exists!(contract, operation, fun_or_passthrough)
+    end
+
     update_handler_state(contract, fn state ->
       existing = Map.get(state.expects, operation, [])
       %{state | expects: Map.put(state.expects, operation, existing ++ entries)}
     end)
 
     contract
+  end
+
+  defp validate_stateful_fake_exists!(contract, operation, fun) do
+    state_key = Module.concat(DoubleDown.State, contract)
+
+    case NimbleOwnership.get_owned(@ownership_server, self()) do
+      %{^state_key => %{fallback: {:stateful, _}}} ->
+        :ok
+
+      _ ->
+        arity = :erlang.fun_info(fun)[:arity]
+
+        raise ArgumentError, """
+        expect for :#{operation} received a #{arity}-arity stateful responder, \
+        but no stateful fake is configured on #{inspect(contract)}.
+
+        Stateful responders (2-arity or 3-arity) require a stateful fake \
+        set via Double.fake/3 before calling expect. Use a 1-arity \
+        fn [args] -> result end for stateless expects.
+        """
+    end
   end
 
   # -- Public API: stub --
@@ -458,7 +505,7 @@ defmodule DoubleDown.Double do
         invoke_fallback_or_raise(new_state, operation, args, all_states)
 
       {:ok, fun, new_state} ->
-        {fun.(args), new_state}
+        invoke_expect(fun, args, new_state, all_states, operation)
 
       :none ->
         case Map.get(state.stubs, operation) do
@@ -469,6 +516,46 @@ defmodule DoubleDown.Double do
             {stub_fun.(args), state}
         end
     end
+  end
+
+  # Invoke an expect responder. 1-arity is stateless (bare result).
+  # 2-arity and 3-arity are stateful (return {result, new_fallback_state}).
+  defp invoke_expect(fun, args, state, _all_states, _operation)
+       when is_function(fun, 1) do
+    {fun.(args), state}
+  end
+
+  defp invoke_expect(fun, args, state, _all_states, operation)
+       when is_function(fun, 2) do
+    case fun.(args, state.fallback_state) do
+      {result, new_fallback_state} ->
+        {result, %{state | fallback_state: new_fallback_state}}
+
+      other ->
+        raise_bad_stateful_expect_return(operation, 2, other)
+    end
+  end
+
+  defp invoke_expect(fun, args, state, all_states, operation)
+       when is_function(fun, 3) do
+    case fun.(args, state.fallback_state, all_states) do
+      {result, new_fallback_state} ->
+        {result, %{state | fallback_state: new_fallback_state}}
+
+      other ->
+        raise_bad_stateful_expect_return(operation, 3, other)
+    end
+  end
+
+  defp raise_bad_stateful_expect_return(operation, arity, got) do
+    raise ArgumentError, """
+    Stateful expect responder for :#{operation} must return {result, new_state}.
+
+    Got: #{inspect(got)}
+
+    #{arity}-arity expect responders must return a {result, new_fallback_state} tuple. \
+    Use a 1-arity fn [args] -> result end for stateless expects that return bare results.
+    """
   end
 
   defp pop_expect(%{expects: expects} = state, operation) do

@@ -394,6 +394,146 @@ defmodule DoubleDown.DoubleTest do
     end
   end
 
+  # ── stateful expect responders ──────────────────────────────
+
+  describe "stateful expect responders" do
+    test "2-arity expect receives and updates fallback state" do
+      Counter
+      |> Double.fake(
+        fn
+          :increment, [n], count -> {count + n, count + n}
+          :get_count, [], count -> {count, count}
+        end,
+        0
+      )
+      |> Double.expect(:increment, fn [n], count ->
+        # Double the increment and update state
+        {count + n * 2, count + n * 2}
+      end)
+
+      # First call: 2-arity expect fires, state becomes 10
+      assert 10 = Counter.Port.increment(5)
+      # Second call: fallback, state is 10, becomes 13
+      assert 13 = Counter.Port.increment(3)
+      assert 13 = Counter.Port.get_count()
+    end
+
+    test "3-arity expect receives fallback state and all_states" do
+      Greeter
+      |> Double.fake(
+        fn :greet, [name], state -> {"Hello #{name}", state} end,
+        %{greeted: []}
+      )
+
+      Counter
+      |> Double.fake(
+        fn
+          :increment, [_n], count -> {count, count}
+          :get_count, [], count -> {count, count}
+        end,
+        0
+      )
+      |> Double.expect(:get_count, fn [], _state, all_states ->
+        greeter_state = Map.get(all_states, Greeter)
+        {greeter_state, 0}
+      end)
+
+      result = Counter.Port.get_count()
+      assert result == %{greeted: []}
+    end
+
+    test "stateful expects thread state through sequenced calls" do
+      Counter
+      |> Double.fake(
+        fn
+          :increment, [n], count -> {count + n, count + n}
+          :get_count, [], count -> {count, count}
+        end,
+        0
+      )
+      |> Double.expect(:increment, fn [n], count ->
+        {count + n, count + n}
+      end)
+      |> Double.expect(:increment, fn [n], count ->
+        # Second expect sees state updated by first expect
+        {count + n * 10, count + n * 10}
+      end)
+
+      assert 5 = Counter.Port.increment(5)
+      # State is now 5, second expect multiplies by 10
+      assert 35 = Counter.Port.increment(3)
+      assert 35 = Counter.Port.get_count()
+    end
+
+    test "raises at expect time if no stateful fake configured — 2-arity" do
+      Double.stub(Counter, :get_count, fn [] -> 0 end)
+
+      assert_raise ArgumentError, ~r/no stateful fake is configured/, fn ->
+        Double.expect(Counter, :increment, fn [_n], _state ->
+          {0, 0}
+        end)
+      end
+    end
+
+    test "raises at expect time if no stateful fake configured — 3-arity" do
+      Double.stub(Counter, :get_count, fn [] -> 0 end)
+
+      assert_raise ArgumentError, ~r/no stateful fake is configured/, fn ->
+        Double.expect(Counter, :increment, fn [_n], _state, _all ->
+          {0, 0}
+        end)
+      end
+    end
+
+    test "raises at dispatch time if 2-arity responder returns bare value" do
+      Counter
+      |> Double.fake(
+        fn :increment, [n], count -> {count + n, count + n} end,
+        0
+      )
+      |> Double.expect(:increment, fn [_n], _state ->
+        # Wrong — bare result instead of {result, new_state}
+        42
+      end)
+
+      assert_raise ArgumentError, ~r/must return \{result, new_state\}/, fn ->
+        Counter.Port.increment(5)
+      end
+    end
+
+    test "raises at dispatch time if 3-arity responder returns bare value" do
+      Counter
+      |> Double.fake(
+        fn :increment, [n], count -> {count + n, count + n} end,
+        0
+      )
+      |> Double.expect(:increment, fn [_n], _state, _all ->
+        42
+      end)
+
+      assert_raise ArgumentError, ~r/must return \{result, new_state\}/, fn ->
+        Counter.Port.increment(5)
+      end
+    end
+
+    test "1-arity expects still work unchanged with stateful fake" do
+      Counter
+      |> Double.fake(
+        fn
+          :increment, [n], count -> {count + n, count + n}
+          :get_count, [], count -> {count, count}
+        end,
+        0
+      )
+      |> Double.expect(:increment, fn [_n] -> 999 end)
+
+      # 1-arity: state unchanged
+      assert 999 = Counter.Port.increment(5)
+      assert 3 = Counter.Port.increment(3)
+      assert 3 = Counter.Port.get_count()
+    end
+  end
+
   # ── dispatch with unexpected operations ───────────────────
 
   describe "unexpected operations" do
