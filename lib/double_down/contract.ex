@@ -129,6 +129,16 @@ defmodule DoubleDown.Contract do
       facade-specific context into arguments at the dispatch boundary.
       Most contracts don't need this — the canonical example is
       `DoubleDown.Repo`'s `transact` operation.
+
+  ### Typespec mismatch severity (`:warn_on_typespec_mismatch?`)
+
+    * **omitted / `false`** (default) — raise `CompileError` when the
+      `defcallback` type spec doesn't match the production impl's `@spec`.
+    * **`true`** — emit a warning instead of an error. Use this during
+      migration when you know the specs differ and want to defer fixing them.
+
+  See `DoubleDown.Contract.SpecWarnings` for details on compile-time
+  spec mismatch detection.
   """
   defmacro defcallback(spec, opts \\ [])
 
