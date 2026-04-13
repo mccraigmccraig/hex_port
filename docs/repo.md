@@ -509,6 +509,94 @@ test "logs the failure then the success" do
 end
 ```
 
+## Cross-contract state access
+
+The "two-contract" pattern separates write operations (through the
+`DoubleDown.Repo` contract) from domain-specific query operations
+(through a separate contract). In production, both hit the same
+database. In tests, the Repo uses `Repo.InMemory`, and the query
+contract needs to see what Repo has written.
+
+4-arity stateful handlers enable this by providing a read-only
+snapshot of all contract states. The Queries handler can look up the
+Repo's InMemory store and answer queries against it.
+
+### Example: Queries handler reading Repo state
+
+```elixir
+# Define a domain-specific query contract
+defmodule MyApp.UserQueries do
+  use DoubleDown.Contract
+
+  defcallback active_users() :: [User.t()]
+  defcallback user_by_email(email :: String.t()) :: User.t() | nil
+end
+```
+
+```elixir
+# In tests, set up Repo with InMemory and Queries with a 4-arity handler
+setup do
+  # Repo uses InMemory — writes land here
+  DoubleDown.Double.fake(
+    DoubleDown.Repo,
+    &DoubleDown.Repo.InMemory.dispatch/3,
+    DoubleDown.Repo.InMemory.new()
+  )
+
+  # Queries reads from Repo's InMemory state via the global snapshot
+  DoubleDown.Testing.set_stateful_handler(
+    MyApp.UserQueries,
+    fn operation, args, state, all_states ->
+      # Extract Repo's InMemory store from the global snapshot
+      repo_state = Map.get(all_states, DoubleDown.Repo, %{})
+      users = repo_state |> Map.get(User, %{}) |> Map.values()
+
+      result =
+        case {operation, args} do
+          {:active_users, []} ->
+            Enum.filter(users, & &1.active)
+
+          {:user_by_email, [email]} ->
+            Enum.find(users, &(&1.email == email))
+        end
+
+      {result, state}
+    end,
+    %{}
+  )
+
+  :ok
+end
+
+test "queries see records written through Repo" do
+  changeset = User.changeset(%User{}, %{name: "Alice", email: "alice@co.com", active: true})
+  {:ok, _alice} = MyApp.Repo.insert(changeset)
+
+  # The Queries handler reads from Repo's InMemory state
+  assert [%User{name: "Alice"}] = MyApp.UserQueries.Port.active_users()
+  assert %User{email: "alice@co.com"} = MyApp.UserQueries.Port.user_by_email("alice@co.com")
+end
+```
+
+The `all_states` map contains the Repo's InMemory store keyed by
+`DoubleDown.Repo`. The store structure is
+`%{SchemaModule => %{pk_value => struct}}`, so the Queries handler
+can scan, filter, and match against it.
+
+**Key points:**
+
+- The Repo state in the snapshot reflects all writes up to the point
+  the Queries handler is called — insert then query gives consistent
+  results
+- The Queries handler cannot modify the Repo state — it's read-only
+- The handler's own state (`state` / 3rd arg) is independent and can
+  be used for Queries-specific bookkeeping if needed
+- Non-PK queries require scanning the store — this is a linear scan
+  over in-memory maps, which is fast for test-sized data sets
+
+See [Cross-contract state access](testing.md#cross-contract-state-access)
+in the Testing guide for the general mechanism.
+
 ## Why this matters
 
 The in-memory Repo removes the database from your test feedback loop.

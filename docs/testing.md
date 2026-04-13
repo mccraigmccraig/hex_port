@@ -465,6 +465,56 @@ end
 This makes the choice to use the real implementation visible and
 intentional, rather than an accident of config inheritance.
 
+## Cross-contract state access
+
+By default, each contract's stateful handler can only see its own
+state. This is the right isolation boundary for most tests — you're
+testing one contract's logic independently.
+
+However, the "two-contract" pattern (e.g. a `Repo` contract for
+writes and a domain-specific `Queries` contract for reads) has two
+contracts backed by a single logical store. A Queries handler may
+need to see what the Repo handler has written.
+
+4-arity stateful handlers solve this. Instead of receiving just the
+contract's own state, they receive a read-only snapshot of all
+contract states as a 4th argument:
+
+```elixir
+# 3-arity (default) — own state only
+fn operation, args, state -> {result, new_state} end
+
+# 4-arity — own state + read-only global snapshot
+fn operation, args, state, all_states -> {result, new_state} end
+```
+
+The `all_states` map is keyed by contract module:
+
+```elixir
+%{
+  DoubleDown.Repo => %{User => %{1 => %User{...}}, ...},
+  MyApp.Queries => %{...},
+  DoubleDown.Contract.GlobalState => true
+}
+```
+
+The `DoubleDown.Contract.GlobalState` key is a sentinel — if a
+handler accidentally returns `all_states` instead of its own state,
+the sentinel is detected and a clear error is raised.
+
+**Constraints:**
+
+- The global snapshot is **read-only** — the handler can only update
+  its own contract's state via the return value
+- The snapshot is taken **before** the `get_and_update` call — it's
+  a point-in-time view, not a live reference
+- The handler return must be `{result, new_own_state}` — returning
+  the global map raises `ArgumentError`
+
+See [Cross-contract state with Repo](repo.md#cross-contract-state-access)
+for a worked example of a Queries handler reading the Repo InMemory
+store.
+
 ## Low-level handler APIs
 
 `DoubleDown.Double` is built on top of `set_stateful_handler`
@@ -476,6 +526,8 @@ there's probably never a need to use them directly:
   a 2-arity function handler
 - `set_stateful_handler(contract, fn op, args, state -> {result, state} end, init)` —
   register a 3-arity stateful handler
+- `set_stateful_handler(contract, fn op, args, state, all_states -> {result, state} end, init)` —
+  register a 4-arity stateful handler with cross-contract state access
 
 These are the primitives that power `Double.stub`, `Double.fake`,
 and `Double.expect`.
