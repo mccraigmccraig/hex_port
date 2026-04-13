@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.32.0]
+
+### Added
+
+- 4-arity stateful handlers with read-only cross-contract state
+  access. Handlers registered with
+  `fn operation, args, state, all_states -> {result, new_state} end`
+  receive a snapshot of all contract states as the 4th argument. This
+  enables the "two-contract" pattern where a Queries handler reads
+  the Repo InMemory store. Works with both `DoubleDown.Double.fake/3`
+  and `DoubleDown.Testing.set_stateful_handler/3`. Existing 3-arity
+  handlers are unchanged (non-breaking).
+- `DoubleDown.Contract.GlobalState` sentinel key in the global state
+  map. If a handler accidentally returns the global map instead of
+  its own state, a clear `ArgumentError` is raised.
+
+### Fixed
+
+- Exceptions inside stateful handlers no longer crash the
+  NimbleOwnership GenServer. Raises, throws, and exits that occur
+  inside `NimbleOwnership.get_and_update` are now caught and
+  transported to the calling process via `%Defer{}`, where they
+  re-raise safely. Previously these would crash the ownership
+  server — a singleton for the entire test run — aborting the suite.
+
 ## [0.31.1]
 
 ### Fixed
