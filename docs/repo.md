@@ -347,7 +347,7 @@ The **Test** and **InMemory** adapters do **not** provide true
 transaction isolation:
 
 - `Repo.Test` calls the function directly without any locking.
-- `Repo.InMemory` uses `%DoubleDown.Defer{}` to run the transaction
+- `Repo.InMemory` uses `%DoubleDown.Dispatch.Defer{}` to run the transaction
   function outside the NimbleOwnership lock — each sub-operation
   acquires the lock individually.
 

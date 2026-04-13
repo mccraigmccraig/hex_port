@@ -232,13 +232,13 @@ if Code.ensure_loaded?(Ecto) do
     # -----------------------------------------------------------------
 
     defp dispatch(:transact, [fun, _opts], _fallback_fn) when is_function(fun, 0) do
-      %DoubleDown.Defer{fn: fn -> run_in_transaction(fun) end}
+      %DoubleDown.Dispatch.Defer{fn: fn -> run_in_transaction(fun) end}
     end
 
     defp dispatch(:transact, [%Ecto.Multi{} = multi, opts], _fallback_fn) do
       repo_facade = Keyword.get(opts, DoubleDown.Repo.Facade)
 
-      %DoubleDown.Defer{
+      %DoubleDown.Dispatch.Defer{
         fn: fn ->
           run_in_transaction(fn -> DoubleDown.Repo.MultiStepper.run(multi, repo_facade) end)
         end
@@ -246,7 +246,7 @@ if Code.ensure_loaded?(Ecto) do
     end
 
     defp dispatch(:rollback, [value], _fallback_fn) do
-      %DoubleDown.Defer{fn: fn -> throw({:rollback, value}) end}
+      %DoubleDown.Dispatch.Defer{fn: fn -> throw({:rollback, value}) end}
     end
 
     defp run_in_transaction(fun) do

@@ -306,7 +306,7 @@ if Code.ensure_loaded?(Ecto) do
              |> Enum.filter(&is_integer/1)
            end) do
         {:error, {:no_autogenerate, message}} ->
-          {%DoubleDown.Defer{fn: fn -> raise ArgumentError, message end}, store}
+          {%DoubleDown.Dispatch.Defer{fn: fn -> raise ArgumentError, message end}, store}
 
         {id, record} ->
           {{:ok, record}, put_record(store, schema, id, record)}
@@ -448,7 +448,7 @@ if Code.ensure_loaded?(Ecto) do
     # Transaction Operations
     # -----------------------------------------------------------------
 
-    # transact uses %DoubleDown.Defer{} to run the user's function
+    # transact uses %DoubleDown.Dispatch.Defer{} to run the user's function
     # outside the NimbleOwnership lock. Sub-operations (insert, get, etc.)
     # each acquire the lock individually. This avoids GenServer reentrancy
     # deadlock at the cost of not providing true transaction isolation —
@@ -457,13 +457,13 @@ if Code.ensure_loaded?(Ecto) do
     # The facade's pre_dispatch wraps 1-arity fns into 0-arity thunks,
     # so implementations always receive a 0-arity fn or an Ecto.Multi.
     def dispatch(:transact, [fun, _opts], store) when is_function(fun, 0) do
-      {%DoubleDown.Defer{fn: fn -> run_in_transaction(fun) end}, store}
+      {%DoubleDown.Dispatch.Defer{fn: fn -> run_in_transaction(fun) end}, store}
     end
 
     def dispatch(:transact, [%Ecto.Multi{} = multi, opts], store) do
       repo_facade = Keyword.get(opts, DoubleDown.Repo.Facade)
 
-      {%DoubleDown.Defer{
+      {%DoubleDown.Dispatch.Defer{
          fn: fn ->
            run_in_transaction(fn -> DoubleDown.Repo.MultiStepper.run(multi, repo_facade) end)
          end
@@ -471,7 +471,7 @@ if Code.ensure_loaded?(Ecto) do
     end
 
     def dispatch(:rollback, [value], store) do
-      {%DoubleDown.Defer{fn: fn -> throw({:rollback, value}) end}, store}
+      {%DoubleDown.Dispatch.Defer{fn: fn -> throw({:rollback, value}) end}, store}
     end
 
     defp run_in_transaction(fun) do
@@ -568,7 +568,7 @@ if Code.ensure_loaded?(Ecto) do
     #
     # Because dispatch/3 runs inside NimbleOwnership.get_and_update
     # (a GenServer call), we must not raise here — that would crash
-    # the ownership server. Instead, we use %DoubleDown.Defer{} to
+    # the ownership server. Instead, we use %DoubleDown.Dispatch.Defer{} to
     # move the raise outside the lock.
     # -----------------------------------------------------------------
 
@@ -596,13 +596,13 @@ if Code.ensure_loaded?(Ecto) do
             # then defer the reraise to the calling test process.
             exception ->
               stacktrace = __STACKTRACE__
-              {%DoubleDown.Defer{fn: fn -> reraise exception, stacktrace end}, store}
+              {%DoubleDown.Dispatch.Defer{fn: fn -> reraise exception, stacktrace end}, store}
           end
       end
     end
 
     defp defer_raise_no_fallback(operation, args, store) do
-      {%DoubleDown.Defer{
+      {%DoubleDown.Dispatch.Defer{
          fn: fn ->
            raise ArgumentError, """
            DoubleDown.Repo.InMemory cannot service :#{operation} with args #{inspect(args)}.
