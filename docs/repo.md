@@ -130,11 +130,7 @@ needed:
 
 ```elixir
 setup do
-  DoubleDown.Double.fake(
-    DoubleDown.Repo,
-    &DoubleDown.Repo.InMemory.dispatch/3,
-    DoubleDown.Repo.InMemory.new()
-  )
+  DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory)
   :ok
 end
 
@@ -211,20 +207,16 @@ canned data with records inserted during the test:
 setup do
   alice = %User{id: 1, name: "Alice", email: "alice@example.com"}
 
-  state = DoubleDown.Repo.InMemory.new(
-    seed: [alice],
+  DoubleDown.Double.fake(
+    DoubleDown.Repo,
+    DoubleDown.Repo.InMemory,
+    [alice],
     fallback_fn: fn
       :get_by, [User, [email: "alice@example.com"]], _state -> alice
       :all, [User], state -> state |> Map.get(User, %{}) |> Map.values()
       :exists?, [User], _state -> true
       :aggregate, [User, :count, :id], _state -> 1
     end
-  )
-
-  DoubleDown.Double.fake(
-    DoubleDown.Repo,
-    &DoubleDown.Repo.InMemory.dispatch/3,
-    state
   )
   :ok
 end
@@ -418,7 +410,7 @@ need read-after-write consistency alongside failure simulation:
 ```elixir
 setup do
   DoubleDown.Repo
-  |> DoubleDown.Double.fake(&DoubleDown.Repo.InMemory.dispatch/3, DoubleDown.Repo.InMemory.new())
+  |> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
   |> DoubleDown.Double.expect(:insert, fn [changeset] ->
     {:error, Ecto.Changeset.add_error(changeset, :email, "has already been taken")}
   end)
@@ -450,7 +442,7 @@ expect is consumed for `verify!` counting:
 ```elixir
 setup do
   DoubleDown.Repo
-  |> DoubleDown.Double.fake(&DoubleDown.Repo.InMemory.dispatch/3, DoubleDown.Repo.InMemory.new())
+  |> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
   |> DoubleDown.Double.expect(:insert, :passthrough, times: 2)
   :ok
 end
@@ -466,7 +458,7 @@ You can mix `:passthrough` and function expects — for example,
 
 ```elixir
 DoubleDown.Repo
-|> DoubleDown.Double.fake(&DoubleDown.Repo.InMemory.dispatch/3, DoubleDown.Repo.InMemory.new())
+|> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
 |> DoubleDown.Double.expect(:insert, :passthrough)
 |> DoubleDown.Double.expect(:insert, fn [changeset] ->
   {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
@@ -482,7 +474,7 @@ including computed results:
 ```elixir
 setup do
   DoubleDown.Repo
-  |> DoubleDown.Double.fake(&DoubleDown.Repo.InMemory.dispatch/3, DoubleDown.Repo.InMemory.new())
+  |> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
   |> DoubleDown.Double.expect(:insert, fn [changeset] ->
     {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
   end)
@@ -538,10 +530,7 @@ end
 setup do
   # Repo uses InMemory — writes land here
   DoubleDown.Repo
-  |> DoubleDown.Double.fake(
-    &DoubleDown.Repo.InMemory.dispatch/3,
-    DoubleDown.Repo.InMemory.new()
-  )
+  |> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
 
   # Queries uses a 4-arity fake that reads Repo's InMemory state
   MyApp.UserQueries

@@ -495,6 +495,78 @@ defmodule DoubleDown.DoubleTest do
     end
   end
 
+  # ── FakeHandler module-based fake ──────────────────────────
+
+  describe "FakeHandler module-based fake" do
+    alias DoubleDown.Repo
+    alias DoubleDown.Test.SimpleUser
+
+    test "fake/2 with FakeHandler module uses default state" do
+      Double.fake(Repo, Repo.InMemory)
+
+      {:ok, user} = Repo.Port.insert(SimpleUser.changeset(%{name: "Alice"}))
+      assert %SimpleUser{name: "Alice"} = Repo.Port.get(SimpleUser, user.id)
+    end
+
+    test "fake/3 with FakeHandler module passes seed as list" do
+      alice = %SimpleUser{id: 1, name: "Alice"}
+      Double.fake(Repo, Repo.InMemory, [alice])
+
+      assert %SimpleUser{name: "Alice"} = Repo.Port.get(SimpleUser, 1)
+    end
+
+    test "fake/3 with FakeHandler module passes seed as map" do
+      alice = %SimpleUser{id: 1, name: "Alice"}
+      Double.fake(Repo, Repo.InMemory, %{SimpleUser => %{1 => alice}})
+
+      assert %SimpleUser{name: "Alice"} = Repo.Port.get(SimpleUser, 1)
+    end
+
+    test "fake/4 passes seed and opts to new/2" do
+      alice = %SimpleUser{id: 1, name: "Alice"}
+
+      Double.fake(Repo, Repo.InMemory, [alice],
+        fallback_fn: fn :all, [SimpleUser], state ->
+          state |> Map.get(SimpleUser, %{}) |> Map.values()
+        end
+      )
+
+      assert %SimpleUser{name: "Alice"} = Repo.Port.get(SimpleUser, 1)
+      assert [%SimpleUser{name: "Alice"}] = Repo.Port.all(SimpleUser)
+    end
+
+    test "FakeHandler fake supports expects" do
+      Double.fake(Repo, Repo.InMemory)
+      |> Double.expect(:insert, fn [_changeset] ->
+        {:error, :conflict}
+      end)
+
+      assert {:error, :conflict} = Repo.Port.insert(SimpleUser.changeset(%{name: "Bob"}))
+
+      # Second insert goes through InMemory
+      assert {:ok, %SimpleUser{name: "Bob"}} =
+               Repo.Port.insert(SimpleUser.changeset(%{name: "Bob"}))
+    end
+
+    test "fake/2 with non-FakeHandler module uses module fake" do
+      # Greeter.Impl doesn't implement FakeHandler — should be module fake
+      Double.fake(Greeter, Greeter.Impl)
+
+      assert "Hello, Alice!" = Greeter.Port.greet("Alice")
+    end
+
+    test "raises for fake/3 with non-FakeHandler module" do
+      assert_raise ArgumentError, ~r/does not implement.*FakeHandler/, fn ->
+        Double.fake(Greeter, Greeter.Impl, %{})
+      end
+    end
+
+    test "returns contract module for piping" do
+      result = Double.fake(Repo, Repo.InMemory)
+      assert result == Repo
+    end
+  end
+
   # ── fallback mutual exclusivity ───────────────────────────
 
   describe "fallback mutual exclusivity" do

@@ -151,8 +151,7 @@ Layer expects over a stateful fake to simulate specific failures:
 setup do
   # InMemory Repo as the baseline — real state, read-after-write
   DoubleDown.Repo
-  |> DoubleDown.Double.fake(&DoubleDown.Repo.InMemory.dispatch/3,
-    DoubleDown.Repo.InMemory.new())
+  |> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
   # First insert fails with constraint error
   |> DoubleDown.Double.expect(:insert, fn [changeset] ->
     {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}

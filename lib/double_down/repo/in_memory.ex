@@ -28,6 +28,8 @@
 #
 if Code.ensure_loaded?(Ecto) do
   defmodule DoubleDown.Repo.InMemory do
+    @behaviour DoubleDown.Dispatch.FakeHandler
+
     @moduledoc """
     Stateful in-memory Repo implementation for tests.
 
@@ -164,35 +166,80 @@ if Code.ensure_loaded?(Ecto) do
     @doc """
     Create a new InMemory state map.
 
-    ## Options
+    ## Arguments
 
-      * `:seed` - a list of structs to pre-populate the store
-      * `:fallback_fn` - a 3-arity function `(operation, args, state) -> result`
-        that handles operations the state cannot answer authoritatively. The
-        `state` argument is the clean store map (without internal keys like
-        `:__fallback_fn__`), so the fallback can compose canned data with
-        records inserted during the test. If the function raises
-        `FunctionClauseError`, dispatch falls through to an error.
+      * `seed` — seed data to pre-populate the store. Accepts:
+        - a list of structs: `[%User{id: 1, name: "Alice"}]`
+        - a pre-built store map: `%{User => %{1 => %User{id: 1}}}`
+        - `%{}` or `[]` for empty (default)
+      * `opts` — keyword options:
+        - `:fallback_fn` — a 3-arity function `(operation, args, state) -> result`
+          that handles operations the state cannot answer authoritatively. The
+          `state` argument is the clean store map (without internal keys like
+          `:__fallback_fn__`), so the fallback can compose canned data with
+          records inserted during the test. If the function raises
+          `FunctionClauseError`, dispatch falls through to an error.
 
     ## Examples
 
         # Empty state, no fallback
         DoubleDown.Repo.InMemory.new()
 
-        # Seeded with fallback that uses state
+        # Seeded with a list of structs
+        DoubleDown.Repo.InMemory.new([%User{id: 1, name: "Alice"}])
+
+        # Seeded with a map
+        DoubleDown.Repo.InMemory.new(%{User => %{1 => %User{id: 1, name: "Alice"}}})
+
+        # Seeded with fallback
         DoubleDown.Repo.InMemory.new(
-          seed: [%User{id: 1, name: "Alice"}],
+          [%User{id: 1, name: "Alice"}],
           fallback_fn: fn
             :all, [User], state ->
               Map.get(state, User, %{}) |> Map.values()
           end
         )
+
+    ## Legacy keyword-only form (still supported)
+
+        DoubleDown.Repo.InMemory.new(seed: [%User{id: 1}], fallback_fn: fn ...)
     """
-    @spec new(keyword()) :: store()
-    def new(opts \\ []) do
-      seed_records = Keyword.get(opts, :seed, [])
+    @impl DoubleDown.Dispatch.FakeHandler
+    @spec new(term(), keyword()) :: store()
+    def new(seed \\ %{}, opts \\ [])
+
+    # Legacy keyword-only form: new(seed: [...], fallback_fn: fn ...)
+    def new(opts, []) when is_list(opts) and opts != [] do
+      case Keyword.keyword?(opts) do
+        true ->
+          seed_records = Keyword.get(opts, :seed, [])
+          fallback_fn = Keyword.get(opts, :fallback_fn, nil)
+          build_store(seed_records, fallback_fn)
+
+        false ->
+          # It's a plain list of structs as seed
+          build_store(opts, nil)
+      end
+    end
+
+    # new(seed_list, opts)
+    def new(seed, opts) when is_list(seed) do
+      fallback_fn = Keyword.get(opts, :fallback_fn, nil)
+      build_store(seed, fallback_fn)
+    end
+
+    # new(seed_map, opts)
+    def new(seed, opts) when is_map(seed) do
       fallback_fn = Keyword.get(opts, :fallback_fn, nil)
 
+      if fallback_fn do
+        Map.put(seed, @fallback_fn_key, fallback_fn)
+      else
+        seed
+      end
+    end
+
+    defp build_store(seed_records, fallback_fn) do
       store = seed(seed_records)
 
       if fallback_fn do
@@ -224,7 +271,8 @@ if Code.ensure_loaded?(Ecto) do
     end
 
     @doc """
-    Stateful handler function for use with `DoubleDown.Testing.set_stateful_handler/3`.
+    Stateful handler function for use with `DoubleDown.Testing.set_stateful_handler/3`
+    or `DoubleDown.Double.fake/2..4`.
 
     Handles all `DoubleDown.Repo` operations. The function signature is
     `(operation, args, store) -> {result, new_store}`.
@@ -234,6 +282,7 @@ if Code.ensure_loaded?(Ecto) do
     reads go directly to the fallback function. If no fallback is registered
     or the fallback doesn't handle the operation, an error is raised.
     """
+    @impl DoubleDown.Dispatch.FakeHandler
     @spec dispatch(atom(), list(), store()) :: {term(), store()}
 
     # -----------------------------------------------------------------

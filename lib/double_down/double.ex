@@ -363,10 +363,27 @@ defmodule DoubleDown.Double do
   implementation module. They handle any operation not covered by an
   `expect` or per-operation `stub`.
 
+  ## FakeHandler module (recommended for stateful fakes)
+
+  A module implementing `DoubleDown.Dispatch.FakeHandler`. The module's
+  `new/2` builds initial state, and its `dispatch/3` or `dispatch/4`
+  handles operations:
+
+      # Default state
+      DoubleDown.Double.fake(MyContract, Repo.InMemory)
+
+      # With seed data
+      DoubleDown.Double.fake(MyContract, Repo.InMemory, [%User{id: 1}])
+
+      # With seed data and options
+      DoubleDown.Double.fake(MyContract, Repo.InMemory, [%User{id: 1}],
+        fallback_fn: fn :all, [User], state -> Map.values(state[User]) end
+      )
+
   ## Module fake
 
-  A module implementing the contract's `@behaviour`. All unhandled
-  operations delegate via `apply(module, operation, args)`:
+  A module implementing the contract's `@behaviour` (but not FakeHandler).
+  All unhandled operations delegate via `apply(module, operation, args)`:
 
       DoubleDown.Double.fake(MyContract, MyApp.Impl)
 
@@ -378,19 +395,13 @@ defmodule DoubleDown.Double do
   it calls its own `:foo` directly. For stubs to be visible, the
   module must call through the facade.
 
-  ## Stateful fake
+  ## Stateful fake function
 
   A 3-arity `fn operation, args, state -> {result, new_state} end`
   or 4-arity `fn operation, args, state, all_states -> {result, new_state} end`
-  with initial state. Same signature as `set_stateful_handler`,
-  allowing fakes like `Repo.InMemory` to integrate directly:
+  with initial state:
 
-      DoubleDown.Double.fake(MyContract, &Repo.InMemory.dispatch/3, Repo.InMemory.new())
-
-  4-arity fakes receive a read-only snapshot of all contract states
-  as the 4th argument, enabling cross-contract state access (e.g. a
-  Queries handler reading the Repo InMemory store). See
-  [Cross-contract state access](docs/testing.md#cross-contract-state-access).
+      DoubleDown.Double.fake(MyContract, &handler/3, initial_state)
 
   The fake's state is threaded through calls automatically. When an
   expect short-circuits (e.g. returning an error), the fake state is
@@ -402,22 +413,26 @@ defmodule DoubleDown.Double do
 
   Returns the contract module for piping.
   """
-  # fake/2 — module fake
+  # fake/2 — module fake or FakeHandler module with default state
   @spec fake(module(), module()) :: module()
   def fake(contract, module)
       when is_atom(contract) and is_atom(module) do
-    validate_module_fallback!(contract, module)
-    ensure_handler_installed(contract)
+    if fake_handler?(module) do
+      do_fake_handler(contract, module, %{}, [])
+    else
+      validate_module_fallback!(contract, module)
+      ensure_handler_installed(contract)
 
-    update_handler_state(contract, fn state ->
-      %{state | fallback: {:module, module}}
-    end)
+      update_handler_state(contract, fn state ->
+        %{state | fallback: {:module, module}}
+      end)
 
-    contract
+      contract
+    end
   end
 
-  # fake/3 — stateful fake (3-arity or 4-arity with cross-contract state access)
-  @spec fake(module(), function(), term()) :: module()
+  # fake/3 — stateful fake function OR FakeHandler module with seed
+  @spec fake(module(), function() | module(), term()) :: module()
   def fake(contract, fun, init_state)
       when is_atom(contract) and (is_function(fun, 3) or is_function(fun, 4)) do
     ensure_handler_installed(contract)
@@ -427,6 +442,56 @@ defmodule DoubleDown.Double do
     end)
 
     contract
+  end
+
+  def fake(contract, module, seed)
+      when is_atom(contract) and is_atom(module) do
+    do_fake_handler(contract, module, seed, [])
+  end
+
+  # fake/4 — FakeHandler module with seed and opts
+  @spec fake(module(), module(), term(), keyword()) :: module()
+  def fake(contract, module, seed, opts)
+      when is_atom(contract) and is_atom(module) and is_list(opts) do
+    do_fake_handler(contract, module, seed, opts)
+  end
+
+  defp do_fake_handler(contract, module, seed, opts) do
+    unless fake_handler?(module) do
+      raise ArgumentError, """
+      #{inspect(module)} does not implement the DoubleDown.Dispatch.FakeHandler behaviour.
+
+      To use a module with Double.fake/3..4, it must implement:
+        @behaviour DoubleDown.Dispatch.FakeHandler
+        @callback new(seed, opts) :: state
+        @callback dispatch(operation, args, state) :: {result, new_state}
+      """
+    end
+
+    dispatch_fn = resolve_fake_dispatch(module)
+    init_state = module.new(seed, opts)
+
+    ensure_handler_installed(contract)
+
+    update_handler_state(contract, fn state ->
+      %{state | fallback: {:stateful, dispatch_fn}, fallback_state: init_state}
+    end)
+
+    contract
+  end
+
+  defp fake_handler?(module) do
+    Code.ensure_loaded?(module) and
+      function_exported?(module, :new, 2) and
+      (function_exported?(module, :dispatch, 3) or function_exported?(module, :dispatch, 4))
+  end
+
+  # Prefer dispatch/4 (cross-contract) over dispatch/3
+  defp resolve_fake_dispatch(module) do
+    cond do
+      function_exported?(module, :dispatch, 4) -> &module.dispatch/4
+      function_exported?(module, :dispatch, 3) -> &module.dispatch/3
+    end
   end
 
   # -- Public API: verify --

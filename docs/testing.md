@@ -90,21 +90,32 @@ end)
 |> DoubleDown.Double.expect(:create_todo, fn [p] -> {:ok, struct!(Todo, p)} end)
 ```
 
-**Stateful fake** — a 3-arity `fn op, args, state -> {result, state}`
-or 4-arity `fn op, args, state, all_states -> {result, state}` with
-initial state. Fakes like `Repo.InMemory` integrate directly.
-4-arity fakes receive a read-only snapshot of all contract states
-for [cross-contract state access](#cross-contract-state-access).
-Override specific operations with expects while the fake handles
-everything else:
+**Stateful fake** — a module implementing
+`DoubleDown.Dispatch.FakeHandler`, or a 3/4-arity function with
+initial state. Fakes like `Repo.InMemory` implement FakeHandler
+and integrate directly by module name:
 
 ```elixir
-# First insert fails with constraint error, rest go through InMemory
+# FakeHandler module — simplest form
 DoubleDown.Repo
-|> DoubleDown.Double.fake(&DoubleDown.Repo.InMemory.dispatch/3, DoubleDown.Repo.InMemory.new())
+|> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
 |> DoubleDown.Double.expect(:insert, fn [changeset] ->
   {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
 end)
+
+# With seed data
+DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory,
+  [%User{id: 1, name: "Alice"}])
+
+# With seed data and options
+DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory,
+  [%User{id: 1, name: "Alice"}],
+  fallback_fn: fn :all, [User], state -> Map.values(state[User]) end)
+
+# Function form (still supported)
+DoubleDown.Double.fake(DoubleDown.Repo,
+  &DoubleDown.Repo.InMemory.dispatch/3,
+  DoubleDown.Repo.InMemory.new())
 ```
 
 When a 1-arity expect short-circuits (returns an error), the fake
@@ -150,7 +161,7 @@ through the fake, second call returns an error":
 
 ```elixir
 DoubleDown.Repo
-|> DoubleDown.Double.fake(&DoubleDown.Repo.InMemory.dispatch/3, DoubleDown.Repo.InMemory.new())
+|> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
 |> DoubleDown.Double.expect(:insert, :passthrough)
 |> DoubleDown.Double.expect(:insert, fn [changeset] ->
   {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
@@ -195,10 +206,7 @@ the fake**
 
 ```elixir
 DoubleDown.Repo
-|> DoubleDown.Double.fake(
-  &DoubleDown.Repo.InMemory.dispatch/3,
-  DoubleDown.Repo.InMemory.new()
-)
+|> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
 |> DoubleDown.Double.expect(:insert, :passthrough)
 |> DoubleDown.Double.expect(:insert, fn [changeset], state ->
   # state is the InMemory store: %{Schema => %{pk => record}}
@@ -241,10 +249,7 @@ without knowing the call count in advance:
 
 ```elixir
 DoubleDown.Repo
-|> DoubleDown.Double.fake(
-  &DoubleDown.Repo.InMemory.dispatch/3,
-  DoubleDown.Repo.InMemory.new()
-)
+|> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
 |> DoubleDown.Double.stub(:insert, fn [changeset], state ->
   existing_emails =
     state
@@ -433,9 +438,7 @@ mode:
 setup do
   DoubleDown.Testing.set_mode_to_global()
 
-  DoubleDown.Repo
-  |> DoubleDown.Double.fake(&DoubleDown.Repo.InMemory.dispatch/3,
-    DoubleDown.Repo.InMemory.new())
+  DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory)
 
   on_exit(fn -> DoubleDown.Testing.set_mode_to_private() end)
   :ok
@@ -495,9 +498,7 @@ defmodule MyApp.PipelineIntegrationTest do
   setup do
     DoubleDown.Testing.set_mode_to_global()
 
-    DoubleDown.Repo
-    |> DoubleDown.Double.fake(&DoubleDown.Repo.InMemory.dispatch/3,
-      DoubleDown.Repo.InMemory.new())
+    DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory)
 
     on_exit(fn -> DoubleDown.Testing.set_mode_to_private() end)
 
