@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.31.1]
+
+### Fixed
+
+- Exceptions inside stateful handlers no longer crash the
+  NimbleOwnership GenServer. Raises, throws, and exits that occur
+  inside `NimbleOwnership.get_and_update` (e.g. a module fallback
+  hitting a dead Ecto sandbox connection during test teardown) are
+  now caught and transported to the calling process via `%Defer{}`,
+  where they re-raise safely. Previously these would crash the
+  ownership server — a singleton for the entire test run — aborting
+  the suite.
+
 ## [0.31.0]
 
 ### Added
