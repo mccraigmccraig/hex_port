@@ -84,6 +84,7 @@ defmodule DoubleDown.Testing do
   Use this when spawning Tasks or other processes that need to
   dispatch through the same test handlers.
   """
+  @spec allow(module(), pid() | (-> pid() | [pid()])) :: :ok | {:error, term()}
   @spec allow(module(), pid(), pid() | (-> pid() | [pid()])) :: :ok | {:error, term()}
   def allow(contract, owner_pid \\ self(), child_pid) do
     NimbleOwnership.allow(@ownership_server, owner_pid, child_pid, contract)
