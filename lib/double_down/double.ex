@@ -289,10 +289,16 @@ defmodule DoubleDown.Double do
   ## Stateful fake
 
   A 3-arity `fn operation, args, state -> {result, new_state} end`
+  or 4-arity `fn operation, args, state, all_states -> {result, new_state} end`
   with initial state. Same signature as `set_stateful_handler`,
   allowing fakes like `Repo.InMemory` to integrate directly:
 
       DoubleDown.Double.fake(MyContract, &Repo.InMemory.dispatch/3, Repo.InMemory.new())
+
+  4-arity fakes receive a read-only snapshot of all contract states
+  as the 4th argument, enabling cross-contract state access (e.g. a
+  Queries handler reading the Repo InMemory store). See
+  [Cross-contract state access](docs/testing.md#cross-contract-state-access).
 
   The fake's state is threaded through calls automatically. When an
   expect short-circuits (e.g. returning an error), the fake state is
@@ -318,10 +324,10 @@ defmodule DoubleDown.Double do
     contract
   end
 
-  # fake/3 — stateful fake
+  # fake/3 — stateful fake (3-arity or 4-arity with cross-contract state access)
   @spec fake(module(), function(), term()) :: module()
   def fake(contract, fun, init_state)
-      when is_atom(contract) and is_function(fun, 3) do
+      when is_atom(contract) and (is_function(fun, 3) or is_function(fun, 4)) do
     ensure_handler_installed(contract)
 
     update_handler_state(contract, fn state ->
@@ -408,10 +414,12 @@ defmodule DoubleDown.Double do
         :ok
 
       _ ->
-        # First touch — install the canonical handler fn
+        # First touch — install the canonical handler fn.
+        # Always 4-arity so dispatch passes the global state snapshot,
+        # which is forwarded to stateful fakes that need it.
         DoubleDown.Testing.set_stateful_handler(
           contract,
-          &canonical_handler/3,
+          &canonical_handler/4,
           %{@initial_state | contract: contract}
         )
 
@@ -441,10 +449,10 @@ defmodule DoubleDown.Double do
   # contract via set_stateful_handler and never replaced — all changes
   # go through state mutations.
   @doc false
-  def canonical_handler(operation, args, state) do
+  def canonical_handler(operation, args, state, all_states) do
     case pop_expect(state, operation) do
       {:ok, :passthrough, new_state} ->
-        invoke_fallback_or_raise(new_state, operation, args)
+        invoke_fallback_or_raise(new_state, operation, args, all_states)
 
       {:ok, fun, new_state} ->
         {fun.(args), new_state}
@@ -452,7 +460,7 @@ defmodule DoubleDown.Double do
       :none ->
         case Map.get(state.stubs, operation) do
           nil ->
-            invoke_fallback_or_raise(state, operation, args)
+            invoke_fallback_or_raise(state, operation, args, all_states)
 
           stub_fun ->
             {stub_fun.(args), state}
@@ -471,7 +479,7 @@ defmodule DoubleDown.Double do
     end
   end
 
-  defp invoke_fallback_or_raise(state, operation, args) do
+  defp invoke_fallback_or_raise(state, operation, args, all_states) do
     case state.fallback do
       nil ->
         msg = unexpected_call_message(state.contract, state, operation, args)
@@ -481,7 +489,7 @@ defmodule DoubleDown.Double do
         invoke_fn_fallback(fallback_fn, state, operation, args)
 
       {:stateful, fallback_fn} ->
-        invoke_stateful_fallback(fallback_fn, state, operation, args)
+        invoke_stateful_fallback(fallback_fn, state, operation, args, all_states)
 
       {:module, module} ->
         invoke_module_fallback(module, state, operation, args)
@@ -497,8 +505,14 @@ defmodule DoubleDown.Double do
       {%DoubleDown.Defer{fn: fn -> reraise msg, __STACKTRACE__ end}, state}
   end
 
-  defp invoke_stateful_fallback(fallback_fn, state, operation, args) do
-    {result, new_fallback_state} = fallback_fn.(operation, args, state.fallback_state)
+  defp invoke_stateful_fallback(fallback_fn, state, operation, args, all_states) do
+    {result, new_fallback_state} =
+      if is_function(fallback_fn, 4) do
+        fallback_fn.(operation, args, state.fallback_state, all_states)
+      else
+        fallback_fn.(operation, args, state.fallback_state)
+      end
+
     {result, %{state | fallback_state: new_fallback_state}}
   rescue
     FunctionClauseError ->

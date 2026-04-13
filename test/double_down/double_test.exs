@@ -297,6 +297,83 @@ defmodule DoubleDown.DoubleTest do
     end
   end
 
+  # ── fake/3 with 4-arity stateful fake ──────────────────────
+
+  describe "fake/3 with 4-arity stateful fake (cross-contract state)" do
+    test "4-arity stateful fake receives global state" do
+      # Set up Greeter with a 3-arity stateful handler (another contract's state)
+      Double.fake(
+        Greeter,
+        fn :greet, [name], state -> {"Hello #{name}", state} end,
+        %{greeting_count: 0}
+      )
+
+      # Set up Counter with a 4-arity fake that reads Greeter's state
+      Double.fake(
+        Counter,
+        fn :get_count, [], state, all_states ->
+          greeter_state = Map.get(all_states, Greeter)
+          {greeter_state, state}
+        end,
+        %{}
+      )
+
+      # The 4-arity fake can see Greeter's state
+      result = Counter.Port.get_count()
+      assert result == %{greeting_count: 0}
+    end
+
+    test "4-arity stateful fake with expects takes priority" do
+      Double.fake(
+        Counter,
+        fn
+          :increment, [n], count, _all_states -> {count + n, count + n}
+          :get_count, [], count, _all_states -> {count, count}
+        end,
+        0
+      )
+      |> Double.expect(:increment, fn [_] -> 999 end)
+
+      # Expect fires first, state unchanged
+      assert 999 = Counter.Port.increment(5)
+      # Fallback, state still 0
+      assert 3 = Counter.Port.increment(3)
+      assert 3 = Counter.Port.get_count()
+    end
+
+    test "3-arity fake still works when canonical handler is 4-arity" do
+      # This verifies backward compatibility — the canonical handler is
+      # always registered as 4-arity, but 3-arity fakes still work
+      Double.fake(
+        Counter,
+        fn
+          :increment, [n], count -> {count + n, count + n}
+          :get_count, [], count -> {count, count}
+        end,
+        0
+      )
+
+      assert 5 = Counter.Port.increment(5)
+      assert 5 = Counter.Port.get_count()
+    end
+
+    test "passthrough with 4-arity fake threads state correctly" do
+      Double.fake(
+        Counter,
+        fn
+          :increment, [n], count, _all_states -> {count + n, count + n}
+          :get_count, [], count, _all_states -> {count, count}
+        end,
+        0
+      )
+      |> Double.expect(:increment, :passthrough)
+
+      # Passthrough delegates to 4-arity fake
+      assert 5 = Counter.Port.increment(5)
+      assert 5 = Counter.Port.get_count()
+    end
+  end
+
   # ── fallback mutual exclusivity ───────────────────────────
 
   describe "fallback mutual exclusivity" do

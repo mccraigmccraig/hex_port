@@ -202,12 +202,25 @@ defmodule DoubleDown.Dispatch do
 
     # Find all stateful handlers and map contract => state.
     # Seed with sentinel key so accidental return of global map is detectable.
+    #
+    # When a contract is managed by DoubleDown.Double, the NimbleOwnership
+    # state is the Double's internal wrapper (%{expects:, stubs:, fallback:,
+    # fallback_state:, ...}). For 4-arity handlers, we unwrap this and
+    # expose the fallback_state — the user's actual domain state.
     owned
     |> Enum.reduce(%{@global_state_sentinel => true}, fn
       {contract, %{type: :stateful, state_key: state_key}}, acc ->
         case Map.get(owned, state_key) do
-          nil -> acc
-          state -> Map.put(acc, contract, state)
+          nil ->
+            acc
+
+          %{fallback_state: fallback_state} ->
+            # Double-managed: expose the user's fallback state
+            Map.put(acc, contract, fallback_state)
+
+          state ->
+            # Direct set_stateful_handler: expose raw state
+            Map.put(acc, contract, state)
         end
 
       _, acc ->
