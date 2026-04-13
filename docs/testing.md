@@ -107,14 +107,9 @@ DoubleDown.Repo
 end)
 ```
 
-When an expect short-circuits (returns an error), the fake state is
-unchanged — correct for error simulation.
-
-Note: expects cannot delegate to a stateful fake inline (no
-"passthrough" callback). Threading mutable state through a
-user-provided callback requires a complex API and seems of limited
-value given that the main use case — error simulation — doesn't
-need it. We decided to leave it out for now.
+When a 1-arity expect short-circuits (returns an error), the fake
+state is unchanged — correct for error simulation. Expects can also
+be stateful — see [Stateful expect responders](#stateful-expect-responders).
 
 **Module fake** — a module implementing the contract's behaviour.
 Override specific operations while the rest delegate to the real
@@ -164,6 +159,66 @@ end)
 # First insert: passthrough to InMemory (writes to store)
 # Second insert: expect fires, returns error (store unchanged)
 ```
+
+### Stateful expect responders
+
+By default, expect responders are 1-arity (`fn [args] -> result end`)
+and stateless — they can't see or modify the fake's state. When a
+stateful fake is configured via `fake/3`, expects can also be
+2-arity or 3-arity to access and update the fake's state:
+
+```elixir
+# 1-arity (default) — stateless, returns bare result
+DoubleDown.Double.expect(Contract, :op, fn [args] -> result end)
+
+# 2-arity — receives and updates the fake's state
+DoubleDown.Double.expect(Contract, :op, fn [args], state ->
+  {result, new_state}
+end)
+
+# 3-arity — same + read-only cross-contract state snapshot
+DoubleDown.Double.expect(Contract, :op, fn [args], state, all_states ->
+  {result, new_state}
+end)
+```
+
+2-arity and 3-arity responders **must** return `{result, new_state}`.
+Returning a bare value raises `ArgumentError` at dispatch time.
+
+Stateful responders require `fake/3` to be called **before**
+`expect` — the fake provides the state. Calling `expect` with a
+2-arity or 3-arity function without a stateful fake raises
+`ArgumentError` immediately.
+
+**Example: first insert modifies state, second insert fails based
+on that state**
+
+```elixir
+DoubleDown.Repo
+|> DoubleDown.Double.fake(
+  &DoubleDown.Repo.InMemory.dispatch/3,
+  DoubleDown.Repo.InMemory.new()
+)
+|> DoubleDown.Double.expect(:insert, fn [changeset], state ->
+  # First insert: delegate to InMemory's insert logic manually,
+  # or just pass through and update state
+  record = Ecto.Changeset.apply_changes(changeset)
+  {{:ok, record}, Map.put(state, :last_inserted, record)}
+end)
+|> DoubleDown.Double.expect(:insert, fn [changeset], state ->
+  # Second insert: check what first insert did
+  if state[:last_inserted] do
+    {{:error, Ecto.Changeset.add_error(changeset, :email, "taken")}, state}
+  else
+    {{:ok, Ecto.Changeset.apply_changes(changeset)}, state}
+  end
+end)
+```
+
+State threads through sequenced expects — each expect sees the
+state left by the previous one. When a 1-arity expect fires
+between stateful expects, the state is unchanged (1-arity expects
+don't touch state).
 
 ### Multi-contract
 
