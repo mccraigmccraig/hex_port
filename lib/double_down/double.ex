@@ -854,14 +854,25 @@ defmodule DoubleDown.Double do
   end
 
   defp invoke_stateful_fallback(fallback_fn, state, operation, args, all_states) do
-    {result, new_fallback_state} =
+    handler_result =
       if is_function(fallback_fn, 4) do
         fallback_fn.(operation, args, state.fallback_state, all_states)
       else
         fallback_fn.(operation, args, state.fallback_state)
       end
 
-    {result, %{state | fallback_state: new_fallback_state}}
+    case handler_result do
+      {result, new_fallback_state} ->
+        {result, %{state | fallback_state: new_fallback_state}}
+
+      other ->
+        raise_bad_stateful_responder_return(
+          :fake,
+          operation,
+          :erlang.fun_info(fallback_fn)[:arity],
+          other
+        )
+    end
   rescue
     FunctionClauseError ->
       msg = unexpected_call_message(state.contract, state, operation, args)
@@ -913,7 +924,7 @@ defmodule DoubleDown.Double do
           contracts
 
         _ ->
-          raise "DoubleDown.Double.verify!/0 called but no handlers were installed"
+          raise "DoubleDown.Double.verify! called but no handlers were installed"
       end
 
     unconsumed =
