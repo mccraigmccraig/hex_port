@@ -83,8 +83,8 @@ defmodule MyApp.Repo do
   use DoubleDown.Facade, contract: DoubleDown.Repo, otp_app: :my_app
 end
 
-# Domain contract — queries specific to your domain
-defmodule MyApp.Todos do
+# Domain model contract — queries specific to your domain
+defmodule MyApp.Todos.Model do
   use DoubleDown.Facade, otp_app: :my_app
 
   defcallback active_todos(tenant_id :: String.t()) :: [Todo.t()]
@@ -94,13 +94,13 @@ end
 
 ### Write orchestration code
 
-Orchestration code uses both contracts — Repo for writes, Todos for
-domain queries:
+The context module orchestrates domain logic using both contracts —
+Repo for writes, Model for domain queries:
 
 ```elixir
-defmodule MyApp.CreateTodo do
-  def call(tenant_id, params) do
-    if MyApp.Todos.todo_exists?(tenant_id, params.title) do
+defmodule MyApp.Todos do
+  def create(tenant_id, params) do
+    if MyApp.Todos.Model.todo_exists?(tenant_id, params.title) do
       {:error, :duplicate}
     else
       MyApp.Repo.insert(Todo.changeset(%Todo{tenant_id: tenant_id}, params))
@@ -114,7 +114,7 @@ end
 ```elixir
 # config/config.exs
 config :my_app, DoubleDown.Repo, impl: MyApp.EctoRepo
-config :my_app, MyApp.Todos, impl: MyApp.Todos.Ecto
+config :my_app, MyApp.Todos.Model, impl: MyApp.Todos.Model.Ecto
 ```
 
 ### Test without a database
@@ -133,17 +133,32 @@ setup do
   # InMemory Repo for writes — read-after-write consistency
   DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory)
 
-  # Stub domain queries
-  DoubleDown.Double.stub(MyApp.Todos, fn
-    :active_todos, [_tenant] -> []
-    :todo_exists?, [_tenant, _title] -> false
-  end)
+  # Domain model queries read from the Repo's InMemory store
+  # via cross-contract state access (4-arity fake)
+  DoubleDown.Double.fake(MyApp.Todos.Model,
+    fn operation, args, state, all_states ->
+      repo = Map.get(all_states, DoubleDown.Repo, %{})
+      todos = repo |> Map.get(Todo, %{}) |> Map.values()
+
+      result =
+        case {operation, args} do
+          {:active_todos, [tenant]} ->
+            Enum.filter(todos, &(&1.tenant_id == tenant))
+
+          {:todo_exists?, [tenant, title]} ->
+            Enum.any?(todos, &(&1.tenant_id == tenant and &1.title == title))
+        end
+
+      {result, state}
+    end,
+    %{}
+  )
 
   :ok
 end
 
 test "creates a todo when no duplicate exists" do
-  assert {:ok, todo} = MyApp.CreateTodo.call("t1", %{title: "Ship it"})
+  assert {:ok, todo} = MyApp.Todos.create("t1", %{title: "Ship it"})
   assert todo.tenant_id == "t1"
 
   # Read-after-write: InMemory serves from store
@@ -151,11 +166,12 @@ test "creates a todo when no duplicate exists" do
 end
 
 test "rejects duplicate todos" do
-  # Override the stub for this specific test
-  DoubleDown.Double.expect(MyApp.Todos, :todo_exists?, fn [_tenant, _title] -> true end)
+  # First create succeeds — record lands in InMemory store
+  assert {:ok, _} = MyApp.Todos.create("t1", %{title: "Ship it"})
 
-  assert {:error, :duplicate} = MyApp.CreateTodo.call("t1", %{title: "Existing"})
-  DoubleDown.Double.verify!()
+  # Second create with same title — Model.todo_exists? reads from
+  # InMemory store and finds the duplicate
+  assert {:error, :duplicate} = MyApp.Todos.create("t1", %{title: "Ship it"})
 end
 ```
 
@@ -166,7 +182,7 @@ Layer expects over the InMemory Repo to simulate database failures:
 ```elixir
 setup do
   DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory)
-  DoubleDown.Double.stub(MyApp.Todos, fn :todo_exists?, [_, _] -> false end)
+  DoubleDown.Double.stub(MyApp.Todos.Model, fn :todo_exists?, [_, _] -> false end)
   :ok
 end
 
@@ -176,11 +192,11 @@ test "handles constraint violation on insert" do
     {:error, Ecto.Changeset.add_error(changeset, :title, "taken")}
   end)
 
-  assert {:error, cs} = MyApp.CreateTodo.call("t1", %{title: "Conflict"})
+  assert {:error, cs} = MyApp.Todos.create("t1", %{title: "Conflict"})
   assert {"taken", _} = cs.errors[:title]
 
   # Second call succeeds — expect consumed, InMemory handles it
-  assert {:ok, _} = MyApp.CreateTodo.call("t1", %{title: "Conflict"})
+  assert {:ok, _} = MyApp.Todos.create("t1", %{title: "Conflict"})
 end
 ```
 
