@@ -569,6 +569,38 @@ defmodule DoubleDown.Double do
     end
   end
 
+  # -- Public API: dynamic --
+
+  @doc """
+  Set up a dynamically-faked module with its original implementation
+  as the fallback.
+
+  Requires the module to have been set up with
+  `DoubleDown.Dynamic.setup/1`. Layer expects and stubs on top:
+
+      SomeClient
+      |> DoubleDown.Double.dynamic()
+      |> DoubleDown.Double.expect(:fetch, fn [_] -> {:error, :timeout} end)
+
+  Calls without a matching expect or stub delegate to the original
+  module's implementation.
+
+  Returns the module for piping.
+  """
+  @spec dynamic(module()) :: module()
+  def dynamic(module) when is_atom(module) do
+    unless DoubleDown.Dynamic.setup?(module) do
+      raise ArgumentError, """
+      #{inspect(module)} has not been set up for dynamic dispatch.
+
+      Call DoubleDown.Dynamic.setup(#{inspect(module)}) in test_helper.exs \
+      before ExUnit.start().
+      """
+    end
+
+    fake(module, DoubleDown.Dynamic.original_module(module))
+  end
+
   # -- Public API: allow --
 
   @doc """

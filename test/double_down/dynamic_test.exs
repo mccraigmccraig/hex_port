@@ -99,17 +99,25 @@ defmodule DoubleDown.DynamicTest do
     end
   end
 
-  describe "dispatch with module fake (Mimic-style)" do
-    test "module fake delegates unhandled operations" do
-      # Use the original module as a module fake — override one operation
-      Double.fake(DynamicTarget, DoubleDown.Dynamic.original_module(DynamicTarget))
-      Double.expect(DynamicTarget, :greet, fn [_] -> "Overridden" end)
+  describe "Double.dynamic/1" do
+    test "delegates to original, allows expects on top" do
+      DynamicTarget
+      |> Double.dynamic()
+      |> Double.expect(:greet, fn [_] -> "Overridden" end)
 
       assert "Overridden" = DynamicTarget.greet("Alice")
       # add falls through to the original via module fake
       assert 5 = DynamicTarget.add(2, 3)
+      # second greet falls through to original
+      assert "Original: Bob" = DynamicTarget.greet("Bob")
 
       Double.verify!()
+    end
+
+    test "raises for modules not set up with Dynamic.setup" do
+      assert_raise ArgumentError, ~r/has not been set up/, fn ->
+        Double.dynamic(String)
+      end
     end
   end
 

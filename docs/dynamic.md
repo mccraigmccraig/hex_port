@@ -89,13 +89,14 @@ DoubleDown.Double.expect(SomeClient, :fetch, fn [id], state ->
 end)
 ```
 
-### Module fake (Mimic-style override)
+### Override one operation, delegate the rest
 
-Override one operation, delegate the rest to the original:
+Use `Double.dynamic/1` to set up the original module as the
+fallback, then layer expects on top:
 
 ```elixir
-DoubleDown.Double.fake(SomeClient,
-  DoubleDown.Dynamic.original_module(SomeClient))
+SomeClient
+|> DoubleDown.Double.dynamic()
 |> DoubleDown.Double.expect(:fetch, fn [_] -> {:error, :not_found} end)
 
 # fetch is overridden, all other functions delegate to the original
@@ -110,11 +111,12 @@ completely unaffected.
 When a handler IS installed, `Double.passthrough()` and
 `:passthrough` expects delegate to the fallback (fake, stub, or
 module fake) — not directly to the original. To delegate to the
-original explicitly, use a module fake:
+original explicitly, use `Double.dynamic/1`:
 
 ```elixir
-DoubleDown.Double.fake(SomeClient,
-  DoubleDown.Dynamic.original_module(SomeClient))
+SomeClient
+|> DoubleDown.Double.dynamic()
+|> DoubleDown.Double.expect(:fetch, :passthrough)
 ```
 
 ## Cross-contract state access
