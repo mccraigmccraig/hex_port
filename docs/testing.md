@@ -138,10 +138,12 @@ When a 1-arity expect short-circuits (returns an error), the fake
 state is unchanged — correct for error simulation. Expects can also
 be stateful — see [Stateful expect responders](#stateful-expect-responders).
 
-#### Module fakes
+#### Module fakes (Mimic-style)
 
 A module implementing the contract's `@behaviour`. Override specific
-operations with expects while the rest delegate to the module:
+operations with expects while the rest delegate to the module — the
+same pattern [Mimic](https://hex.pm/packages/mimic) provides for
+plain modules:
 
 ```elixir
 MyApp.Todos
@@ -153,10 +155,10 @@ The module is validated at `fake` time. Module fakes run in the
 calling process (via `%Defer{}`), so they work correctly with Ecto
 sandbox and other process-scoped resources.
 
-**Important caveat:** if the module's internal implementation calls
-other operations directly, your stubs and expects won't intercept
-those internal calls — only calls that go through the facade are
-dispatched:
+**Important caveat (same as Mimic):** if the module's internal
+implementation calls other operations directly, your stubs and
+expects won't intercept those internal calls — only calls that go
+through the facade are dispatched:
 
 ```elixir
 # Given this implementation:
