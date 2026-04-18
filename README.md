@@ -40,7 +40,14 @@ pattern:
   just hit the real DB and accept the speed penalty. DoubleDown's
   stateful fakes maintain in-memory state with atomic updates,
   enabling read-after-write consistency without a database — fast
-  enough for property-based testing.
+  enough for property-based testing. The built-in Ecto Repo ships
+  with three test doubles:
+  - `Repo.Test` — stateless stub (fire-and-forget writes)
+  - `Repo.InMemory` — open-world stateful fake (PK-based
+    read-after-write, fallback for other reads)
+  - `Repo.ClosedInMemory` — closed-world stateful fake (state is
+    the complete truth, authoritative for all bare-schema reads —
+    works with ExMachina factories)
 - **Fakes with expectations** — testing "what happens when the second
   insert fails with a constraint violation?" means either a real DB
   or a mock that responds to each Repo call individually — verbose and
@@ -78,8 +85,20 @@ pattern:
 | Stubs and fakes as fallbacks       | Dispatch priority chain: expects > stubs > fake > raise                    |
 | Dispatch logging                   | Record `{contract, op, args, result}` for every call                       |
 | Structured log matching            | `DoubleDown.Log` — pattern-match on logged results                         |
-| Built-in Ecto Repo                 | Full Ecto.Repo contract with `Repo.Test`, `Repo.InMemory`, and `Repo.ClosedInMemory` fakes |
 | Async-safe                         | Process-scoped isolation via NimbleOwnership, `async: true` out of the box |
+
+### Built-in Ecto Repo fakes
+
+Full `Ecto.Repo` contract (`DoubleDown.Repo`) with three test doubles:
+
+| Fake | Type | Best for |
+|------|------|----------|
+| `Repo.Test` | Stateless stub | Fire-and-forget writes, canned read responses |
+| `Repo.InMemory` | Open-world stateful fake | PK-based read-after-write; fallback for other reads |
+| `Repo.ClosedInMemory` | Closed-world stateful fake | Full in-memory store; all bare-schema reads without fallback; ExMachina factories |
+
+All three support `Ecto.Multi` transactions, PK autogeneration,
+changeset validation, and timestamps. See [Repo](docs/repo.md).
 
 ## Quick example
 
@@ -229,7 +248,7 @@ end
 - **[Process Sharing](docs/process-sharing.md)** — async safety, allow,
   global mode, supervision tree testing
 - **[Repo](docs/repo.md)** — built-in Ecto Repo contract, `Repo.Test`,
-  `Repo.InMemory`, failure scenario testing
+  `Repo.InMemory`, `Repo.ClosedInMemory`, failure scenario testing
 - **[Migration](docs/migration.md)** — incremental adoption, coexisting
   with direct Ecto.Repo calls
 
