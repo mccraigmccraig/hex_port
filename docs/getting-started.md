@@ -148,6 +148,28 @@ The behaviour must be compiled before the facade (its `.beam`
 file must be on disk). See `DoubleDown.BehaviourFacade` for
 details and limitations compared to `defcallback`.
 
+### Choosing a facade type
+
+All three facade types use the same dispatch and Double
+infrastructure — they coexist in the same project. A fourth
+option, [Dynamic Facades](dynamic.md), provides Mimic-style
+bytecode interception for any module without a contract.
+
+| Feature | `Facade` (defcallback) | `BehaviourFacade` | Dynamic |
+|---------|----------------------|-------------------|---------|
+| Setup ceremony | `defcallback` + config | `use BehaviourFacade` + config | `Dynamic.setup(Module)` |
+| Typespecs | Generated `@spec` | Generated `@spec` | None |
+| LSP docs | `@doc` on facade | Generic docs | None |
+| Pre-dispatch transforms | Yes | No | No |
+| Combined contract + facade | Yes | No (separate modules) | N/A |
+| Compile-time spec checking | Yes | No | No |
+| Production dispatch | Zero-cost inlined calls | Zero-cost inlined calls | N/A (test-only) |
+| Test doubles | Full Double API | Full Double API | Full Double API |
+| Stateful fakes | Full support | Full support | Full support |
+| Cross-contract state | Full support | Full support | Full support |
+| Dispatch logging | Full support | Full support | Full support |
+| async: true | Yes | Yes | Yes |
+
 ## `defcallback` syntax
 
 `defcallback` uses the same syntax as `@callback` — if your existing
