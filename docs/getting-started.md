@@ -29,7 +29,7 @@ DoubleDown supports several kinds of test double, all configured via
 |---|---|---|
 | **Stub** | Returns canned responses, no verification | `Double.stub` |
 | **Mock** | Returns canned responses + verifies call counts/order | `Double.expect` + `verify!` |
-| **Fake** | Working logic, simpler than production but behaviourally realistic | `Double.fake`, `Repo.Stub`, `Repo.OpenInMemory` |
+| **Fake** | Working logic, simpler than production but behaviourally realistic | `Double.fake`, `Repo.InMemory`, `Repo.OpenInMemory` |
 
 **Stubs** are the simplest — register a function that returns what you
 need, don't bother checking how many times it was called.
@@ -38,12 +38,13 @@ need, don't bother checking how many times it was called.
 is consumed in order, and `verify!` checks that all expected calls were
 made. This is the Mox model.
 
-**Fakes** are the most powerful — they have real logic. `Repo.Stub`
+**Fakes** are the most powerful — they have real logic. `Repo.InMemory`
 and `Repo.OpenInMemory` are fakes: they validate changesets, autogenerate
 primary keys and timestamps, handle `Ecto.Multi`, and support
 `transact(fn repo -> ... end)`. A fake can be wrong in different ways
 than the real implementation, but it exercises more of your code's
-behaviour than a stub or mock.
+behaviour than a stub or mock. `Repo.Stub` is a stateless stub that
+sits between plain function stubs and full fakes.
 
 The spectrum from stub to fake is a tradeoff: stubs are easier to
 write but test less; fakes test more but require more upfront work
@@ -80,8 +81,9 @@ a different answer to "which module is the contract?":
 
 - **Dynamic facades** (`DoubleDown.DynamicFacade`) — Mimic-style bytecode
   interception for any module, no explicit contract needed. The
-  **original module is both contract and facade** — `Dynamic.setup`
-  replaces it with a dispatch shim, and test doubles reference the
+  **original module is both contract and facade** —
+  `DynamicFacade.setup` replaces it with a dispatch shim, and test
+  doubles reference the
   original module name. See [Dynamic Facades](dynamic.md).
 
 ### Combined contract + facade (recommended)
@@ -197,9 +199,9 @@ details and limitations compared to `defcallback`.
 All three approaches use the same dispatch and Double
 infrastructure — they coexist in the same project.
 
-| Feature | `Facade` (defcallback) | `BehaviourFacade` | Dynamic |
-|---------|----------------------|-------------------|---------|
-| Setup ceremony | `defcallback` + config | `use BehaviourFacade` + config | `Dynamic.setup(Module)` |
+| Feature | `ContractFacade` (defcallback) | `BehaviourFacade` | `DynamicFacade` |
+|---------|-------------------------------|-------------------|-----------------|
+| Setup ceremony | `defcallback` + config | `use BehaviourFacade` + config | `DynamicFacade.setup(Module)` |
 | Typespecs | Generated `@spec` | Generated `@spec` | None |
 | LSP docs | `@doc` on facade | Generic docs | None |
 | Pre-dispatch transforms | Yes | No | No |
