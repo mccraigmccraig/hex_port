@@ -124,22 +124,22 @@ read-after-write consistency. Use `Double.fake` with a `FakeHandler`
 module or a 3/4-arity function:
 
 ```elixir
-# FakeHandler module (e.g. Repo.OpenInMemory)
+# FakeHandler module (e.g. Repo.InMemory)
 DoubleDown.Repo
-|> DoubleDown.Double.fake(DoubleDown.Repo.OpenInMemory)
+|> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
 |> DoubleDown.Double.expect(:insert, fn [changeset] ->
   {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
 end)
 
 # With seed data and options
-DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.OpenInMemory,
+DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory,
   [%User{id: 1, name: "Alice"}],
   fallback_fn: fn :all, [User], state -> Map.values(state[User]) end)
 
 # 3-arity function fake (equivalent to FakeHandler)
 DoubleDown.Double.fake(DoubleDown.Repo,
-  &DoubleDown.Repo.OpenInMemory.dispatch/3,
-  DoubleDown.Repo.OpenInMemory.new())
+  &DoubleDown.Repo.InMemory.dispatch/3,
+  DoubleDown.Repo.InMemory.new())
 ```
 
 4-arity fakes receive a read-only snapshot of all contract states
@@ -226,7 +226,7 @@ through the fake, second call returns an error":
 
 ```elixir
 DoubleDown.Repo
-|> DoubleDown.Double.fake(DoubleDown.Repo.OpenInMemory)
+|> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
 |> DoubleDown.Double.expect(:insert, :passthrough)
 |> DoubleDown.Double.expect(:insert, fn [changeset] ->
   {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
@@ -271,7 +271,7 @@ the fake**
 
 ```elixir
 DoubleDown.Repo
-|> DoubleDown.Double.fake(DoubleDown.Repo.OpenInMemory)
+|> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
 |> DoubleDown.Double.expect(:insert, :passthrough)
 |> DoubleDown.Double.expect(:insert, fn [changeset], state ->
   # state is the InMemory store: %{Schema => %{pk => record}}
@@ -314,7 +314,7 @@ without knowing the call count in advance:
 
 ```elixir
 DoubleDown.Repo
-|> DoubleDown.Double.fake(DoubleDown.Repo.OpenInMemory)
+|> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
 |> DoubleDown.Double.stub(:insert, fn [changeset], state ->
   existing_emails =
     state
