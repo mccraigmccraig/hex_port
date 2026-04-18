@@ -31,11 +31,19 @@ if Code.ensure_loaded?(Ecto) do
     @behaviour DoubleDown.Dispatch.FakeHandler
 
     @moduledoc """
-    Stateful in-memory Repo implementation for tests.
+    Stateful in-memory Repo implementation for tests (open-world).
 
     Provides a stateful handler function for `DoubleDown.Repo` operations.
     State is a nested map keyed by `schema_module => %{primary_key => struct}`,
     giving read-after-write consistency for PK-based lookups within a test.
+
+    ## Open-world semantics
+
+    This adapter uses **open-world** semantics: the state may be
+    incomplete. If a record is not found in state, the adapter cannot
+    know whether it exists in the _logical_ store — it falls through to
+    the fallback function. For **closed-world** semantics (absence
+    means "doesn't exist"), see `DoubleDown.Repo.ClosedInMemory`.
 
     ## State Shape
 
@@ -157,11 +165,16 @@ if Code.ensure_loaded?(Ecto) do
       `exists?`, `aggregate` — fallback or error
     - **Bulk (2-stage):** `update_all`, `delete_all` — fallback or error
     - **Transactions:** `transact` — delegates to sub-operations
+
+    ## See also
+
+    - `DoubleDown.Repo.ClosedInMemory` — closed-world variant where absence
+      means "doesn't exist", enabling authoritative reads without a fallback.
     """
 
-    @type store :: %{optional(module()) => %{optional(term()) => struct()}}
+    alias DoubleDown.Repo.InMemory.Shared
 
-    @fallback_fn_key :__fallback_fn__
+    @type store :: Shared.store()
 
     @doc """
     Create a new InMemory state map.
@@ -206,48 +219,7 @@ if Code.ensure_loaded?(Ecto) do
     """
     @impl DoubleDown.Dispatch.FakeHandler
     @spec new(term(), keyword()) :: store()
-    def new(seed \\ %{}, opts \\ [])
-
-    # Legacy keyword-only form: new(seed: [...], fallback_fn: fn ...)
-    def new(opts, []) when is_list(opts) and opts != [] do
-      case Keyword.keyword?(opts) do
-        true ->
-          seed_records = Keyword.get(opts, :seed, [])
-          fallback_fn = Keyword.get(opts, :fallback_fn, nil)
-          build_store(seed_records, fallback_fn)
-
-        false ->
-          # It's a plain list of structs as seed
-          build_store(opts, nil)
-      end
-    end
-
-    # new(seed_list, opts)
-    def new(seed, opts) when is_list(seed) do
-      fallback_fn = Keyword.get(opts, :fallback_fn, nil)
-      build_store(seed, fallback_fn)
-    end
-
-    # new(seed_map, opts)
-    def new(seed, opts) when is_map(seed) do
-      fallback_fn = Keyword.get(opts, :fallback_fn, nil)
-
-      if fallback_fn do
-        Map.put(seed, @fallback_fn_key, fallback_fn)
-      else
-        seed
-      end
-    end
-
-    defp build_store(seed_records, fallback_fn) do
-      store = seed(seed_records)
-
-      if fallback_fn do
-        Map.put(store, @fallback_fn_key, fallback_fn)
-      else
-        store
-      end
-    end
+    defdelegate new(seed \\ %{}, opts \\ []), to: Shared
 
     @doc """
     Convert a list of structs into the nested state map for seeding.
@@ -262,13 +234,7 @@ if Code.ensure_loaded?(Ecto) do
         #               2 => %User{id: 2, name: "Bob"}}}
     """
     @spec seed(list(struct())) :: store()
-    def seed(records) when is_list(records) do
-      Enum.reduce(records, %{}, fn record, store ->
-        schema = record.__struct__
-        id = DoubleDown.Repo.Autogenerate.get_primary_key(record)
-        put_record(store, schema, id, record)
-      end)
-    end
+    defdelegate seed(records), to: Shared
 
     @doc """
     Stateful handler function for use with `DoubleDown.Testing.set_stateful_handler/3`
@@ -286,77 +252,37 @@ if Code.ensure_loaded?(Ecto) do
     @spec dispatch(atom(), list(), store()) :: {term(), store()}
 
     # -----------------------------------------------------------------
-    # Write operations — always authoritative
+    # Write operations — delegate to Shared
     # -----------------------------------------------------------------
 
-    def dispatch(:insert, [%Ecto.Changeset{valid?: false} = changeset], store) do
-      {{:error, changeset}, store}
-    end
-
-    def dispatch(:insert, [changeset], store) do
-      alias DoubleDown.Repo.Autogenerate
-
-      record = Autogenerate.apply_changes(changeset, :insert)
-      schema = record.__struct__
-
-      case Autogenerate.maybe_autogenerate_id(record, schema, fn s ->
-             store
-             |> records_for_schema(s)
-             |> Enum.map(&Autogenerate.get_primary_key/1)
-             |> Enum.filter(&is_integer/1)
-           end) do
-        {:error, {:no_autogenerate, message}} ->
-          {%DoubleDown.Dispatch.Defer{fn: fn -> raise ArgumentError, message end}, store}
-
-        {id, record} ->
-          {{:ok, record}, put_record(store, schema, id, record)}
-      end
-    end
-
-    def dispatch(:update, [%Ecto.Changeset{valid?: false} = changeset], store) do
-      {{:error, changeset}, store}
-    end
-
-    def dispatch(:update, [changeset], store) do
-      record = DoubleDown.Repo.Autogenerate.apply_changes(changeset, :update)
-      schema = record.__struct__
-      id = DoubleDown.Repo.Autogenerate.get_primary_key(record)
-      {{:ok, record}, put_record(store, schema, id, record)}
-    end
-
-    def dispatch(:delete, [record], store) do
-      schema = record.__struct__
-      id = DoubleDown.Repo.Autogenerate.get_primary_key(record)
-      {{:ok, record}, delete_record(store, schema, id)}
-    end
+    def dispatch(:insert, [changeset], store), do: Shared.dispatch_insert([changeset], store)
+    def dispatch(:update, [changeset], store), do: Shared.dispatch_update([changeset], store)
+    def dispatch(:delete, [record], store), do: Shared.dispatch_delete([record], store)
 
     # -----------------------------------------------------------------
     # PK reads — 3-stage: state -> fallback -> error
     # -----------------------------------------------------------------
 
     def dispatch(:get, [queryable, id] = args, store) do
-      schema = extract_schema(queryable)
+      schema = Shared.extract_schema(queryable)
 
-      case get_record(store, schema, id) do
-        nil -> try_fallback(store, :get, args)
+      case Shared.get_record(store, schema, id) do
+        nil -> dispatch_via_fallback(:get, args, store)
         record -> {record, store}
       end
     end
 
     def dispatch(:get!, [queryable, id] = args, store) do
-      schema = extract_schema(queryable)
+      schema = Shared.extract_schema(queryable)
 
-      case get_record(store, schema, id) do
-        nil -> try_fallback(store, :get!, args)
+      case Shared.get_record(store, schema, id) do
+        nil -> dispatch_via_fallback(:get!, args, store)
         record -> {record, store}
       end
     end
 
     # -----------------------------------------------------------------
     # Opts-accepting variants — strip opts, delegate to base arity.
-    # Ecto.Repo operations all accept an optional opts keyword list as
-    # the last argument. These are called by Ecto.Multi's internal :run
-    # callbacks and by user code passing opts through the facade.
     # -----------------------------------------------------------------
 
     def dispatch(:insert, [changeset, _opts], store),
@@ -397,15 +323,6 @@ if Code.ensure_loaded?(Ecto) do
 
     # -----------------------------------------------------------------
     # get_by / get_by! — 3-stage when clauses include PK, else fallback
-    #
-    # When the queryable is a bare schema (atom) and the clauses contain
-    # all primary key fields, we can do a direct map lookup in state.
-    # If found, we verify any additional clauses match the record.
-    # If not found in state, we delegate to the fallback (absence is
-    # not authoritative — the store is incomplete).
-    #
-    # When the queryable is an Ecto.Query, or the clauses don't include
-    # the PK, we delegate directly to the fallback as before.
     # -----------------------------------------------------------------
 
     def dispatch(:get_by, [queryable, clauses] = args, store) do
@@ -416,92 +333,48 @@ if Code.ensure_loaded?(Ecto) do
       dispatch_get_by(:get_by!, queryable, clauses, args, store)
     end
 
-    def dispatch(:one, args, store),
-      do: dispatch_via_fallback(:one, args, store)
-
-    def dispatch(:one!, args, store),
-      do: dispatch_via_fallback(:one!, args, store)
-
-    def dispatch(:all, args, store),
-      do: dispatch_via_fallback(:all, args, store)
-
-    def dispatch(:exists?, args, store),
-      do: dispatch_via_fallback(:exists?, args, store)
-
-    def dispatch(:aggregate, args, store),
-      do: dispatch_via_fallback(:aggregate, args, store)
-
     # -----------------------------------------------------------------
-    # Bulk operations — 2-stage: fallback -> error
+    # Non-PK reads — always fallback (open-world)
     # -----------------------------------------------------------------
 
-    def dispatch(:insert_all, args, store),
-      do: dispatch_via_fallback(:insert_all, args, store)
-
-    def dispatch(:update_all, args, store),
-      do: dispatch_via_fallback(:update_all, args, store)
-
-    def dispatch(:delete_all, args, store),
-      do: dispatch_via_fallback(:delete_all, args, store)
+    def dispatch(:one, args, store), do: dispatch_via_fallback(:one, args, store)
+    def dispatch(:one!, args, store), do: dispatch_via_fallback(:one!, args, store)
+    def dispatch(:all, args, store), do: dispatch_via_fallback(:all, args, store)
+    def dispatch(:exists?, args, store), do: dispatch_via_fallback(:exists?, args, store)
+    def dispatch(:aggregate, args, store), do: dispatch_via_fallback(:aggregate, args, store)
 
     # -----------------------------------------------------------------
-    # Transaction Operations
+    # Bulk operations — always fallback (open-world)
     # -----------------------------------------------------------------
 
-    # transact uses %DoubleDown.Dispatch.Defer{} to run the user's function
-    # outside the NimbleOwnership lock. Sub-operations (insert, get, etc.)
-    # each acquire the lock individually. This avoids GenServer reentrancy
-    # deadlock at the cost of not providing true transaction isolation —
-    # acceptable for a test-only in-memory adapter.
-    #
-    # The facade's pre_dispatch wraps 1-arity fns into 0-arity thunks,
-    # so implementations always receive a 0-arity fn or an Ecto.Multi.
-    def dispatch(:transact, [fun, _opts], store) when is_function(fun, 0) do
-      {%DoubleDown.Dispatch.Defer{fn: fn -> run_in_transaction(fun) end}, store}
-    end
-
-    def dispatch(:transact, [%Ecto.Multi{} = multi, opts], store) do
-      repo_facade = Keyword.get(opts, DoubleDown.Repo.Facade)
-
-      {%DoubleDown.Dispatch.Defer{
-         fn: fn ->
-           run_in_transaction(fn -> DoubleDown.Repo.MultiStepper.run(multi, repo_facade) end)
-         end
-       }, store}
-    end
-
-    def dispatch(:rollback, [value], store) do
-      {%DoubleDown.Dispatch.Defer{fn: fn -> throw({:rollback, value}) end}, store}
-    end
-
-    defp run_in_transaction(fun) do
-      fun.()
-    catch
-      {:rollback, value} -> {:error, value}
-    end
+    def dispatch(:insert_all, args, store), do: dispatch_via_fallback(:insert_all, args, store)
+    def dispatch(:update_all, args, store), do: dispatch_via_fallback(:update_all, args, store)
+    def dispatch(:delete_all, args, store), do: dispatch_via_fallback(:delete_all, args, store)
 
     # -----------------------------------------------------------------
-    # get_by PK-inclusive dispatch
-    #
-    # Attempts a state lookup when the queryable is a bare schema and
-    # the clauses include all PK fields. Falls through to the fallback
-    # for non-PK clauses, Ecto.Query queryables, or when the PK is
-    # not found in state.
+    # Transaction operations — delegate to Shared
+    # -----------------------------------------------------------------
+
+    def dispatch(:transact, args, store), do: Shared.dispatch_transact(args, store)
+    def dispatch(:rollback, args, store), do: Shared.dispatch_rollback(args, store)
+
+    # -----------------------------------------------------------------
+    # get_by PK-inclusive dispatch (open-world)
     # -----------------------------------------------------------------
 
     defp dispatch_get_by(operation, queryable, clauses, args, store)
          when is_atom(queryable) and not is_nil(queryable) do
-      clauses_kw = normalize_clauses(clauses)
+      clauses_kw = Shared.normalize_clauses(clauses)
 
-      case extract_pk_from_clauses(queryable, clauses_kw) do
+      case Shared.extract_pk_from_clauses(queryable, clauses_kw) do
         {:ok, pk_value, remaining_clauses} ->
-          case get_record(store, queryable, pk_value) do
+          case Shared.get_record(store, queryable, pk_value) do
             nil ->
               # Not in state — absence is not authoritative, delegate to fallback
-              try_fallback(store, operation, args)
+              dispatch_via_fallback(operation, args, store)
 
             record ->
-              if fields_match?(record, remaining_clauses) do
+              if Shared.fields_match?(record, remaining_clauses) do
                 {record, store}
               else
                 {nil, store}
@@ -518,146 +391,39 @@ if Code.ensure_loaded?(Ecto) do
       dispatch_via_fallback(operation, args, store)
     end
 
-    defp normalize_clauses(clauses) when is_map(clauses), do: Enum.to_list(clauses)
-    defp normalize_clauses(clauses) when is_list(clauses), do: clauses
-
-    # Check if the clauses contain all PK fields for the schema.
-    # Returns {:ok, pk_value, remaining_clauses} or :not_pk_inclusive.
-    defp extract_pk_from_clauses(schema, clauses_kw) do
-      if function_exported?(schema, :__schema__, 1) do
-        case schema.__schema__(:primary_key) do
-          [] ->
-            :not_pk_inclusive
-
-          [pk_field] ->
-            case Keyword.fetch(clauses_kw, pk_field) do
-              {:ok, pk_value} ->
-                remaining = Keyword.delete(clauses_kw, pk_field)
-                {:ok, pk_value, remaining}
-
-              :error ->
-                :not_pk_inclusive
-            end
-
-          pk_fields when is_list(pk_fields) ->
-            pk_values = Enum.map(pk_fields, &Keyword.fetch(clauses_kw, &1))
-
-            if Enum.all?(pk_values, &match?({:ok, _}, &1)) do
-              pk_value = pk_values |> Enum.map(fn {:ok, v} -> v end) |> List.to_tuple()
-              remaining = Enum.reject(clauses_kw, fn {k, _v} -> k in pk_fields end)
-              {:ok, pk_value, remaining}
-            else
-              :not_pk_inclusive
-            end
-        end
-      else
-        :not_pk_inclusive
-      end
-    end
-
-    defp fields_match?(_record, []), do: true
-
-    defp fields_match?(record, clauses) do
-      Enum.all?(clauses, fn {field, value} ->
-        Map.get(record, field) == value
-      end)
-    end
-
     # -----------------------------------------------------------------
-    # Fallback dispatch
-    #
-    # Because dispatch/3 runs inside NimbleOwnership.get_and_update
-    # (a GenServer call), we must not raise here — that would crash
-    # the ownership server. Instead, we use %DoubleDown.Dispatch.Defer{} to
-    # move the raise outside the lock.
+    # Fallback dispatch (open-world error messages)
     # -----------------------------------------------------------------
 
     defp dispatch_via_fallback(operation, args, store) do
-      try_fallback(store, operation, args)
-    end
-
-    defp try_fallback(store, operation, args) do
-      case Map.get(store, @fallback_fn_key) do
-        nil ->
+      case Shared.try_fallback(store, operation, args) do
+        {:no_fallback, ^operation, ^args} ->
           defer_raise_no_fallback(operation, args, store)
 
-        fallback_fn when is_function(fallback_fn, 3) ->
-          clean_state = Map.delete(store, @fallback_fn_key)
-
-          try do
-            {fallback_fn.(operation, args, clean_state), store}
-          rescue
-            # FunctionClauseError means no matching clause — treat as missing fallback.
-            FunctionClauseError ->
-              defer_raise_no_fallback(operation, args, store)
-
-            # Any other exception from user-supplied fallback code must not crash
-            # the NimbleOwnership GenServer. Capture the exception and stacktrace,
-            # then defer the reraise to the calling test process.
-            exception ->
-              stacktrace = __STACKTRACE__
-              {%DoubleDown.Dispatch.Defer{fn: fn -> reraise exception, stacktrace end}, store}
-          end
+        result ->
+          result
       end
     end
 
     defp defer_raise_no_fallback(operation, args, store) do
-      {%DoubleDown.Dispatch.Defer{
-         fn: fn ->
-           raise ArgumentError, """
-           DoubleDown.Repo.InMemory cannot service :#{operation} with args #{inspect(args)}.
+      Shared.defer_raise(
+        """
+        DoubleDown.Repo.InMemory cannot service :#{operation} with args #{inspect(args)}.
 
-           The InMemory adapter can only answer authoritatively for:
-             - Write operations (insert, update, delete)
-             - PK-based reads (get, get!) when the record exists in state
+        The InMemory adapter can only answer authoritatively for:
+          - Write operations (insert, update, delete)
+          - PK-based reads (get, get!) when the record exists in state
 
-           For all other operations, register a fallback function:
+        For all other operations, register a fallback function:
 
-           DoubleDown.Repo.InMemory.new(
-             fallback_fn: fn
-               :#{operation}, #{inspect(args)}, _state -> # your result here
-             end
-           )
-           """
-         end
-       }, store}
+        DoubleDown.Repo.InMemory.new(
+          fallback_fn: fn
+            :#{operation}, #{inspect(args)}, _state -> # your result here
+          end
+        )
+        """,
+        store
+      )
     end
-
-    # -----------------------------------------------------------------
-    # State access helpers
-    # -----------------------------------------------------------------
-
-    defp get_record(store, schema, id) do
-      store
-      |> Map.get(schema, %{})
-      |> Map.get(id)
-    end
-
-    defp put_record(store, schema, id, record) do
-      schema_map = Map.get(store, schema, %{})
-      Map.put(store, schema, Map.put(schema_map, id, record))
-    end
-
-    defp delete_record(store, schema, id) do
-      case Map.get(store, schema) do
-        nil -> store
-        schema_map -> Map.put(store, schema, Map.delete(schema_map, id))
-      end
-    end
-
-    defp records_for_schema(store, schema) do
-      store
-      |> Map.get(schema, %{})
-      |> Map.values()
-    end
-
-    defp extract_schema(queryable) when is_atom(queryable), do: queryable
-
-    defp extract_schema(%Ecto.Query{from: %Ecto.Query.FromExpr{source: {_table, schema}}})
-         when is_atom(schema) and not is_nil(schema) do
-      schema
-    end
-
-    defp extract_schema(queryable), do: queryable
   end
 end
