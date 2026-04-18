@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.42.0]
+
+### Added
+
+- `DoubleDown.Repo.ClosedInMemory` — closed-world stateful Repo fake.
+  Unlike `Repo.InMemory` (open-world, where absence means "I don't
+  know"), `ClosedInMemory` treats the state as the complete truth —
+  if a record isn't in the state, it doesn't exist. This makes the
+  adapter authoritative for bare schema queryables without needing a
+  fallback function:
+
+  - **PK reads:** `get`/`get!` return `nil`/raise on miss (no fallback)
+  - **Clause reads:** `get_by`/`get_by!` scan and filter all records
+  - **Collection reads:** `all`, `one`/`one!`, `exists?` scan state
+  - **Aggregates:** `count`/`sum`/`avg`/`min`/`max` computed from state
+  - **Bulk writes:** `insert_all`, `delete_all`, `update_all`
+    (with `set:` updates)
+
+  `Ecto.Query` queryables still fall through to the fallback function
+  (or raise), since evaluating query expressions requires a query
+  engine. The fallback is the escape hatch, not the default path.
+
+  Enables the pattern of using ExMachina factories to write test data
+  into an in-memory store and testing against it without a database:
+
+      DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.ClosedInMemory)
+      insert(:user, name: "Alice", email: "alice@example.com")
+
+      assert [%User{}] = MyApp.Repo.all(User)
+      assert %User{} = MyApp.Repo.get_by(User, email: "alice@example.com")
+
+- `DoubleDown.Repo.InMemory.Shared` — extracted shared helpers (state
+  access, writes, transactions, fallback dispatch, query helpers) from
+  `Repo.InMemory` into a shared module for reuse by `ClosedInMemory`.
+  Pure refactor of `Repo.InMemory` — no behaviour change.
+
+- Updated documentation across `docs/repo.md` (ClosedInMemory section
+  with comparison table and ExMachina example), README (features table),
+  and `mix.exs` (module groups).
+
 ## [0.41.1]
 
 ### Fixed
@@ -851,7 +891,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `DoubleDown.Testing` with NimbleOwnership, `Repo.Test` stateless
   adapter, CI setup, Credo, Dialyzer.
 
-[Unreleased]: https://github.com/mccraigmccraig/double_down/compare/v0.41.1...HEAD
+[Unreleased]: https://github.com/mccraigmccraig/double_down/compare/v0.42.0...HEAD
+[0.42.0]: https://github.com/mccraigmccraig/double_down/compare/v0.41.1...v0.42.0
 [0.41.1]: https://github.com/mccraigmccraig/double_down/compare/v0.41.0...v0.41.1
 [0.41.0]: https://github.com/mccraigmccraig/double_down/compare/v0.40.0...v0.41.0
 [0.40.0]: https://github.com/mccraigmccraig/double_down/compare/v0.39.0...v0.40.0
