@@ -51,7 +51,7 @@ write but test less; fakes test more but require more upfront work
 (which DoubleDown provides out of the box for Repo operations).
 `Repo.InMemory` works with ExMachina factories as a drop-in
 replacement for the Ecto sandbox — see
-[ExMachina integration](repo.md#exmachina-integration).
+[ExMachina integration](repo-doubles.md#exmachina-integration).
 
 ## Contracts and facades
 

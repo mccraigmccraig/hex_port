@@ -26,6 +26,8 @@ defmodule DoubleDown.MixProject do
           "docs/logging.md",
           "docs/process-sharing.md",
           "docs/repo.md",
+          "docs/repo-doubles.md",
+          "docs/repo-testing.md",
           "docs/migration.md",
           "CHANGELOG.md"
         ],

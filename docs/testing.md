@@ -419,7 +419,7 @@ DoubleDown.Testing.set_stateful_handler(
 )
 ```
 
-See [Cross-contract state with Repo](repo.md#cross-contract-state-access)
+See [Cross-contract state with Repo](repo-testing.md#cross-contract-state-access)
 for a worked example of a Queries handler reading the Repo InMemory
 store.
 

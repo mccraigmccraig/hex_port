@@ -1,6 +1,6 @@
 # Incremental Migration
 
-[< Repo](repo.md) | [Up: README](../README.md)
+[< Repo Testing](repo-testing.md) | [Up: README](../README.md)
 
 This guide covers adopting DoubleDown into an existing Elixir/Phoenix
 codebase alongside direct Ecto.Repo calls. You don't need to migrate
@@ -230,4 +230,4 @@ which don't *need* a DB don't *use* a DB.
 
 ---
 
-[< Repo](repo.md) | [Up: README](../README.md)
+[< Repo Testing](repo-testing.md) | [Up: README](../README.md)
