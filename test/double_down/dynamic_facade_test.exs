@@ -198,7 +198,7 @@ defmodule DoubleDown.DynamicFacadeTest do
   describe "cross-contract state access with dynamic facade" do
     test "4-arity fake on dynamic module reads contract-based Repo state" do
       alias DoubleDown.Repo
-  alias DoubleDown.Test.Repo, as: TestRepo
+      alias DoubleDown.Test.Repo, as: TestRepo
       alias DoubleDown.Test.SimpleUser
 
       # Set up Repo with InMemory

@@ -231,7 +231,7 @@ defmodule DoubleDown.DoubleTest do
 
   describe "StubHandler module-based stub" do
     alias DoubleDown.Repo
-  alias DoubleDown.Test.Repo, as: TestRepo
+    alias DoubleDown.Test.Repo, as: TestRepo
     alias DoubleDown.Test.SimpleUser
 
     test "stub/2 with StubHandler module — writes only" do
@@ -592,7 +592,7 @@ defmodule DoubleDown.DoubleTest do
 
   describe "FakeHandler module-based fake" do
     alias DoubleDown.Repo
-  alias DoubleDown.Test.Repo, as: TestRepo
+    alias DoubleDown.Test.Repo, as: TestRepo
     alias DoubleDown.Test.SimpleUser
 
     test "fake/2 with FakeHandler module uses default state" do

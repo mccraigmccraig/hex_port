@@ -487,7 +487,7 @@ defmodule DoubleDown.TestDispatchTest do
 
     test "cross-contract state read: Queries handler reads Repo InMemory state" do
       alias DoubleDown.Repo
-  alias DoubleDown.Test.Repo, as: TestRepo
+      alias DoubleDown.Test.Repo, as: TestRepo
       alias DoubleDown.Test.SimpleUser
 
       # Set up Repo with InMemory — insert a user
