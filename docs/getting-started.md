@@ -71,9 +71,9 @@ supports three ways to define this pairing:
   dispatch facade.
 
 - **Dynamic facades** — Mimic-style bytecode interception for any
-  module, no contract needed. `DoubleDown.Dynamic` replaces a
-  module with a dispatch shim at test time. See
-  [Dynamic Facades](dynamic.md).
+  module, no explicit contract needed. `DoubleDown.Dynamic` replaces
+  a module with a dispatch shim at test time — the module itself
+  becomes the ad-hoc contract. See [Dynamic Facades](dynamic.md).
 
 ### Combined contract + facade (recommended)
 
