@@ -234,14 +234,14 @@ defmodule DoubleDown.DoubleTest do
     alias DoubleDown.Test.SimpleUser
 
     test "stub/2 with StubHandler module — writes only" do
-      Double.stub(Repo, Repo.Test)
+      Double.stub(Repo, Repo.Stub)
 
       {:ok, user} = Repo.Port.insert(SimpleUser.changeset(%{name: "Alice"}))
       assert %SimpleUser{name: "Alice"} = user
     end
 
     test "stub/2 with StubHandler — reads raise without fallback" do
-      Double.stub(Repo, Repo.Test)
+      Double.stub(Repo, Repo.Stub)
 
       assert_raise ArgumentError, ~r/cannot service :all/, fn ->
         Repo.Port.all(SimpleUser)
@@ -249,7 +249,7 @@ defmodule DoubleDown.DoubleTest do
     end
 
     test "stub/3 with StubHandler module and fallback_fn" do
-      Double.stub(Repo, Repo.Test, fn :all, [SimpleUser] ->
+      Double.stub(Repo, Repo.Stub, fn :all, [SimpleUser] ->
         [%SimpleUser{id: 1, name: "Alice"}]
       end)
 
@@ -258,7 +258,7 @@ defmodule DoubleDown.DoubleTest do
 
     test "stub/3 with StubHandler supports expects" do
       Repo
-      |> Double.stub(Repo.Test)
+      |> Double.stub(Repo.Stub)
       |> Double.expect(:insert, fn [_changeset] -> {:error, :conflict} end)
 
       assert {:error, :conflict} = Repo.Port.insert(SimpleUser.changeset(%{name: "Bob"}))
@@ -274,7 +274,7 @@ defmodule DoubleDown.DoubleTest do
     end
 
     test "returns contract module for piping" do
-      result = Double.stub(Repo, Repo.Test)
+      result = Double.stub(Repo, Repo.Stub)
       assert result == Repo
     end
 

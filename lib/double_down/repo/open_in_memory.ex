@@ -124,15 +124,15 @@ if Code.ensure_loaded?(Ecto) do
           %User{id: 2, name: "Bob"}
         ])
 
-    ## Differences from Repo.Test
+    ## Differences from Repo.Stub
 
-    `Repo.Test` is stateless — writes apply changesets and return `{:ok, struct}`
+    `Repo.Stub` is stateless — writes apply changesets and return `{:ok, struct}`
     but nothing is stored. Reads always return defaults (`nil`, `[]`, `false`).
 
     `Repo.OpenInMemory` is stateful — writes store records in state, and subsequent
     PK-based reads can find them. Non-PK reads require a fallback function.
     Use `Repo.OpenInMemory` when your test needs read-after-write consistency.
-    Use `Repo.Test` when you only need fire-and-forget writes.
+    Use `Repo.Stub` when you only need fire-and-forget writes.
 
     ## Primary Key Autogeneration
 

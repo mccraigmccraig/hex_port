@@ -6,12 +6,12 @@
 #
 # ## Usage
 #
-#     DoubleDown.Testing.set_fn_handler(DoubleDown.Repo, DoubleDown.Repo.Test.new())
+#     DoubleDown.Testing.set_fn_handler(DoubleDown.Repo, DoubleDown.Repo.Stub.new())
 #
 #     # With fallback for reads:
 #     DoubleDown.Testing.set_fn_handler(
 #       DoubleDown.Repo,
-#       DoubleDown.Repo.Test.new(
+#       DoubleDown.Repo.Stub.new(
 #         fallback_fn: fn
 #           :all, [User] -> [%User{id: 1, name: "Alice"}]
 #           :get, [User, 1] -> %User{id: 1, name: "Alice"}
@@ -20,7 +20,7 @@
 #     )
 #
 if Code.ensure_loaded?(Ecto) do
-  defmodule DoubleDown.Repo.Test do
+  defmodule DoubleDown.Repo.Stub do
     @behaviour DoubleDown.Contract.Dispatch.StubHandler
 
     @moduledoc """
@@ -40,12 +40,12 @@ if Code.ensure_loaded?(Ecto) do
     ## Usage
 
         # Writes only — reads will raise:
-        DoubleDown.Testing.set_fn_handler(DoubleDown.Repo, DoubleDown.Repo.Test.new())
+        DoubleDown.Testing.set_fn_handler(DoubleDown.Repo, DoubleDown.Repo.Stub.new())
 
         # With fallback for reads:
         DoubleDown.Testing.set_fn_handler(
           DoubleDown.Repo,
-          DoubleDown.Repo.Test.new(
+          DoubleDown.Repo.Stub.new(
             fallback_fn: fn
               :get, [User, 1] -> %User{id: 1, name: "Alice"}
               :all, [User] -> [%User{id: 1, name: "Alice"}]
@@ -54,17 +54,17 @@ if Code.ensure_loaded?(Ecto) do
         )
 
         # With logging:
-        DoubleDown.Testing.set_fn_handler(DoubleDown.Repo, DoubleDown.Repo.Test.new())
+        DoubleDown.Testing.set_fn_handler(DoubleDown.Repo, DoubleDown.Repo.Stub.new())
         DoubleDown.Testing.enable_log(DoubleDown.Repo)
 
     ## Differences from Repo.OpenInMemory
 
-    `Repo.Test` is stateless — writes apply changesets and return `{:ok, struct}`
+    `Repo.Stub` is stateless — writes apply changesets and return `{:ok, struct}`
     but nothing is stored. There is no read-after-write consistency.
 
     `Repo.OpenInMemory` is stateful — writes store records and PK-based reads can
     find them. Use `Repo.OpenInMemory` when your test needs read-after-write
-    consistency. Use `Repo.Test` when you only need fire-and-forget writes.
+    consistency. Use `Repo.Stub` when you only need fire-and-forget writes.
     """
 
     @doc """
@@ -84,10 +84,10 @@ if Code.ensure_loaded?(Ecto) do
     ## Examples
 
         # Writes only — via module name (StubHandler)
-        DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Test)
+        DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Stub)
 
         # With fallback for specific reads
-        DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Test,
+        DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Stub,
           fn
             :get, [User, 1] -> %User{id: 1, name: "Alice"}
             :all, [User] -> [%User{id: 1, name: "Alice"}]
@@ -97,7 +97,7 @@ if Code.ensure_loaded?(Ecto) do
 
     ## Legacy keyword-only form (still supported)
 
-        DoubleDown.Repo.Test.new(fallback_fn: fn :get, [User, 1] -> %User{} end)
+        DoubleDown.Repo.Stub.new(fallback_fn: fn :get, [User, 1] -> %User{} end)
     """
     @impl DoubleDown.Contract.Dispatch.StubHandler
     @spec new((atom(), [term()] -> term()) | nil, keyword()) :: (atom(), [term()] -> term())
@@ -139,7 +139,7 @@ if Code.ensure_loaded?(Ecto) do
       schema = record.__struct__
 
       case Autogenerate.maybe_autogenerate_id(record, schema, fn _schema ->
-             # Repo.Test is stateless — use a monotonic counter for unique integer IDs
+             # Repo.Stub is stateless — use a monotonic counter for unique integer IDs
              [System.unique_integer([:positive, :monotonic])]
            end) do
         {:error, {:no_autogenerate, message}} ->
@@ -271,14 +271,14 @@ if Code.ensure_loaded?(Ecto) do
 
     defp raise_no_fallback(operation, args) do
       raise ArgumentError, """
-      DoubleDown.Repo.Test cannot service :#{operation} with args #{inspect(args)}.
+      DoubleDown.Repo.Stub cannot service :#{operation} with args #{inspect(args)}.
 
       The Test adapter can only answer authoritatively for:
         - Write operations (insert, update, delete)
 
       For all other operations, register a fallback function:
 
-          DoubleDown.Repo.Test.new(
+          DoubleDown.Repo.Stub.new(
             fallback_fn: fn
               :#{operation}, #{inspect(args)} -> # your result here
             end

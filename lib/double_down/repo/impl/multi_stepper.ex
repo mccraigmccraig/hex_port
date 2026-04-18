@@ -11,7 +11,7 @@ if Code.ensure_loaded?(Ecto) do
     @moduledoc """
     Steps through an `Ecto.Multi` without a real database transaction.
 
-    Used by `DoubleDown.Repo.Test` and `DoubleDown.Repo.OpenInMemory` to execute
+    Used by `DoubleDown.Repo.Stub` and `DoubleDown.Repo.OpenInMemory` to execute
     Multi operations in order, accumulating a changes map.
 
     The `repo_facade` argument is passed to `:run` callbacks as the

@@ -5,7 +5,7 @@ defmodule DoubleDown.Log do
   Declares expectations against the dispatch log after execution.
   Matches on the full `{contract, operation, args, result}` tuple —
   including results, which is meaningful because DoubleDown handlers
-  (especially `Repo.Test`) do real computation (changeset validation,
+  (especially `Repo.Stub`) do real computation (changeset validation,
   PK autogeneration, timestamps).
 
   ## Basic usage
@@ -80,7 +80,7 @@ defmodule DoubleDown.Log do
   ## Relationship to existing APIs
 
   Built on `DoubleDown.Testing.get_log/1`. Completely decoupled from
-  handler choice — works with `Repo.Test`, `Repo.OpenInMemory`,
+  handler choice — works with `Repo.Stub`, `Repo.OpenInMemory`,
   `set_fn_handler`, `set_stateful_handler`, or `DoubleDown.Double`.
 
   Can be used alongside `DoubleDown.Double` — Handler for fail-fast

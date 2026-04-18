@@ -140,8 +140,8 @@ defmodule MyApp.BillingTest do
       {:ok, %PaymentMethod{id: 1, type: :card}}
     end)
 
-    # Repo — stateless writes via Repo.Test stub
-    DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Test)
+    # Repo — stateless writes via Repo.Stub stub
+    DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Stub)
 
     :ok
   end
@@ -201,7 +201,7 @@ DoubleDown.Double.fake(DoubleDown.Repo, MyApp.EctoRepo)
 
 ## When to use InMemory vs Test
 
-- **`Repo.Test`** — when your function does writes and you just need
+- **`Repo.Stub`** — when your function does writes and you just need
   them to succeed. No state, no read-after-write. Fastest setup.
 - **`Repo.OpenInMemory`** — when your function inserts a record then
   reads it back by PK within the same operation. Provides
@@ -209,7 +209,7 @@ DoubleDown.Double.fake(DoubleDown.Repo, MyApp.EctoRepo)
 
 Most context functions that do `insert` then `get` in a transaction
 need `Repo.OpenInMemory`. Simple command-style functions that just write
-and return can use `Repo.Test`.
+and return can use `Repo.Stub`.
 
 ## What stays on the DB
 

@@ -60,7 +60,7 @@ defmodule DoubleDown.MixProject do
           ],
           Repo: [
             DoubleDown.Repo,
-            DoubleDown.Repo.Test,
+            DoubleDown.Repo.Stub,
             DoubleDown.Repo.InMemory,
             DoubleDown.Repo.OpenInMemory
           ],

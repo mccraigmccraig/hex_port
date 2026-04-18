@@ -6,13 +6,13 @@ defmodule DoubleDown.Contract.Dispatch.StubHandler do
   name in `DoubleDown.Double.stub/2..4`:
 
       # Instead of:
-      Double.stub(Repo, Repo.Test.new())
+      Double.stub(Repo, Repo.Stub.new())
 
       # Write:
-      Double.stub(Repo, Repo.Test)
+      Double.stub(Repo, Repo.Stub)
 
       # With a fallback function:
-      Double.stub(Repo, Repo.Test, fn :all, [User] -> [] end)
+      Double.stub(Repo, Repo.Stub, fn :all, [User] -> [] end)
 
   ## Callbacks
 

@@ -34,7 +34,7 @@ returns the full sequence.
 log. Unlike `get_log/1` + manual assertions, it supports ordered
 matching, counting, reject expectations, and strict mode.
 
-This is particularly valuable with fakes like `Repo.Test` that do
+This is particularly valuable with fakes like `Repo.Stub` that do
 real computation — matching on results in the log is a meaningful
 assertion, not a tautology.
 

@@ -3,7 +3,7 @@
 [< Process Sharing](process-sharing.md) | [Up: README](../README.md) | [Migration >](migration.md)
 
 DoubleDown ships a ready-made Ecto Repo contract behaviour
-with three test double implementations (`Repo.Test`, `Repo.OpenInMemory`,
+with three test double implementations (`Repo.Stub`, `Repo.OpenInMemory`,
 and `Repo.InMemory`).
 In production, the dispatch facade passes through to your existing Ecto
 Repo with zero overhead (via static dispatch). The test doubles are
@@ -48,7 +48,7 @@ implementation.
 | Implementation | Type | State | Best for |
 |----------------|------|-------|----------|
 | **Your Ecto Repo** | Production | Real database | Production dispatch (zero-cost passthrough) |
-| **`Repo.Test`** | Stateless stub | None | Fire-and-forget writes, canned read responses |
+| **`Repo.Stub`** | Stateless stub | None | Fire-and-forget writes, canned read responses |
 | **`Repo.OpenInMemory`** | Stateful fake (open-world) | `%{Schema => %{pk => struct}}` | PK-based read-after-write; fallback for other reads |
 | **`Repo.InMemory`** | Stateful fake (closed-world) | `%{Schema => %{pk => struct}}` | Full in-memory store; ExMachina factories; all bare-schema reads without fallback |
 
@@ -70,22 +70,22 @@ calls — no `Application.get_env`, no extra stack frame, the facade
 compiles away entirely. `MyApp.Repo.insert(changeset)` produces
 identical bytecode to `MyApp.EctoRepo.insert(changeset)`.
 
-### `Repo.Test` — stateless test double
+### `Repo.Stub` — stateless test double
 
 A fire-and-forget adapter. Write operations apply changeset changes
 and return `{:ok, struct}`, but nothing is stored. Read operations
 delegate to an optional fallback function, or raise with an actionable
 error message.
 
-`Repo.Test` implements `DoubleDown.Contract.Dispatch.StubHandler` and can be
+`Repo.Stub` implements `DoubleDown.Contract.Dispatch.StubHandler` and can be
 used by module name with `Double.stub`:
 
 ```elixir
 # Writes only — reads will raise with a suggestion:
-DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Test)
+DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Stub)
 
 # With fallback for reads:
-DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Test,
+DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Stub,
   fn
     :get, [User, 1] -> %User{id: 1, name: "Alice"}
     :all, [User] -> [%User{id: 1, name: "Alice"}]
@@ -94,7 +94,7 @@ DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Test,
 )
 ```
 
-Use `Repo.Test` when your test only needs fire-and-forget writes and
+Use `Repo.Stub` when your test only needs fire-and-forget writes and
 a few canned read responses. For read-after-write consistency, use
 `Repo.OpenInMemory`.
 
@@ -375,7 +375,7 @@ adapter — so `repo.insert(cs)` dispatches correctly in both cases.
 Bulk operations (`insert_all`, `update_all`, `delete_all`) go through
 the fallback function or raise in test adapters.
 
-Both `Repo.Test` and `Repo.OpenInMemory` share a `MultiStepper` module
+Both `Repo.Stub` and `Repo.OpenInMemory` share a `MultiStepper` module
 that walks through Multi operations without a real database.
 
 ### Rollback
@@ -416,7 +416,7 @@ ACID isolation — this is the production path.
 The **Test** and **InMemory** adapters do **not** provide true
 transaction isolation:
 
-- `Repo.Test` calls the function directly without any locking.
+- `Repo.Stub` calls the function directly without any locking.
 - `Repo.OpenInMemory` uses `%DoubleDown.Contract.Dispatch.Defer{}` to run the transaction
   function outside the NimbleOwnership lock — each sub-operation
   acquires the lock individually.
@@ -439,16 +439,16 @@ Ecto's sandbox.
 override specific operations to simulate failures while the rest of
 the Repo behaves normally.
 
-### Error simulation with `Repo.Test`
+### Error simulation with `Repo.Stub`
 
-Use a 2-arity function fallback (`Repo.Test.new/1` returns one) as
+Use a 2-arity function fallback (`Repo.Stub.new/1` returns one) as
 the Double's fallback stub, and add expects for the operations that
 should fail:
 
 ```elixir
 setup do
   DoubleDown.Repo
-  |> DoubleDown.Double.stub(DoubleDown.Repo.Test)
+  |> DoubleDown.Double.stub(DoubleDown.Repo.Stub)
   |> DoubleDown.Double.expect(:insert, fn [changeset] ->
     {:error, Ecto.Changeset.add_error(changeset, :email, "has already been taken")}
   end)
@@ -462,7 +462,7 @@ test "handles duplicate email gracefully" do
   assert {:error, cs} = MyApp.Repo.insert(changeset)
   assert {"has already been taken", _} = cs.errors[:email]
 
-  # Second insert succeeds (falls through to Repo.Test)
+  # Second insert succeeds (falls through to Repo.Stub)
   assert {:ok, %User{}} = MyApp.Repo.insert(changeset)
 
   DoubleDown.Double.verify!()

@@ -320,10 +320,10 @@ defmodule DoubleDown.Double do
   `new/2` builds a dispatch function from an optional fallback:
 
       # Writes only — reads will raise
-      DoubleDown.Double.stub(MyContract, DoubleDown.Repo.Test)
+      DoubleDown.Double.stub(MyContract, DoubleDown.Repo.Stub)
 
       # With fallback for reads
-      DoubleDown.Double.stub(MyContract, DoubleDown.Repo.Test,
+      DoubleDown.Double.stub(MyContract, DoubleDown.Repo.Stub,
         fn :all, [User] -> [] end)
 
   For stateful fakes and module delegation, see `fake/2` and `fake/3`.

@@ -1,4 +1,4 @@
-defmodule DoubleDown.Repo.TestTest do
+defmodule DoubleDown.Repo.StubTest do
   use ExUnit.Case, async: true
 
   alias DoubleDown.Repo
@@ -112,7 +112,7 @@ defmodule DoubleDown.Repo.TestTest do
 
   describe "write operations" do
     setup do
-      DoubleDown.Testing.set_fn_handler(Repo, Repo.Test.new())
+      DoubleDown.Testing.set_fn_handler(Repo, Repo.Stub.new())
       :ok
     end
 
@@ -233,78 +233,78 @@ defmodule DoubleDown.Repo.TestTest do
 
   describe "read operations raise without fallback" do
     setup do
-      DoubleDown.Testing.set_fn_handler(Repo, Repo.Test.new())
+      DoubleDown.Testing.set_fn_handler(Repo, Repo.Stub.new())
       :ok
     end
 
     test "get raises without fallback" do
-      assert_raise ArgumentError, ~r/Repo.Test cannot service :get/, fn ->
+      assert_raise ArgumentError, ~r/Repo.Stub cannot service :get/, fn ->
         Repo.Port.get(User, 1)
       end
     end
 
     test "get! raises without fallback" do
-      assert_raise ArgumentError, ~r/Repo.Test cannot service :get!/, fn ->
+      assert_raise ArgumentError, ~r/Repo.Stub cannot service :get!/, fn ->
         Repo.Port.get!(User, 1)
       end
     end
 
     test "get_by raises without fallback" do
-      assert_raise ArgumentError, ~r/Repo.Test cannot service :get_by/, fn ->
+      assert_raise ArgumentError, ~r/Repo.Stub cannot service :get_by/, fn ->
         Repo.Port.get_by(User, name: "Alice")
       end
     end
 
     test "get_by! raises without fallback" do
-      assert_raise ArgumentError, ~r/Repo.Test cannot service :get_by!/, fn ->
+      assert_raise ArgumentError, ~r/Repo.Stub cannot service :get_by!/, fn ->
         Repo.Port.get_by!(User, name: "Alice")
       end
     end
 
     test "one raises without fallback" do
-      assert_raise ArgumentError, ~r/Repo.Test cannot service :one/, fn ->
+      assert_raise ArgumentError, ~r/Repo.Stub cannot service :one/, fn ->
         Repo.Port.one(User)
       end
     end
 
     test "one! raises without fallback" do
-      assert_raise ArgumentError, ~r/Repo.Test cannot service :one!/, fn ->
+      assert_raise ArgumentError, ~r/Repo.Stub cannot service :one!/, fn ->
         Repo.Port.one!(User)
       end
     end
 
     test "all raises without fallback" do
-      assert_raise ArgumentError, ~r/Repo.Test cannot service :all/, fn ->
+      assert_raise ArgumentError, ~r/Repo.Stub cannot service :all/, fn ->
         Repo.Port.all(User)
       end
     end
 
     test "exists? raises without fallback" do
-      assert_raise ArgumentError, ~r/Repo.Test cannot service :exists\?/, fn ->
+      assert_raise ArgumentError, ~r/Repo.Stub cannot service :exists\?/, fn ->
         Repo.Port.exists?(User)
       end
     end
 
     test "aggregate raises without fallback" do
-      assert_raise ArgumentError, ~r/Repo.Test cannot service :aggregate/, fn ->
+      assert_raise ArgumentError, ~r/Repo.Stub cannot service :aggregate/, fn ->
         Repo.Port.aggregate(User, :count, :id)
       end
     end
 
     test "insert_all raises without fallback" do
-      assert_raise ArgumentError, ~r/Repo.Test cannot service :insert_all/, fn ->
+      assert_raise ArgumentError, ~r/Repo.Stub cannot service :insert_all/, fn ->
         Repo.Port.insert_all(User, [%{name: "a"}], [])
       end
     end
 
     test "update_all raises without fallback" do
-      assert_raise ArgumentError, ~r/Repo.Test cannot service :update_all/, fn ->
+      assert_raise ArgumentError, ~r/Repo.Stub cannot service :update_all/, fn ->
         Repo.Port.update_all(User, [set: [name: "bulk"]], [])
       end
     end
 
     test "delete_all raises without fallback" do
-      assert_raise ArgumentError, ~r/Repo.Test cannot service :delete_all/, fn ->
+      assert_raise ArgumentError, ~r/Repo.Stub cannot service :delete_all/, fn ->
         Repo.Port.delete_all(User, [])
       end
     end
@@ -319,7 +319,7 @@ defmodule DoubleDown.Repo.TestTest do
       alice = %User{id: 1, name: "Alice"}
 
       handler =
-        Repo.Test.new(
+        Repo.Stub.new(
           fallback_fn: fn
             :get, [User, 1] -> alice
             :get, [User, _] -> nil
@@ -336,7 +336,7 @@ defmodule DoubleDown.Repo.TestTest do
       alice = %User{id: 1, name: "Alice"}
 
       handler =
-        Repo.Test.new(fallback_fn: fn :get!, [User, 1] -> alice end)
+        Repo.Stub.new(fallback_fn: fn :get!, [User, 1] -> alice end)
 
       DoubleDown.Testing.set_fn_handler(Repo, handler)
       assert ^alice = Repo.Port.get!(User, 1)
@@ -346,7 +346,7 @@ defmodule DoubleDown.Repo.TestTest do
       alice = %User{id: 1, name: "Alice"}
 
       handler =
-        Repo.Test.new(fallback_fn: fn :get_by, [User, [name: "Alice"]] -> alice end)
+        Repo.Stub.new(fallback_fn: fn :get_by, [User, [name: "Alice"]] -> alice end)
 
       DoubleDown.Testing.set_fn_handler(Repo, handler)
       assert ^alice = Repo.Port.get_by(User, name: "Alice")
@@ -356,7 +356,7 @@ defmodule DoubleDown.Repo.TestTest do
       users = [%User{id: 1, name: "Alice"}, %User{id: 2, name: "Bob"}]
 
       handler =
-        Repo.Test.new(fallback_fn: fn :all, [User] -> users end)
+        Repo.Stub.new(fallback_fn: fn :all, [User] -> users end)
 
       DoubleDown.Testing.set_fn_handler(Repo, handler)
       assert ^users = Repo.Port.all(User)
@@ -364,7 +364,7 @@ defmodule DoubleDown.Repo.TestTest do
 
     test "exists? dispatches to fallback" do
       handler =
-        Repo.Test.new(fallback_fn: fn :exists?, [User] -> true end)
+        Repo.Stub.new(fallback_fn: fn :exists?, [User] -> true end)
 
       DoubleDown.Testing.set_fn_handler(Repo, handler)
       assert Repo.Port.exists?(User) == true
@@ -372,7 +372,7 @@ defmodule DoubleDown.Repo.TestTest do
 
     test "aggregate dispatches to fallback" do
       handler =
-        Repo.Test.new(fallback_fn: fn :aggregate, [User, :count, :id] -> 42 end)
+        Repo.Stub.new(fallback_fn: fn :aggregate, [User, :count, :id] -> 42 end)
 
       DoubleDown.Testing.set_fn_handler(Repo, handler)
       assert 42 = Repo.Port.aggregate(User, :count, :id)
@@ -380,11 +380,11 @@ defmodule DoubleDown.Repo.TestTest do
 
     test "fallback raises on unmatched clause" do
       handler =
-        Repo.Test.new(fallback_fn: fn :get, [User, 1] -> nil end)
+        Repo.Stub.new(fallback_fn: fn :get, [User, 1] -> nil end)
 
       DoubleDown.Testing.set_fn_handler(Repo, handler)
 
-      assert_raise ArgumentError, ~r/Repo.Test cannot service :get/, fn ->
+      assert_raise ArgumentError, ~r/Repo.Stub cannot service :get/, fn ->
         Repo.Port.get(User, 999)
       end
     end
@@ -396,7 +396,7 @@ defmodule DoubleDown.Repo.TestTest do
 
   describe "transact" do
     setup do
-      DoubleDown.Testing.set_fn_handler(Repo, Repo.Test.new())
+      DoubleDown.Testing.set_fn_handler(Repo, Repo.Stub.new())
       :ok
     end
 
@@ -521,7 +521,7 @@ defmodule DoubleDown.Repo.TestTest do
 
   describe "dispatch logging" do
     test "logs write operations" do
-      DoubleDown.Testing.set_fn_handler(Repo, Repo.Test.new())
+      DoubleDown.Testing.set_fn_handler(Repo, Repo.Stub.new())
       DoubleDown.Testing.enable_log(Repo)
       cs = User.changeset(%{name: "Alice"})
 
@@ -537,7 +537,7 @@ defmodule DoubleDown.Repo.TestTest do
 
       DoubleDown.Testing.set_fn_handler(
         Repo,
-        Repo.Test.new(fallback_fn: fn :get, [User, 1] -> alice end)
+        Repo.Stub.new(fallback_fn: fn :get, [User, 1] -> alice end)
       )
 
       DoubleDown.Testing.enable_log(Repo)
@@ -550,7 +550,7 @@ defmodule DoubleDown.Repo.TestTest do
     end
 
     test "1-arity transact logs inner facade calls made from the transaction function" do
-      DoubleDown.Testing.set_fn_handler(Repo, Repo.Test.new())
+      DoubleDown.Testing.set_fn_handler(Repo, Repo.Stub.new())
       DoubleDown.Testing.enable_log(Repo)
 
       cs = User.changeset(%{name: "Alice"})
@@ -577,18 +577,18 @@ defmodule DoubleDown.Repo.TestTest do
   end
 
   # -------------------------------------------------------------------
-  # Repo.Test via Double.stub (transact deadlock regression)
+  # Repo.Stub via Double.stub (transact deadlock regression)
   # -------------------------------------------------------------------
 
-  describe "Repo.Test via Double.stub" do
+  describe "Repo.Stub via Double.stub" do
     test "transact with 0-arity fun works via Double.stub (no deadlock)" do
-      DoubleDown.Double.stub(Repo, Repo.Test.new())
+      DoubleDown.Double.stub(Repo, Repo.Stub.new())
 
       assert {:ok, :done} = Repo.Port.transact(fn -> {:ok, :done} end, [])
     end
 
     test "transact with nested Repo calls works via Double.stub" do
-      DoubleDown.Double.stub(Repo, Repo.Test.new())
+      DoubleDown.Double.stub(Repo, Repo.Stub.new())
 
       result =
         Repo.Port.transact(
@@ -603,7 +603,7 @@ defmodule DoubleDown.Repo.TestTest do
     end
 
     test "transact with Ecto.Multi works via Double.stub" do
-      DoubleDown.Double.stub(Repo, Repo.Test.new())
+      DoubleDown.Double.stub(Repo, Repo.Stub.new())
 
       multi =
         Ecto.Multi.new()
@@ -619,7 +619,7 @@ defmodule DoubleDown.Repo.TestTest do
 
   describe "nested transact" do
     setup do
-      DoubleDown.Testing.set_fn_handler(Repo, Repo.Test.new())
+      DoubleDown.Testing.set_fn_handler(Repo, Repo.Stub.new())
       :ok
     end
 
@@ -677,7 +677,7 @@ defmodule DoubleDown.Repo.TestTest do
 
   describe "nested transact via Double.stub" do
     test "nested transact works via Double.stub (no deadlock)" do
-      DoubleDown.Double.stub(Repo, Repo.Test.new())
+      DoubleDown.Double.stub(Repo, Repo.Stub.new())
 
       result =
         Repo.Port.transact(
@@ -701,7 +701,7 @@ defmodule DoubleDown.Repo.TestTest do
 
   describe "rollback" do
     setup do
-      DoubleDown.Testing.set_fn_handler(Repo, Repo.Test.new())
+      DoubleDown.Testing.set_fn_handler(Repo, Repo.Stub.new())
       :ok
     end
 
@@ -749,7 +749,7 @@ defmodule DoubleDown.Repo.TestTest do
 
   describe "rollback via Double.stub" do
     test "rollback works via Double.stub" do
-      DoubleDown.Double.stub(Repo, Repo.Test.new())
+      DoubleDown.Double.stub(Repo, Repo.Stub.new())
 
       result =
         Repo.Port.transact(

@@ -98,11 +98,11 @@ Stubs provide canned responses without maintaining state. Use
 `Double.stub` with a `StubHandler` module or a 2-arity function:
 
 ```elixir
-# StubHandler module (e.g. Repo.Test)
-DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Test)
+# StubHandler module (e.g. Repo.Stub)
+DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Stub)
 
 # StubHandler with a fallback function for reads
-DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Test,
+DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Stub,
   fn
     :get, [User, 1] -> %User{id: 1, name: "Alice"}
     :all, [User] -> [%User{id: 1, name: "Alice"}]
