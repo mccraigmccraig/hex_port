@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.44.0]
+
+### Added
+
+- Bang write operations: `insert!/1,2`, `update!/1,2`, `delete!/1,2`
+  added to `DoubleDown.Repo` contract and all three test doubles.
+  These were lost when auto-bang generation was removed in v0.38.0.
+  Needed for ExMachina integration (`ExMachina` calls `Repo.insert!`).
+
+- `insert`/`insert!` now accept bare structs in addition to
+  changesets, matching `Ecto.Repo` behaviour. `delete`/`delete!`
+  now accept changesets in addition to structs.
+
+- ExMachina integration tests demonstrating the factory + InMemory
+  pattern: factory-inserted records readable via `all`, `get`,
+  `get_by`, `exists?`, `aggregate` — no database, `async: true`,
+  at in-memory speed. `ex_machina ~> 2.7` added as a test-only
+  dependency.
+
+- ExMachina integration documentation in `docs/repo.md` with
+  worked example: factory definition, test setup, reads, aggregates,
+  read-after-write, failure simulation. Cross-referenced from
+  `docs/getting-started.md`.
+
+### Changed
+
+- **Breaking:** `DoubleDown.Repo.Port` (test facade) renamed to
+  `DoubleDown.Test.Repo`. Natural alias gives `Repo.*` without
+  `as:` clause.
+
 ## [0.43.0]
 
 ### Changed
@@ -935,7 +965,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `DoubleDown.Testing` with NimbleOwnership, `Repo.Test` stateless
   adapter, CI setup, Credo, Dialyzer.
 
-[Unreleased]: https://github.com/mccraigmccraig/double_down/compare/v0.43.0...HEAD
+[Unreleased]: https://github.com/mccraigmccraig/double_down/compare/v0.44.0...HEAD
+[0.44.0]: https://github.com/mccraigmccraig/double_down/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/mccraigmccraig/double_down/compare/v0.42.0...v0.43.0
 [0.42.0]: https://github.com/mccraigmccraig/double_down/compare/v0.41.1...v0.42.0
 [0.41.1]: https://github.com/mccraigmccraig/double_down/compare/v0.41.0...v0.41.1
