@@ -50,6 +50,8 @@ defmodule DoubleDown.MixProject do
           Core: [
             DoubleDown.Contract,
             DoubleDown.Facade,
+            DoubleDown.BehaviourFacade,
+            DoubleDown.Dynamic,
             DoubleDown.Dispatch
           ],
           Testing: [

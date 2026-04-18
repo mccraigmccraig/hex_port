@@ -53,7 +53,7 @@ defmodule DoubleDown.Facade do
 
   ## See also
 
-    * `DoubleDown.Facade.Behaviour` — generates dispatch facades for vanilla
+    * `DoubleDown.BehaviourFacade` — generates dispatch facades for vanilla
       `@behaviour` modules (when you don't control the contract definition).
     * `DoubleDown.Dynamic` — Mimic-style bytecode interception for any module.
 

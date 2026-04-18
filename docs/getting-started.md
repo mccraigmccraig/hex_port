@@ -302,32 +302,52 @@ clashes with user-defined `defcallback key(...)` operations.
 
 ## Why `defcallback` instead of plain `@callback`?
 
-DoubleDown could in principle generate a facade from any Elixir behaviour,
-but there are practical limitations:
+`defcallback` is recommended over plain `@callback` because it
+captures richer metadata at compile time:
 
-- **Parameter names may not be available.** A `@callback` declaration
-  like `@callback get(term(), term()) :: term()` has no parameter names.
-- **`Code.Typespec.fetch_callbacks/1` has limitations.** It only works
-  on compiled modules with beam files on disk, not on modules being
-  compiled in the same project. This rules out the combined
-  contract + facade pattern entirely — the contract must be in a
-  separate, pre-compiled module, which also means the LSP-friendly
-  `@doc` hover docs described above are never available.
-- **No place for additional metadata.** `defcallback` supports options like
-  `pre_dispatch:` (argument transforms before dispatch). Plain `@callback`
-  has no mechanism for this.
-- **LSP-friendly docs on facade calls.** Plain `@callback`
-  declarations don't support `@doc` at all — the best you can do is
-  `#` comments that won't appear in hover docs. With the combined
-  contract + facade pattern (recommended), `@doc` placed above a
-  `defcallback` resolves on both the declaration itself and on any
-  call site that goes through the facade. Hovering over
-  `MyApp.Todos.get_todo(id)` in your editor shows the documentation
-  — no manual syncing between contract comments and facade `@doc`
-  tags needed.
+- **Combined contract + facade in one module.** `defcallback` works
+  within the module being compiled — no need for a separate,
+  pre-compiled behaviour module.
+- **LSP-friendly docs.** `@doc` placed above a `defcallback` resolves
+  on both the declaration and any call site through the facade.
+  Hovering over `MyApp.Todos.get_todo(id)` in your editor shows the
+  documentation — no manual syncing needed.
+- **Additional metadata.** `defcallback` supports options like
+  `pre_dispatch:` (argument transforms before dispatch). Plain
+  `@callback` has no mechanism for this.
+- **Compile-time spec checking.** When static dispatch is enabled,
+  DoubleDown cross-checks the implementation's `@spec` against the
+  contract's `defcallback` types and warns on mismatches.
 
-`defcallback` captures all metadata at macro expansion time in a
-structured form (`__callbacks__/0`), avoiding these limitations.
+### Vanilla behaviour facades
+
+If you have an existing `@behaviour` module — either from a
+third-party library or legacy code — that you can't or don't want
+to convert to `defcallback`, use `DoubleDown.BehaviourFacade`:
+
+```elixir
+defmodule MyApp.Todos do
+  use DoubleDown.BehaviourFacade,
+    behaviour: MyApp.Todos.Behaviour,
+    otp_app: :my_app
+end
+```
+
+This reads `@callback` declarations from the compiled behaviour
+module and generates the same dispatch facade. Limitations compared
+to `defcallback`:
+
+- **Must be a separate module.** The behaviour must be compiled
+  before the facade, so the combined contract + facade pattern is
+  not available.
+- **No `@doc` sync.** Facade functions get generic docs, not the
+  behaviour's callback documentation.
+- **No `pre_dispatch` transforms.**
+- **Synthesized parameter names.** For bare types like
+  `@callback get(String.t(), keyword())`, parameter names are
+  synthesized as `arg1`, `arg2`. Annotated types like
+  `@callback get(id :: String.t())` preserve the name.
+- **No compile-time spec mismatch warnings.**
 
 ---
 

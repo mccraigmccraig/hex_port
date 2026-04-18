@@ -39,6 +39,14 @@ defmodule DoubleDown.Dynamic do
   - Cannot set up dynamic facades for DoubleDown contracts (use
     `DoubleDown.Facade` instead), DoubleDown internals,
     NimbleOwnership, or Erlang/OTP modules.
+
+  ## See also
+
+    * `DoubleDown.Facade` — dispatch facades for `defcallback` contracts
+      (typed, LSP-friendly, recommended for new code).
+    * `DoubleDown.BehaviourFacade` — dispatch facades for vanilla
+      `@behaviour` modules (typed, but no pre_dispatch or combined
+      contract + facade).
   """
 
   @registry_key __MODULE__

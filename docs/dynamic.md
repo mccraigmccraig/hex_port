@@ -11,8 +11,9 @@ any module with a dispatch shim at test time, then use the full
 | Scenario | Approach |
 |----------|----------|
 | New code, long-term boundary | Contract-based (`defcallback` + `DoubleDown.Facade`) |
-| Legacy code without contracts | **Dynamic facade** |
-| Third-party modules you can't modify | **Dynamic facade** |
+| Existing `@behaviour` you don't control | `DoubleDown.BehaviourFacade` |
+| Legacy code without contracts or behaviours | **Dynamic facade** |
+| Third-party modules with no behaviour | **Dynamic facade** |
 | Quick prototyping | **Dynamic facade**, graduate to contract-based later |
 
 Dynamic facades trade compile-time safety (typespecs, LSP docs,
@@ -149,31 +150,36 @@ DoubleDown.Double.fake(MyApp.Legacy,
 - **NimbleOwnership** — required by dispatch
 - **Erlang/OTP modules** — would be catastrophic
 
-## Comparison with contract-based facades
+## Comparison of facade types
 
-| Feature | Contract-based | Dynamic |
-|---------|---------------|---------|
-| Setup ceremony | `defcallback` + `use Facade` + config | `Dynamic.setup(Module)` |
-| Typespecs | Generated `@spec` on facade | None |
-| LSP docs | `@doc` on facade functions | None |
-| Compile-time spec checking | Yes (impl vs contract) | No |
-| Production dispatch | Zero-cost inlined calls | N/A (test-only) |
-| Test doubles | Full Double API | Full Double API |
-| Stateful fakes | Full support | Full support |
-| Cross-contract state | Full support | Full support |
-| Dispatch logging | Full support | Full support |
-| async: true | Yes | Yes |
+| Feature | `Facade` (defcallback) | `BehaviourFacade` | Dynamic |
+|---------|----------------------|-------------------|---------|
+| Setup ceremony | `defcallback` + config | `use BehaviourFacade` + config | `Dynamic.setup(Module)` |
+| Typespecs | Generated `@spec` | Generated `@spec` | None |
+| LSP docs | `@doc` on facade | Generic docs | None |
+| Pre-dispatch transforms | Yes | No | No |
+| Combined contract + facade | Yes | No (separate modules) | N/A |
+| Compile-time spec checking | Yes | No | No |
+| Production dispatch | Zero-cost inlined calls | Zero-cost inlined calls | N/A (test-only) |
+| Test doubles | Full Double API | Full Double API | Full Double API |
+| Stateful fakes | Full support | Full support | Full support |
+| Cross-contract state | Full support | Full support | Full support |
+| Dispatch logging | Full support | Full support | Full support |
+| async: true | Yes | Yes | Yes |
 
 ## Migration path
 
 Start with dynamic facades for quick wins, then graduate to
-contract-based facades for boundaries you want to keep long-term:
+typed facades for boundaries you want to keep long-term:
 
 1. `Dynamic.setup(MyModule)` in test_helper.exs
 2. Write tests using Double APIs
-3. When the boundary stabilises, define a `defcallback` contract
-4. Create a facade with `use DoubleDown.Facade`
-5. Remove the `Dynamic.setup` call
+3. When the boundary stabilises, choose your facade type:
+   - If the module already defines `@callback` declarations,
+     use `DoubleDown.BehaviourFacade`
+   - Otherwise, define a `defcallback` contract and use
+     `DoubleDown.Facade`
+4. Remove the `Dynamic.setup` call
 
 ---
 
