@@ -80,7 +80,7 @@ See **[Repo Testing Patterns](repo-testing.md)** for failure simulation,
 transactions, rollback, cross-contract state access, and dispatch
 logging patterns.
 
-## Why this matters
+## Testing without a database
 
 The in-memory Repo removes the database from your test feedback loop.
 Because there's no I/O, tests run at pure-function speed — fast enough
