@@ -159,7 +159,7 @@ defmodule DoubleDown.RepoTest do
     def transact(%Ecto.Multi{} = multi, _opts) do
       # Simulate what a real Ecto Repo does: step through the Multi
       # using this module as the repo for :run callbacks
-      DoubleDown.Repo.MultiStepper.run(multi, __MODULE__)
+      DoubleDown.Repo.Impl.MultiStepper.run(multi, __MODULE__)
     end
   end
 

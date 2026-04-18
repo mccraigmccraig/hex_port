@@ -7,7 +7,7 @@
 # call repo.insert/1, repo.get/2, etc.).
 #
 if Code.ensure_loaded?(Ecto) do
-  defmodule DoubleDown.Repo.MultiStepper do
+  defmodule DoubleDown.Repo.Impl.MultiStepper do
     @moduledoc """
     Steps through an `Ecto.Multi` without a real database transaction.
 

@@ -62,11 +62,11 @@ defmodule DoubleDown.MixProject do
             DoubleDown.Repo,
             DoubleDown.Repo.Test,
             DoubleDown.Repo.InMemory,
-            DoubleDown.Repo.ClosedInMemory,
-            DoubleDown.Repo.MultiStepper
+            DoubleDown.Repo.ClosedInMemory
           ],
           Internals: [
-            DoubleDown.Contract.Dispatch
+            DoubleDown.Contract.Dispatch,
+            DoubleDown.Repo.Impl.MultiStepper
           ]
         ]
       ]

@@ -133,7 +133,7 @@ if Code.ensure_loaded?(Ecto) do
     end
 
     defp dispatch(:insert, [changeset], _fallback_fn) do
-      alias DoubleDown.Repo.Autogenerate
+      alias DoubleDown.Repo.Impl.Autogenerate
 
       record = Autogenerate.apply_changes(changeset, :insert)
       schema = record.__struct__
@@ -155,7 +155,7 @@ if Code.ensure_loaded?(Ecto) do
     end
 
     defp dispatch(:update, [changeset], _fallback_fn) do
-      {:ok, DoubleDown.Repo.Autogenerate.apply_changes(changeset, :update)}
+      {:ok, DoubleDown.Repo.Impl.Autogenerate.apply_changes(changeset, :update)}
     end
 
     defp dispatch(:delete, [record], _fallback_fn) do
@@ -240,7 +240,7 @@ if Code.ensure_loaded?(Ecto) do
 
       %DoubleDown.Contract.Dispatch.Defer{
         fn: fn ->
-          run_in_transaction(fn -> DoubleDown.Repo.MultiStepper.run(multi, repo_facade) end)
+          run_in_transaction(fn -> DoubleDown.Repo.Impl.MultiStepper.run(multi, repo_facade) end)
         end
       }
     end

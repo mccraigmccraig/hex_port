@@ -1,7 +1,7 @@
-defmodule DoubleDown.Repo.AutogenerateTest do
+defmodule DoubleDown.Repo.Impl.AutogenerateTest do
   use ExUnit.Case, async: true
 
-  alias DoubleDown.Repo.Autogenerate
+  alias DoubleDown.Repo.Impl.Autogenerate
 
   # -------------------------------------------------------------------
   # Test schemas covering all PK variants

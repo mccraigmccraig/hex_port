@@ -172,9 +172,9 @@ if Code.ensure_loaded?(Ecto) do
       means "doesn't exist", enabling authoritative reads without a fallback.
     """
 
-    alias DoubleDown.Repo.InMemory.Shared
+    alias DoubleDown.Repo.Impl.InMemoryShared
 
-    @type store :: Shared.store()
+    @type store :: InMemoryShared.store()
 
     @doc """
     Create a new InMemory state map.
@@ -219,7 +219,7 @@ if Code.ensure_loaded?(Ecto) do
     """
     @impl DoubleDown.Contract.Dispatch.FakeHandler
     @spec new(term(), keyword()) :: store()
-    defdelegate new(seed \\ %{}, opts \\ []), to: Shared
+    defdelegate new(seed \\ %{}, opts \\ []), to: InMemoryShared
 
     @doc """
     Convert a list of structs into the nested state map for seeding.
@@ -234,7 +234,7 @@ if Code.ensure_loaded?(Ecto) do
         #               2 => %User{id: 2, name: "Bob"}}}
     """
     @spec seed(list(struct())) :: store()
-    defdelegate seed(records), to: Shared
+    defdelegate seed(records), to: InMemoryShared
 
     @doc """
     Stateful handler function for use with `DoubleDown.Testing.set_stateful_handler/3`
@@ -255,27 +255,27 @@ if Code.ensure_loaded?(Ecto) do
     # Write operations — delegate to Shared
     # -----------------------------------------------------------------
 
-    def dispatch(:insert, [changeset], store), do: Shared.dispatch_insert([changeset], store)
-    def dispatch(:update, [changeset], store), do: Shared.dispatch_update([changeset], store)
-    def dispatch(:delete, [record], store), do: Shared.dispatch_delete([record], store)
+    def dispatch(:insert, [changeset], store), do: InMemoryShared.dispatch_insert([changeset], store)
+    def dispatch(:update, [changeset], store), do: InMemoryShared.dispatch_update([changeset], store)
+    def dispatch(:delete, [record], store), do: InMemoryShared.dispatch_delete([record], store)
 
     # -----------------------------------------------------------------
     # PK reads — 3-stage: state -> fallback -> error
     # -----------------------------------------------------------------
 
     def dispatch(:get, [queryable, id] = args, store) do
-      schema = Shared.extract_schema(queryable)
+      schema = InMemoryShared.extract_schema(queryable)
 
-      case Shared.get_record(store, schema, id) do
+      case InMemoryShared.get_record(store, schema, id) do
         nil -> dispatch_via_fallback(:get, args, store)
         record -> {record, store}
       end
     end
 
     def dispatch(:get!, [queryable, id] = args, store) do
-      schema = Shared.extract_schema(queryable)
+      schema = InMemoryShared.extract_schema(queryable)
 
-      case Shared.get_record(store, schema, id) do
+      case InMemoryShared.get_record(store, schema, id) do
         nil -> dispatch_via_fallback(:get!, args, store)
         record -> {record, store}
       end
@@ -355,8 +355,8 @@ if Code.ensure_loaded?(Ecto) do
     # Transaction operations — delegate to Shared
     # -----------------------------------------------------------------
 
-    def dispatch(:transact, args, store), do: Shared.dispatch_transact(args, store)
-    def dispatch(:rollback, args, store), do: Shared.dispatch_rollback(args, store)
+    def dispatch(:transact, args, store), do: InMemoryShared.dispatch_transact(args, store)
+    def dispatch(:rollback, args, store), do: InMemoryShared.dispatch_rollback(args, store)
 
     # -----------------------------------------------------------------
     # get_by PK-inclusive dispatch (open-world)
@@ -364,17 +364,17 @@ if Code.ensure_loaded?(Ecto) do
 
     defp dispatch_get_by(operation, queryable, clauses, args, store)
          when is_atom(queryable) and not is_nil(queryable) do
-      clauses_kw = Shared.normalize_clauses(clauses)
+      clauses_kw = InMemoryShared.normalize_clauses(clauses)
 
-      case Shared.extract_pk_from_clauses(queryable, clauses_kw) do
+      case InMemoryShared.extract_pk_from_clauses(queryable, clauses_kw) do
         {:ok, pk_value, remaining_clauses} ->
-          case Shared.get_record(store, queryable, pk_value) do
+          case InMemoryShared.get_record(store, queryable, pk_value) do
             nil ->
               # Not in state — absence is not authoritative, delegate to fallback
               dispatch_via_fallback(operation, args, store)
 
             record ->
-              if Shared.fields_match?(record, remaining_clauses) do
+              if InMemoryShared.fields_match?(record, remaining_clauses) do
                 {record, store}
               else
                 {nil, store}
@@ -396,7 +396,7 @@ if Code.ensure_loaded?(Ecto) do
     # -----------------------------------------------------------------
 
     defp dispatch_via_fallback(operation, args, store) do
-      case Shared.try_fallback(store, operation, args) do
+      case InMemoryShared.try_fallback(store, operation, args) do
         {:no_fallback, ^operation, ^args} ->
           defer_raise_no_fallback(operation, args, store)
 
@@ -406,7 +406,7 @@ if Code.ensure_loaded?(Ecto) do
     end
 
     defp defer_raise_no_fallback(operation, args, store) do
-      Shared.defer_raise(
+      InMemoryShared.defer_raise(
         """
         DoubleDown.Repo.InMemory cannot service :#{operation} with args #{inspect(args)}.
 

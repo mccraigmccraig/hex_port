@@ -1,5 +1,5 @@
 if Code.ensure_loaded?(Ecto) do
-  defmodule DoubleDown.Repo.InMemory.Shared do
+  defmodule DoubleDown.Repo.Impl.InMemoryShared do
     @moduledoc false
 
     # Shared helpers for stateful in-memory Repo fakes.
@@ -78,7 +78,7 @@ if Code.ensure_loaded?(Ecto) do
     def seed(records) when is_list(records) do
       Enum.reduce(records, %{}, fn record, store ->
         schema = record.__struct__
-        id = DoubleDown.Repo.Autogenerate.get_primary_key(record)
+        id = DoubleDown.Repo.Impl.Autogenerate.get_primary_key(record)
         put_record(store, schema, id, record)
       end)
     end
@@ -93,7 +93,7 @@ if Code.ensure_loaded?(Ecto) do
     end
 
     def dispatch_insert([changeset], store) do
-      alias DoubleDown.Repo.Autogenerate
+      alias DoubleDown.Repo.Impl.Autogenerate
 
       record = Autogenerate.apply_changes(changeset, :insert)
       schema = record.__struct__
@@ -118,16 +118,16 @@ if Code.ensure_loaded?(Ecto) do
     end
 
     def dispatch_update([changeset], store) do
-      record = DoubleDown.Repo.Autogenerate.apply_changes(changeset, :update)
+      record = DoubleDown.Repo.Impl.Autogenerate.apply_changes(changeset, :update)
       schema = record.__struct__
-      id = DoubleDown.Repo.Autogenerate.get_primary_key(record)
+      id = DoubleDown.Repo.Impl.Autogenerate.get_primary_key(record)
       {{:ok, record}, put_record(store, schema, id, record)}
     end
 
     @doc false
     def dispatch_delete([record], store) do
       schema = record.__struct__
-      id = DoubleDown.Repo.Autogenerate.get_primary_key(record)
+      id = DoubleDown.Repo.Impl.Autogenerate.get_primary_key(record)
       {{:ok, record}, delete_record(store, schema, id)}
     end
 
@@ -145,7 +145,7 @@ if Code.ensure_loaded?(Ecto) do
 
       {%DoubleDown.Contract.Dispatch.Defer{
          fn: fn ->
-           run_in_transaction(fn -> DoubleDown.Repo.MultiStepper.run(multi, repo_facade) end)
+           run_in_transaction(fn -> DoubleDown.Repo.Impl.MultiStepper.run(multi, repo_facade) end)
          end
        }, store}
     end

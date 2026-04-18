@@ -229,7 +229,7 @@ if Code.ensure_loaded?(Ecto) do
     `{:error, failed_operation, failed_value, changes_so_far}`.
 
     The facade module is injected into opts under the `DoubleDown.Repo.Facade`
-    key so that test adapters can pass it to `DoubleDown.Repo.MultiStepper`
+    key so that test adapters can pass it to `DoubleDown.Repo.Impl.MultiStepper`
     for `:run` callbacks.
     """
     defcallback transact(fun_or_multi :: term(), opts :: keyword()) ::

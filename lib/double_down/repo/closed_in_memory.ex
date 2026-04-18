@@ -92,22 +92,22 @@ if Code.ensure_loaded?(Ecto) do
       inconclusive, requiring a fallback for most reads.
     """
 
-    alias DoubleDown.Repo.InMemory.Shared
+    alias DoubleDown.Repo.Impl.InMemoryShared
 
-    @type store :: Shared.store()
+    @type store :: InMemoryShared.store()
 
     @doc """
     Create a new ClosedInMemory state map. Same API as `Repo.InMemory.new/2`.
     """
     @impl DoubleDown.Contract.Dispatch.FakeHandler
     @spec new(term(), keyword()) :: store()
-    defdelegate new(seed \\ %{}, opts \\ []), to: Shared
+    defdelegate new(seed \\ %{}, opts \\ []), to: InMemoryShared
 
     @doc """
     Convert a list of structs into the nested state map for seeding.
     """
     @spec seed(list(struct())) :: store()
-    defdelegate seed(records), to: Shared
+    defdelegate seed(records), to: InMemoryShared
 
     @doc """
     Stateful handler function with closed-world semantics.
@@ -122,33 +122,33 @@ if Code.ensure_loaded?(Ecto) do
     # Write operations — delegate to Shared
     # -----------------------------------------------------------------
 
-    def dispatch(:insert, [changeset], store), do: Shared.dispatch_insert([changeset], store)
-    def dispatch(:insert, [cs, _opts], store), do: Shared.dispatch_insert([cs], store)
+    def dispatch(:insert, [changeset], store), do: InMemoryShared.dispatch_insert([changeset], store)
+    def dispatch(:insert, [cs, _opts], store), do: InMemoryShared.dispatch_insert([cs], store)
 
-    def dispatch(:update, [changeset], store), do: Shared.dispatch_update([changeset], store)
-    def dispatch(:update, [cs, _opts], store), do: Shared.dispatch_update([cs], store)
+    def dispatch(:update, [changeset], store), do: InMemoryShared.dispatch_update([changeset], store)
+    def dispatch(:update, [cs, _opts], store), do: InMemoryShared.dispatch_update([cs], store)
 
-    def dispatch(:delete, [record], store), do: Shared.dispatch_delete([record], store)
-    def dispatch(:delete, [record, _opts], store), do: Shared.dispatch_delete([record], store)
+    def dispatch(:delete, [record], store), do: InMemoryShared.dispatch_delete([record], store)
+    def dispatch(:delete, [record, _opts], store), do: InMemoryShared.dispatch_delete([record], store)
 
     # -----------------------------------------------------------------
     # PK reads — closed-world: nil/raise on miss
     # -----------------------------------------------------------------
 
     def dispatch(:get, [queryable, id], store) do
-      schema = Shared.extract_schema(queryable)
-      {Shared.get_record(store, schema, id), store}
+      schema = InMemoryShared.extract_schema(queryable)
+      {InMemoryShared.get_record(store, schema, id), store}
     end
 
     def dispatch(:get, [queryable, id, _opts], store),
       do: dispatch(:get, [queryable, id], store)
 
     def dispatch(:get!, [queryable, id], store) do
-      schema = Shared.extract_schema(queryable)
+      schema = InMemoryShared.extract_schema(queryable)
 
-      case Shared.get_record(store, schema, id) do
+      case InMemoryShared.get_record(store, schema, id) do
         nil ->
-          Shared.defer_raise(
+          InMemoryShared.defer_raise(
             "expected #{inspect(schema)} with id #{inspect(id)} to exist in " <>
               "ClosedInMemory store, but it was not found",
             store
@@ -168,9 +168,9 @@ if Code.ensure_loaded?(Ecto) do
 
     def dispatch(:get_by, [queryable, clauses], store)
         when is_atom(queryable) and not is_nil(queryable) do
-      clauses_kw = Shared.normalize_clauses(clauses)
-      records = Shared.records_for_schema(store, queryable)
-      matching = Enum.filter(records, &Shared.fields_match?(&1, clauses_kw))
+      clauses_kw = InMemoryShared.normalize_clauses(clauses)
+      records = InMemoryShared.records_for_schema(store, queryable)
+      matching = Enum.filter(records, &InMemoryShared.fields_match?(&1, clauses_kw))
       {List.first(matching), store}
     end
 
@@ -182,23 +182,23 @@ if Code.ensure_loaded?(Ecto) do
 
     def dispatch(:get_by!, [queryable, clauses], store)
         when is_atom(queryable) and not is_nil(queryable) do
-      clauses_kw = Shared.normalize_clauses(clauses)
-      records = Shared.records_for_schema(store, queryable)
-      matching = Enum.filter(records, &Shared.fields_match?(&1, clauses_kw))
+      clauses_kw = InMemoryShared.normalize_clauses(clauses)
+      records = InMemoryShared.records_for_schema(store, queryable)
+      matching = Enum.filter(records, &InMemoryShared.fields_match?(&1, clauses_kw))
 
       case matching do
         [record] ->
           {record, store}
 
         [] ->
-          Shared.defer_raise(
+          InMemoryShared.defer_raise(
             "expected #{inspect(queryable)} matching #{inspect(clauses)} to exist in " <>
               "ClosedInMemory store, but no matching record was found",
             store
           )
 
         _multiple ->
-          Shared.defer_raise(
+          InMemoryShared.defer_raise(
             "expected at most one #{inspect(queryable)} matching #{inspect(clauses)}, " <>
               "but found #{length(matching)} records in ClosedInMemory store",
             store
@@ -218,7 +218,7 @@ if Code.ensure_loaded?(Ecto) do
 
     def dispatch(:all, [queryable], store)
         when is_atom(queryable) and not is_nil(queryable) do
-      {Shared.records_for_schema(store, queryable), store}
+      {InMemoryShared.records_for_schema(store, queryable), store}
     end
 
     def dispatch(:all, [queryable], store),
@@ -229,7 +229,7 @@ if Code.ensure_loaded?(Ecto) do
 
     def dispatch(:one, [queryable], store)
         when is_atom(queryable) and not is_nil(queryable) do
-      records = Shared.records_for_schema(store, queryable)
+      records = InMemoryShared.records_for_schema(store, queryable)
 
       case records do
         [] ->
@@ -239,7 +239,7 @@ if Code.ensure_loaded?(Ecto) do
           {record, store}
 
         _multiple ->
-          Shared.defer_raise(
+          InMemoryShared.defer_raise(
             "expected at most one #{inspect(queryable)} in ClosedInMemory store, " <>
               "but found #{length(records)}",
             store
@@ -255,21 +255,21 @@ if Code.ensure_loaded?(Ecto) do
 
     def dispatch(:one!, [queryable], store)
         when is_atom(queryable) and not is_nil(queryable) do
-      records = Shared.records_for_schema(store, queryable)
+      records = InMemoryShared.records_for_schema(store, queryable)
 
       case records do
         [record] ->
           {record, store}
 
         [] ->
-          Shared.defer_raise(
+          InMemoryShared.defer_raise(
             "expected exactly one #{inspect(queryable)} in ClosedInMemory store, " <>
               "but found none",
             store
           )
 
         _multiple ->
-          Shared.defer_raise(
+          InMemoryShared.defer_raise(
             "expected exactly one #{inspect(queryable)} in ClosedInMemory store, " <>
               "but found #{length(records)}",
             store
@@ -285,7 +285,7 @@ if Code.ensure_loaded?(Ecto) do
 
     def dispatch(:exists?, [queryable], store)
         when is_atom(queryable) and not is_nil(queryable) do
-      {Shared.records_for_schema(store, queryable) != [], store}
+      {InMemoryShared.records_for_schema(store, queryable) != [], store}
     end
 
     def dispatch(:exists?, [queryable], store),
@@ -300,7 +300,7 @@ if Code.ensure_loaded?(Ecto) do
 
     def dispatch(:aggregate, [queryable, aggregate, field], store)
         when is_atom(queryable) and not is_nil(queryable) do
-      records = Shared.records_for_schema(store, queryable)
+      records = InMemoryShared.records_for_schema(store, queryable)
       {compute_aggregate(records, aggregate, field), store}
     end
 
@@ -321,18 +321,18 @@ if Code.ensure_loaded?(Ecto) do
           record = struct(source, entry_to_keyword(entry))
           schema = record.__struct__
 
-          case DoubleDown.Repo.Autogenerate.maybe_autogenerate_id(record, schema, fn s ->
+          case DoubleDown.Repo.Impl.Autogenerate.maybe_autogenerate_id(record, schema, fn s ->
                  st
-                 |> Shared.records_for_schema(s)
-                 |> Enum.map(&DoubleDown.Repo.Autogenerate.get_primary_key/1)
+                 |> InMemoryShared.records_for_schema(s)
+                 |> Enum.map(&DoubleDown.Repo.Impl.Autogenerate.get_primary_key/1)
                  |> Enum.filter(&is_integer/1)
                end) do
             {:error, {:no_autogenerate, _message}} ->
-              id = DoubleDown.Repo.Autogenerate.get_primary_key(record)
-              {count + 1, [record | acc], Shared.put_record(st, schema, id, record)}
+              id = DoubleDown.Repo.Impl.Autogenerate.get_primary_key(record)
+              {count + 1, [record | acc], InMemoryShared.put_record(st, schema, id, record)}
 
             {id, record} ->
-              {count + 1, [record | acc], Shared.put_record(st, schema, id, record)}
+              {count + 1, [record | acc], InMemoryShared.put_record(st, schema, id, record)}
           end
         end)
 
@@ -353,7 +353,7 @@ if Code.ensure_loaded?(Ecto) do
 
     def dispatch(:delete_all, [queryable], store)
         when is_atom(queryable) and not is_nil(queryable) do
-      records = Shared.records_for_schema(store, queryable)
+      records = InMemoryShared.records_for_schema(store, queryable)
       count = length(records)
       new_store = Map.delete(store, queryable)
       {{count, nil}, new_store}
@@ -394,15 +394,15 @@ if Code.ensure_loaded?(Ecto) do
     # Transaction operations — delegate to Shared
     # -----------------------------------------------------------------
 
-    def dispatch(:transact, args, store), do: Shared.dispatch_transact(args, store)
-    def dispatch(:rollback, args, store), do: Shared.dispatch_rollback(args, store)
+    def dispatch(:transact, args, store), do: InMemoryShared.dispatch_transact(args, store)
+    def dispatch(:rollback, args, store), do: InMemoryShared.dispatch_rollback(args, store)
 
     # -----------------------------------------------------------------
     # Fallback dispatch (closed-world error messages)
     # -----------------------------------------------------------------
 
     defp dispatch_via_fallback(operation, args, store) do
-      case Shared.try_fallback(store, operation, args) do
+      case InMemoryShared.try_fallback(store, operation, args) do
         {:no_fallback, ^operation, ^args} ->
           defer_raise_no_fallback(operation, args, store)
 
@@ -412,7 +412,7 @@ if Code.ensure_loaded?(Ecto) do
     end
 
     defp defer_raise_no_fallback(operation, args, store) do
-      Shared.defer_raise(
+      InMemoryShared.defer_raise(
         """
         DoubleDown.Repo.ClosedInMemory cannot service :#{operation} with args #{inspect(args)}.
 
