@@ -150,6 +150,40 @@ if Code.ensure_loaded?(Ecto) do
       {:ok, record}
     end
 
+    # -----------------------------------------------------------------
+    # Bang Write Operations
+    # -----------------------------------------------------------------
+
+    defp dispatch(:insert!, [changeset], fallback_fn) do
+      case dispatch(:insert, [changeset], fallback_fn) do
+        {:ok, record} ->
+          record
+
+        {:error, changeset} ->
+          raise Ecto.InvalidChangesetError, action: :insert, changeset: changeset
+      end
+    end
+
+    defp dispatch(:update!, [changeset], fallback_fn) do
+      case dispatch(:update, [changeset], fallback_fn) do
+        {:ok, record} ->
+          record
+
+        {:error, changeset} ->
+          raise Ecto.InvalidChangesetError, action: :update, changeset: changeset
+      end
+    end
+
+    defp dispatch(:delete!, [record], fallback_fn) do
+      case dispatch(:delete, [record], fallback_fn) do
+        {:ok, record} ->
+          record
+
+        {:error, changeset} ->
+          raise Ecto.InvalidChangesetError, action: :delete, changeset: changeset
+      end
+    end
+
     # Opts-accepting variants — strip opts, delegate to base arity.
     # Ecto.Repo operations all accept an optional opts keyword list as
     # the last argument. These are called by Ecto.Multi's internal :run
@@ -162,6 +196,15 @@ if Code.ensure_loaded?(Ecto) do
 
     defp dispatch(:delete, [record, _opts], fallback_fn),
       do: dispatch(:delete, [record], fallback_fn)
+
+    defp dispatch(:insert!, [changeset, _opts], fallback_fn),
+      do: dispatch(:insert!, [changeset], fallback_fn)
+
+    defp dispatch(:update!, [changeset, _opts], fallback_fn),
+      do: dispatch(:update!, [changeset], fallback_fn)
+
+    defp dispatch(:delete!, [record, _opts], fallback_fn),
+      do: dispatch(:delete!, [record], fallback_fn)
 
     defp dispatch(:get, [queryable, id, _opts], fallback_fn),
       do: dispatch(:get, [queryable, id], fallback_fn)

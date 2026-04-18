@@ -132,6 +132,40 @@ if Code.ensure_loaded?(Ecto) do
     end
 
     # -------------------------------------------------------------------
+    # Bang write operations
+    # -------------------------------------------------------------------
+
+    @doc false
+    def dispatch_insert!(args, store) do
+      case dispatch_insert(args, store) do
+        {{:ok, record}, new_store} -> {record, new_store}
+        {{:error, changeset}, store} -> bang_raise(:insert!, changeset, store)
+      end
+    end
+
+    @doc false
+    def dispatch_update!(args, store) do
+      case dispatch_update(args, store) do
+        {{:ok, record}, new_store} -> {record, new_store}
+        {{:error, changeset}, store} -> bang_raise(:update!, changeset, store)
+      end
+    end
+
+    @doc false
+    def dispatch_delete!(args, store) do
+      {{:ok, record}, new_store} = dispatch_delete(args, store)
+      {record, new_store}
+    end
+
+    defp bang_raise(action, %Ecto.Changeset{} = changeset, store) do
+      {%DoubleDown.Contract.Dispatch.Defer{
+         fn: fn ->
+           raise Ecto.InvalidChangesetError, action: action, changeset: changeset
+         end
+       }, store}
+    end
+
+    # -------------------------------------------------------------------
     # Transaction operations
     # -------------------------------------------------------------------
 

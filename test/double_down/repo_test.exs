@@ -113,6 +113,7 @@ defmodule DoubleDown.RepoTest do
                :aggregate,
                :all,
                :delete,
+               :delete!,
                :delete_all,
                :exists?,
                :get,
@@ -120,12 +121,14 @@ defmodule DoubleDown.RepoTest do
                :get_by,
                :get_by!,
                :insert,
+               :insert!,
                :insert_all,
                :one,
                :one!,
                :rollback,
                :transact,
                :update,
+               :update!,
                :update_all
              ]
     end

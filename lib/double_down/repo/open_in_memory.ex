@@ -170,6 +170,15 @@ if Code.ensure_loaded?(Ecto) do
 
     def dispatch(:delete, [record], store), do: InMemoryShared.dispatch_delete([record], store)
 
+    def dispatch(:insert!, [changeset], store),
+      do: InMemoryShared.dispatch_insert!([changeset], store)
+
+    def dispatch(:update!, [changeset], store),
+      do: InMemoryShared.dispatch_update!([changeset], store)
+
+    def dispatch(:delete!, [record], store),
+      do: InMemoryShared.dispatch_delete!([record], store)
+
     # -----------------------------------------------------------------
     # PK reads — 3-stage: state -> fallback -> error
     # -----------------------------------------------------------------
@@ -204,6 +213,15 @@ if Code.ensure_loaded?(Ecto) do
 
     def dispatch(:delete, [record, _opts], store),
       do: dispatch(:delete, [record], store)
+
+    def dispatch(:insert!, [changeset, _opts], store),
+      do: dispatch(:insert!, [changeset], store)
+
+    def dispatch(:update!, [changeset, _opts], store),
+      do: dispatch(:update!, [changeset], store)
+
+    def dispatch(:delete!, [record, _opts], store),
+      do: dispatch(:delete!, [record], store)
 
     def dispatch(:get, [queryable, id, _opts], store),
       do: dispatch(:get, [queryable, id], store)

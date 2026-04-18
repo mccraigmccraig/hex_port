@@ -134,6 +134,24 @@ if Code.ensure_loaded?(Ecto) do
     def dispatch(:delete, [record, _opts], store),
       do: InMemoryShared.dispatch_delete([record], store)
 
+    def dispatch(:insert!, [changeset], store),
+      do: InMemoryShared.dispatch_insert!([changeset], store)
+
+    def dispatch(:insert!, [cs, _opts], store),
+      do: InMemoryShared.dispatch_insert!([cs], store)
+
+    def dispatch(:update!, [changeset], store),
+      do: InMemoryShared.dispatch_update!([changeset], store)
+
+    def dispatch(:update!, [cs, _opts], store),
+      do: InMemoryShared.dispatch_update!([cs], store)
+
+    def dispatch(:delete!, [record], store),
+      do: InMemoryShared.dispatch_delete!([record], store)
+
+    def dispatch(:delete!, [record, _opts], store),
+      do: InMemoryShared.dispatch_delete!([record], store)
+
     # -----------------------------------------------------------------
     # PK reads — closed-world: nil/raise on miss
     # -----------------------------------------------------------------

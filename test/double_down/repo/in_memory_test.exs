@@ -83,6 +83,59 @@ defmodule DoubleDown.Repo.InMemoryTest do
   end
 
   # -------------------------------------------------------------------
+  # Bang write operations
+  # -------------------------------------------------------------------
+
+  describe "insert!" do
+    test "returns the struct on success" do
+      store = InMemory.new()
+      cs = User.changeset(%{name: "Alice"})
+      {user, _store} = InMemory.dispatch(:insert!, [cs], store)
+      assert user.name == "Alice"
+      assert user.id != nil
+    end
+
+    test "raises on invalid changeset" do
+      store = InMemory.new()
+      cs = User.changeset(%{}) |> Ecto.Changeset.add_error(:name, "required")
+      cs = %{cs | valid?: false}
+
+      {%DoubleDown.Contract.Dispatch.Defer{fn: raise_fn}, _} =
+        InMemory.dispatch(:insert!, [cs], store)
+
+      assert_raise Ecto.InvalidChangesetError, fn -> raise_fn.() end
+    end
+  end
+
+  describe "update!" do
+    test "returns the struct on success" do
+      store = InMemory.new([%User{id: 1, name: "Alice"}])
+      cs = User.changeset(%User{id: 1, name: "Alice"}, %{name: "Alicia"})
+      {user, _store} = InMemory.dispatch(:update!, [cs], store)
+      assert user.name == "Alicia"
+    end
+
+    test "raises on invalid changeset" do
+      store = InMemory.new()
+      cs = User.changeset(%{}) |> Ecto.Changeset.add_error(:name, "required")
+      cs = %{cs | valid?: false}
+
+      {%DoubleDown.Contract.Dispatch.Defer{fn: raise_fn}, _} =
+        InMemory.dispatch(:update!, [cs], store)
+
+      assert_raise Ecto.InvalidChangesetError, fn -> raise_fn.() end
+    end
+  end
+
+  describe "delete!" do
+    test "returns the struct on success" do
+      store = InMemory.new([%User{id: 1, name: "Alice"}])
+      {user, _store} = InMemory.dispatch(:delete!, [%User{id: 1}], store)
+      assert user.id == 1
+    end
+  end
+
+  # -------------------------------------------------------------------
   # PK reads — closed-world
   # -------------------------------------------------------------------
 

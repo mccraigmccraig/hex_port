@@ -87,6 +87,28 @@ if Code.ensure_loaded?(Ecto) do
                   {:ok, struct()} | {:error, Ecto.Changeset.t()}
 
     # -----------------------------------------------------------------
+    # Bang Write Operations
+    # -----------------------------------------------------------------
+
+    @doc "Insert a new record, raising on failure. Mirrors `Ecto.Repo.insert!/2`."
+    defcallback insert!(changeset :: Ecto.Changeset.t()) :: struct()
+
+    @doc "Insert a new record with options, raising on failure."
+    defcallback insert!(changeset :: Ecto.Changeset.t(), opts :: keyword()) :: struct()
+
+    @doc "Update an existing record, raising on failure. Mirrors `Ecto.Repo.update!/2`."
+    defcallback update!(changeset :: Ecto.Changeset.t()) :: struct()
+
+    @doc "Update an existing record with options, raising on failure."
+    defcallback update!(changeset :: Ecto.Changeset.t(), opts :: keyword()) :: struct()
+
+    @doc "Delete a record, raising on failure. Mirrors `Ecto.Repo.delete!/2`."
+    defcallback delete!(record :: struct()) :: struct()
+
+    @doc "Delete a record with options, raising on failure."
+    defcallback delete!(record :: struct(), opts :: keyword()) :: struct()
+
+    # -----------------------------------------------------------------
     # Bulk Operations
     # -----------------------------------------------------------------
 
