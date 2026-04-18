@@ -160,27 +160,85 @@ end
 
 #### ExMachina integration
 
+`Repo.InMemory` works with [ExMachina](https://hex.pm/packages/ex_machina)
+factories as a drop-in replacement for the Ecto sandbox. Factory
+`insert` calls go through the Repo facade dispatch, land in the
+InMemory store, and all subsequent reads work — `all`, `get_by`,
+`aggregate`, etc. No database, no sandbox, `async: true`, at
+speeds suitable for property-based testing.
+
+**Step 1: Define your factory**
+
+Point ExMachina at your Repo facade module (not your Ecto Repo):
+
 ```elixir
-setup do
-  DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory)
-  insert(:user, name: "Alice", email: "alice@example.com")
-  insert(:user, name: "Bob", email: "bob@example.com")
-  :ok
-end
+defmodule MyApp.Factory do
+  use ExMachina.Ecto, repo: MyApp.Repo
 
-test "all users" do
-  assert [_, _] = MyApp.Repo.all(User)
-end
-
-test "find by email" do
-  assert %User{name: "Alice"} =
-    MyApp.Repo.get_by(User, email: "alice@example.com")
-end
-
-test "count users" do
-  assert 2 = MyApp.Repo.aggregate(User, :count, :id)
+  def user_factory do
+    %MyApp.User{
+      name: sequence(:name, &"User #{&1}"),
+      email: sequence(:email, &"user#{&1}@example.com"),
+      age: 25
+    }
+  end
 end
 ```
+
+**Step 2: Set up InMemory in your test**
+
+```elixir
+defmodule MyApp.SomeTest do
+  use ExUnit.Case, async: true
+  import MyApp.Factory
+
+  setup do
+    DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory)
+    :ok
+  end
+
+  test "factory-inserted records are readable" do
+    insert(:user, name: "Alice", email: "alice@example.com")
+    insert(:user, name: "Bob", email: "bob@example.com")
+
+    # All bare-schema reads work — no fallback needed
+    assert [_, _] = MyApp.Repo.all(User)
+    assert %User{name: "Alice"} = MyApp.Repo.get_by(User, email: "alice@example.com")
+    assert 2 = MyApp.Repo.aggregate(User, :count, :id)
+  end
+
+  test "read-after-write consistency" do
+    user = insert(:user, name: "Alice")
+    assert ^user = MyApp.Repo.get(User, user.id)
+  end
+
+  test "failure simulation over factory data" do
+    insert(:user, name: "Alice")
+    insert(:user, name: "Bob")
+
+    # Intercept the next insert! to simulate a constraint error
+    DoubleDown.Double.expect(DoubleDown.Repo, :insert!, fn [struct] ->
+      cs = Ecto.Changeset.change(struct) |> Ecto.Changeset.add_error(:name, "taken")
+      raise Ecto.InvalidChangesetError, action: :insert, changeset: cs
+    end)
+
+    assert_raise Ecto.InvalidChangesetError, fn ->
+      insert(:user, name: "Carol")
+    end
+
+    # Existing records are unaffected
+    assert 2 = MyApp.Repo.aggregate(User, :count, :id)
+  end
+end
+```
+
+This gives you the same developer experience as the Ecto sandbox —
+factories write records, reads find them — but without a database
+process, without sandbox checkout, and at pure-function speed.
+
+For a complete working example, see
+[`test/double_down/repo/ex_machina_test.exs`](../test/double_down/repo/ex_machina_test.exs)
+in the DoubleDown source.
 
 #### Ecto.Query fallback
 
