@@ -45,6 +45,13 @@ implementation.
 
 ## Implementations
 
+| Implementation | Type | State | Best for |
+|----------------|------|-------|----------|
+| **Your Ecto Repo** | Production | Real database | Production dispatch (zero-cost passthrough) |
+| **`Repo.Test`** | Stateless stub | None | Fire-and-forget writes, canned read responses |
+| **`Repo.InMemory`** | Stateful fake (open-world) | `%{Schema => %{pk => struct}}` | PK-based read-after-write; fallback for other reads |
+| **`Repo.ClosedInMemory`** | Stateful fake (closed-world) | `%{Schema => %{pk => struct}}` | Full in-memory store; ExMachina factories; all bare-schema reads without fallback |
+
 ### Production — zero-cost passthrough to your Ecto Repo
 
 There is no production "implementation" to write — just point the
@@ -91,9 +98,9 @@ Use `Repo.Test` when your test only needs fire-and-forget writes and
 a few canned read responses. For read-after-write consistency, use
 `Repo.InMemory`.
 
-### `Repo.InMemory` — stateful test double
+### `Repo.InMemory` — stateful test double (open-world)
 
-The main event. `Repo.InMemory` models a consistent in-memory store
+`Repo.InMemory` models a consistent in-memory store
 with primary-key indexing, read-after-write consistency for PK lookups,
 and a fallback mechanism for operations the store can't answer
 authoritatively.
@@ -254,12 +261,13 @@ exact operation and suggesting how to add a fallback clause:
 This fail-loud approach prevents tests from passing with silently
 wrong data.
 
-### `Repo.ClosedInMemory` — closed-world stateful test double
+### `Repo.ClosedInMemory` — stateful test double (closed-world)
 
-`Repo.ClosedInMemory` is a variant of `Repo.InMemory` with
-**closed-world semantics**: the state is the complete truth. If a
-record isn't in the state, it doesn't exist. This makes the adapter
-authoritative for bare schema queryables without needing a fallback:
+`Repo.ClosedInMemory` uses **closed-world semantics**: the state is
+the complete truth. If a record isn't in the state, it doesn't
+exist. This makes the adapter authoritative for all bare schema
+operations without needing a fallback — the fallback becomes the
+escape hatch for `Ecto.Query` queryables, not the default path:
 
 | Category | Operations | Behaviour |
 |----------|-----------|-----------|
