@@ -1,175 +1,82 @@
-# Stateful in-memory Repo implementation for tests.
-#
-# Provides read-after-write consistency for PK-based lookups. get_by/get_by!
-# also use PK lookup when clauses include all PK fields. Other non-PK reads
-# (all, one, exists?, aggregate, etc.) go through an optional fallback
-# function, or raise if no fallback is registered.
-#
-# ## Usage
-#
-#     DoubleDown.Testing.set_stateful_handler(
-#       DoubleDown.Repo,
-#       &DoubleDown.Repo.OpenInMemory.dispatch/3,
-#       DoubleDown.Repo.OpenInMemory.new()
-#     )
-#
-#     # With seeded data and a fallback function
-#     initial = DoubleDown.Repo.OpenInMemory.new(
-#       seed: [%User{id: 1, name: "Alice"}],
-#       fallback_fn: fn
-#         :all, [User] -> [%User{id: 1, name: "Alice"}]
-#       end
-#     )
-#     DoubleDown.Testing.set_stateful_handler(
-#       DoubleDown.Repo,
-#       &DoubleDown.Repo.OpenInMemory.dispatch/3,
-#       initial
-#     )
+# Open-world stateful in-memory Repo fake for tests.
+# See Repo.InMemory for the recommended closed-world variant.
 #
 if Code.ensure_loaded?(Ecto) do
   defmodule DoubleDown.Repo.OpenInMemory do
     @behaviour DoubleDown.Contract.Dispatch.FakeHandler
 
     @moduledoc """
-    Stateful in-memory Repo implementation for tests (open-world).
+    Stateful in-memory Repo fake (open-world).
 
-    Provides a stateful handler function for `DoubleDown.Repo` operations.
-    State is a nested map keyed by `schema_module => %{primary_key => struct}`,
-    giving read-after-write consistency for PK-based lookups within a test.
+    Uses **open-world** semantics: the state may be incomplete. If a
+    record is not found in state, the adapter falls through to the
+    fallback function — it cannot assume the record doesn't exist.
 
-    ## Open-world semantics
+    For most use cases, prefer `DoubleDown.Repo.InMemory` (closed-world)
+    which is authoritative for all bare-schema reads without a
+    fallback. Use `OpenInMemory` when the state is deliberately
+    partial — e.g. you've inserted some records but expect the
+    fallback to provide others.
 
-    This adapter uses **open-world** semantics: the state may be
-    incomplete. If a record is not found in state, the adapter cannot
-    know whether it exists in the _logical_ store — it falls through to
-    the fallback function. For **closed-world** semantics (absence
-    means "doesn't exist"), see `DoubleDown.Repo.InMemory`.
+    Implements `DoubleDown.Contract.Dispatch.FakeHandler`, so it can
+    be used by module name with `Double.fake`:
 
-    ## State Shape
+    ## Usage with Double.fake
 
-        %{
-          MyApp.User => %{
-            1 => %MyApp.User{id: 1, name: "Alice"},
-            2 => %MyApp.User{id: 2, name: "Bob"}
-          },
-          MyApp.Post => %{
-            1 => %MyApp.Post{id: 1, title: "Hello"}
-          }
-        }
+        # PK reads only — no fallback needed for records in state:
+        DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.OpenInMemory)
 
-    ## 3-Stage Read Dispatch
-
-    The InMemory adapter can only answer authoritatively for operations where
-    the state definitively contains the answer. For PK-based reads (`get`,
-    `get!`), if a record is found in state it is returned. If not found, the
-    adapter cannot know whether the record exists in the _logical_ store —
-    it falls through to the fallback function, or raises.
-
-    `get_by` and `get_by!` use 3-stage dispatch when the queryable is a bare
-    schema module (atom) and the clauses include all primary key fields. The
-    PK is used for a direct map lookup in state. If found, any additional
-    non-PK clauses are verified against the record (returning `nil` on
-    mismatch). If not found in state, the adapter falls through to the
-    fallback function. When the clauses do not include the PK, or the
-    queryable is an `Ecto.Query`, `get_by`/`get_by!` delegate directly to
-    the fallback function as before.
-
-    For all other reads (`one`, `all`, `exists?`, `aggregate`, etc.) the
-    state is never authoritative — these always go through the fallback
-    function, or raise.
-
-    The dispatch stages are:
-
-    1. **State lookup** (PK reads only) — if the record is in state, return it
-    2. **Fallback function** — an optional user-supplied function that handles
-       operations the state cannot answer. Receives `(operation, args, state)`
-       where `state` is the clean store map (without internal keys), and
-       returns the result. If it raises `FunctionClauseError` (no matching
-       clause), falls through to stage 3.
-    3. **Raise** — a clear error explaining that InMemory cannot service the
-       operation, suggesting the fallback function as the escape hatch.
-
-    ## Usage
-
-        # Basic — PK reads only, no fallback:
-        DoubleDown.Testing.set_stateful_handler(
+        # With seed data and fallback for non-PK reads:
+        DoubleDown.Double.fake(
           DoubleDown.Repo,
-          &DoubleDown.Repo.OpenInMemory.dispatch/3,
-          DoubleDown.Repo.OpenInMemory.new()
-        )
-
-        # With seed data and fallback:
-        state = DoubleDown.Repo.OpenInMemory.new(
-          seed: [%User{id: 1, name: "Alice"}],
+          DoubleDown.Repo.OpenInMemory,
+          [%User{id: 1, name: "Alice"}],
           fallback_fn: fn
             :all, [User], state ->
               Map.get(state, User, %{}) |> Map.values()
             :get_by, [User, [email: "alice@example.com"]], _state ->
-              %User{id: 1}
+              %User{id: 1, name: "Alice"}
           end
         )
-        DoubleDown.Testing.set_stateful_handler(
-          DoubleDown.Repo,
-          &DoubleDown.Repo.OpenInMemory.dispatch/3,
-          state
-        )
 
-    ## Seeding Initial State
+        # Layer expects for failure simulation:
+        DoubleDown.Repo
+        |> DoubleDown.Double.fake(DoubleDown.Repo.OpenInMemory)
+        |> DoubleDown.Double.expect(:insert, fn [changeset] ->
+          {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
+        end)
 
-    Use `new/1` with the `:seed` option, or `seed/1` to convert a list of
-    structs into the nested state map:
+    ## Operation dispatch (3-stage)
 
-        DoubleDown.Repo.OpenInMemory.new(seed: [
-          %User{id: 1, name: "Alice"},
-          %User{id: 2, name: "Bob"}
-        ])
+    | Category | Operations | Behaviour |
+    |----------|-----------|-----------|
+    | **Writes** | `insert`, `update`, `delete` | Always handled by state |
+    | **PK reads** | `get`, `get!` | State first, then fallback |
+    | **get_by** | `get_by`, `get_by!` | PK lookup when PK in clauses, then fallback |
+    | **Other reads** | `one`, `all`, `exists?`, `aggregate` | Always fallback |
+    | **Bulk** | `insert_all`, `update_all`, `delete_all` | Always fallback |
+    | **Transactions** | `transact`, `rollback` | Delegate to sub-operations |
 
-    ## Differences from Repo.Stub
+    For reads, the dispatch stages are:
 
-    `Repo.Stub` is stateless — writes apply changesets and return `{:ok, struct}`
-    but nothing is stored. Reads always return defaults (`nil`, `[]`, `false`).
+    1. **State lookup** — if the record is in state, return it
+    2. **Fallback function** — a 3-arity `(operation, args, state)`
+       function that handles operations the state can't answer
+    3. **Raise** — clear error suggesting a fallback clause
 
-    `Repo.OpenInMemory` is stateful — writes store records in state, and subsequent
-    PK-based reads can find them. Non-PK reads require a fallback function.
-    Use `Repo.OpenInMemory` when your test needs read-after-write consistency.
-    Use `Repo.Stub` when you only need fire-and-forget writes.
+    ## When to use which Repo fake
 
-    ## Primary Key Autogeneration
-
-    When inserting a changeset with a `nil` primary key, the adapter
-    autogenerates the PK based on Ecto schema metadata:
-
-    - **`:id` type** (default `schema`) — auto-incremented integer
-      based on existing records of that schema type
-    - **`:binary_id`** — generates a UUID string via `Ecto.UUID`
-    - **Parameterized types** (`Ecto.UUID`, `Uniq.UUID`, etc.) —
-      calls the type's `autogenerate` callback
-    - **`@primary_key false`** — no PK handling needed
-    - **`autogenerate: false`** — raises `ArgumentError` if no PK
-      value is provided
-
-    Explicitly set PK values are always preserved.
-
-    ## Supported Operations
-
-    - **Writes (authoritative):** `insert`, `update`, `delete` — always handled
-      by the state
-    - **PK reads (3-stage):** `get`, `get!` — check state first, then fallback,
-      then error
-    - **get_by / get_by! (3-stage when PK in clauses):** when the queryable is
-      a bare schema and clauses include all PK fields, uses PK lookup in state
-      then verifies remaining clauses. Falls through to fallback when PK not in
-      state. Delegates directly to fallback when clauses don't include PK or
-      queryable is an `Ecto.Query`.
-    - **Non-PK reads (2-stage):** `one`, `one!`, `all`,
-      `exists?`, `aggregate` — fallback or error
-    - **Bulk (2-stage):** `update_all`, `delete_all` — fallback or error
-    - **Transactions:** `transact` — delegates to sub-operations
+    | Fake | State | Best for |
+    |------|-------|----------|
+    | `Repo.Stub` | None | Fire-and-forget writes, canned reads |
+    | `Repo.InMemory` | Complete store | All bare-schema reads; ExMachina factories |
+    | **`Repo.OpenInMemory`** | **Partial store** | **PK reads in state, fallback for rest** |
 
     ## See also
 
-    - `DoubleDown.Repo.InMemory` — closed-world variant where absence
-      means "doesn't exist", enabling authoritative reads without a fallback.
+    - `DoubleDown.Repo.InMemory` — closed-world variant (recommended).
+      Authoritative for all bare-schema reads without a fallback.
+    - `DoubleDown.Repo.Stub` — stateless stub for fire-and-forget writes.
     """
 
     alias DoubleDown.Repo.Impl.InMemoryShared
@@ -255,8 +162,12 @@ if Code.ensure_loaded?(Ecto) do
     # Write operations — delegate to Shared
     # -----------------------------------------------------------------
 
-    def dispatch(:insert, [changeset], store), do: InMemoryShared.dispatch_insert([changeset], store)
-    def dispatch(:update, [changeset], store), do: InMemoryShared.dispatch_update([changeset], store)
+    def dispatch(:insert, [changeset], store),
+      do: InMemoryShared.dispatch_insert([changeset], store)
+
+    def dispatch(:update, [changeset], store),
+      do: InMemoryShared.dispatch_update([changeset], store)
+
     def dispatch(:delete, [record], store), do: InMemoryShared.dispatch_delete([record], store)
 
     # -----------------------------------------------------------------

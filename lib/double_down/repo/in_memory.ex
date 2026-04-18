@@ -3,62 +3,30 @@ if Code.ensure_loaded?(Ecto) do
     @behaviour DoubleDown.Contract.Dispatch.FakeHandler
 
     @moduledoc """
-    Stateful in-memory Repo implementation for tests (closed-world).
+    Stateful in-memory Repo fake (closed-world). **Recommended default.**
 
-    Like `DoubleDown.Repo.OpenInMemory`, provides a stateful handler for
-    `DoubleDown.Repo` operations with state keyed by
-    `schema_module => %{primary_key => struct}`. The difference is the
-    **closed-world assumption**: the state is the complete truth. If a
-    record is not in the state, it doesn't exist.
+    The state is the complete truth — if a record isn't in the store,
+    it doesn't exist. This makes the adapter authoritative for all
+    bare schema operations without needing a fallback function.
 
-    This makes the adapter authoritative for a much larger subset of
-    operations than `Repo.OpenInMemory`:
+    Implements `DoubleDown.Contract.Dispatch.FakeHandler`, so it can
+    be used by module name with `Double.fake`:
 
-    - **Writes:** `insert`, `update`, `delete` — same as InMemory
-    - **PK reads:** `get`/`get!` — `nil`/raise on miss (no fallback)
-    - **Clause-based reads:** `get_by`/`get_by!` — scan and filter
-    - **Collection reads:** `all`, `one`/`one!`, `exists?` — scan
-    - **Aggregates:** `aggregate(:count/:sum/:avg/:min/:max, field)`
-    - **Bulk writes:** `insert_all`, `delete_all`, `update_all`
-      (bare schema with `set:` updates)
-    - **Transactions:** `transact`, `rollback`
+    ## Usage with Double.fake
 
-    The **fallback function** is only needed for operations with
-    `Ecto.Query` queryables (containing `where`, `join`, `select`
-    etc.) that cannot be evaluated against in-memory data without a
-    query engine. For bare schema queryables, the adapter handles
-    everything.
-
-    ## When to use InMemory vs InMemory
-
-    | Scenario | Use |
-    |----------|-----|
-    | State is the full truth, reads should work without fallback | `InMemory` |
-    | State is partial, reads for missing records should hit a fallback | `InMemory` |
-    | ExMachina factories writing to an in-memory store | `InMemory` |
-    | Only need PK-based read-after-write | `InMemory` |
-
-    ## Usage
-
-        # Basic — closed-world, no fallback needed for bare schemas
+        # Basic — all bare-schema reads work without fallback:
         DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory)
 
-        # With seed data
-        DoubleDown.Double.fake(
-          DoubleDown.Repo,
-          DoubleDown.Repo.InMemory,
-          [%User{id: 1, name: "Alice"}, %Post{id: 1, title: "Hello"}]
-        )
+        # With seed data:
+        DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory,
+          [%User{id: 1, name: "Alice"}, %Post{id: 1, title: "Hello"}])
 
-        # With fallback for Ecto.Query operations
-        DoubleDown.Double.fake(
-          DoubleDown.Repo,
-          DoubleDown.Repo.InMemory,
-          [],
-          fallback_fn: fn
-            :all, [%Ecto.Query{} = _query], _state -> []
-          end
-        )
+        # Layer expects for failure simulation:
+        DoubleDown.Repo
+        |> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
+        |> DoubleDown.Double.expect(:insert, fn [changeset] ->
+          {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
+        end)
 
     ## ExMachina integration
 
@@ -70,8 +38,7 @@ if Code.ensure_loaded?(Ecto) do
         end
 
         test "lists all users" do
-          users = MyApp.Repo.all(User)
-          assert length(users) == 2
+          assert [_, _] = MyApp.Repo.all(User)
         end
 
         test "finds user by email" do
@@ -79,17 +46,47 @@ if Code.ensure_loaded?(Ecto) do
             MyApp.Repo.get_by(User, email: "alice@example.com")
         end
 
-    ## Ecto.Query limitation
+        test "count users" do
+          assert 2 = MyApp.Repo.aggregate(User, :count, :id)
+        end
 
-    Operations with `Ecto.Query` queryables fall through to the
-    fallback function, or raise with a clear error. The adapter
-    cannot evaluate `where`, `join`, `preload`, `select`, or other
-    query expressions against in-memory data.
+    ## Authoritative operations (bare schema queryables)
+
+    | Category | Operations | Behaviour |
+    |----------|-----------|-----------|
+    | **Writes** | `insert`, `update`, `delete` | Store in state |
+    | **PK reads** | `get`, `get!` | `nil`/raise on miss (no fallback) |
+    | **Clause reads** | `get_by`, `get_by!` | Scan and filter |
+    | **Collection** | `all`, `one`/`one!`, `exists?` | Scan state |
+    | **Aggregates** | `aggregate` | Compute from state |
+    | **Bulk writes** | `insert_all`, `delete_all`, `update_all` (`set:`) | Modify state |
+    | **Transactions** | `transact`, `rollback` | Delegate to sub-operations |
+
+    ## Ecto.Query fallback
+
+    Operations with `Ecto.Query` queryables (containing `where`,
+    `join`, `select` etc.) cannot be evaluated in-memory. These fall
+    through to the fallback function, or raise with a clear error:
+
+        DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory, [],
+          fallback_fn: fn
+            :all, [%Ecto.Query{}], _state -> []
+          end
+        )
+
+    ## When to use which Repo fake
+
+    | Fake | State | Best for |
+    |------|-------|----------|
+    | `Repo.Stub` | None | Fire-and-forget writes, canned reads |
+    | **`Repo.InMemory`** | **Complete store** | **All bare-schema reads; ExMachina factories** |
+    | `Repo.OpenInMemory` | Partial store | PK reads in state, fallback for rest |
 
     ## See also
 
-    - `DoubleDown.Repo.OpenInMemory` — open-world variant where absence is
-      inconclusive, requiring a fallback for most reads.
+    - `DoubleDown.Repo.OpenInMemory` — open-world variant where absence
+      is inconclusive, requiring a fallback for most reads.
+    - `DoubleDown.Repo.Stub` — stateless stub for fire-and-forget writes.
     """
 
     alias DoubleDown.Repo.Impl.InMemoryShared
@@ -122,14 +119,20 @@ if Code.ensure_loaded?(Ecto) do
     # Write operations — delegate to Shared
     # -----------------------------------------------------------------
 
-    def dispatch(:insert, [changeset], store), do: InMemoryShared.dispatch_insert([changeset], store)
+    def dispatch(:insert, [changeset], store),
+      do: InMemoryShared.dispatch_insert([changeset], store)
+
     def dispatch(:insert, [cs, _opts], store), do: InMemoryShared.dispatch_insert([cs], store)
 
-    def dispatch(:update, [changeset], store), do: InMemoryShared.dispatch_update([changeset], store)
+    def dispatch(:update, [changeset], store),
+      do: InMemoryShared.dispatch_update([changeset], store)
+
     def dispatch(:update, [cs, _opts], store), do: InMemoryShared.dispatch_update([cs], store)
 
     def dispatch(:delete, [record], store), do: InMemoryShared.dispatch_delete([record], store)
-    def dispatch(:delete, [record, _opts], store), do: InMemoryShared.dispatch_delete([record], store)
+
+    def dispatch(:delete, [record, _opts], store),
+      do: InMemoryShared.dispatch_delete([record], store)
 
     # -----------------------------------------------------------------
     # PK reads — closed-world: nil/raise on miss
