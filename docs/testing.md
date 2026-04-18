@@ -35,8 +35,19 @@ details.
 ## Double (expect/stub/fake)
 
 `DoubleDown.Double` is the primary API for setting up test doubles.
-Each call writes directly to NimbleOwnership — no builder, no
-`install!` step. All functions return the contract module for piping.
+Every `Double` function takes a **contract module** as its first
+argument — this is the module that defines the boundary, regardless
+of how it was created:
+
+- A `defcallback` module (via `DoubleDown.Facade`)
+- A vanilla `@behaviour` module (via `DoubleDown.BehaviourFacade`)
+- A dynamically shimmed module (via `DoubleDown.Dynamic`)
+
+The contract module is the single identity that ties together
+config, dispatch, and test doubles. `Double` doesn't care which
+kind of contract it is — the API is the same. Each call writes
+directly to NimbleOwnership — no builder, no `install!` step.
+All functions return the contract module for piping.
 
 ### Basic usage
 
