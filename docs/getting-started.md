@@ -49,14 +49,31 @@ The spectrum from stub to fake is a tradeoff: stubs are easier to
 write but test less; fakes test more but require more upfront work
 (which DoubleDown provides out of the box for Repo operations).
 
-## Defining a contract
+## Contracts and facades
 
-A contract behaviour declares the operations that cross a boundary. DoubleDown
-uses `defcallback` rather than plain `@callback` to capture typed
-signatures with parameter names, return types, and optional metadata
-— all available at compile time via `__callbacks__/0`. See
-[Why `defcallback` instead of plain `@callback`?](#why-defcallback-instead-of-plain-callback)
-for the rationale.
+A contract declares the operations that cross a boundary. A facade
+dispatches calls to the configured implementation. DoubleDown
+supports three ways to define this pairing:
+
+- **`defcallback` contracts** — richest option. `defcallback`
+  captures typed signatures with parameter names, return types,
+  and optional metadata, and `DoubleDown.Facade` generates the
+  dispatch facade. Supports combined contract + facade in a single
+  module, LSP-friendly `@doc` sync, pre-dispatch transforms, and
+  compile-time spec checking. See
+  [Why `defcallback`?](#why-defcallback-instead-of-plain-callback)
+  for the rationale.
+
+- **Vanilla behaviours** — for existing `@behaviour` modules you
+  don't control (third-party libraries, shared packages, legacy
+  code). `DoubleDown.BehaviourFacade` reads `@callback`
+  declarations from the compiled module and generates an equivalent
+  dispatch facade.
+
+- **Dynamic facades** — Mimic-style bytecode interception for any
+  module, no contract needed. `DoubleDown.Dynamic` replaces a
+  module with a dispatch shim at test time. See
+  [Dynamic Facades](dynamic.md).
 
 ### Combined contract + facade (recommended)
 
