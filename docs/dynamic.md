@@ -4,7 +4,9 @@
 
 Dynamic facades enable Mimic-style bytecode interception — replace
 any module with a dispatch shim at test time, then use the full
-`DoubleDown.Double` API without defining a contract or facade.
+`DoubleDown.Double` API without defining an explicit contract or
+facade. The shimmed module becomes both the **contract** (the name
+used in test double setup) and the **facade** (what callers use).
 
 ## When to use dynamic facades
 
@@ -37,11 +39,19 @@ ExUnit.start()
 
 `setup/1` copies the original module to a backup
 (`Module.__dd_original__`) and replaces it with a dispatch shim.
-The shim checks NimbleOwnership for test handlers, falling back to
-the original implementation when none are installed.
+The original module name becomes the implicit contract — use it
+as the first argument to all `Double` API calls:
 
-Bytecode replacement is VM-global — it must happen before any tests
-run. Tests that don't install a handler get the original module's
+```elixir
+# MyApp.EctoRepo is the contract — same module callers use
+DoubleDown.Double.fake(MyApp.EctoRepo, DoubleDown.Repo.InMemory)
+DoubleDown.Double.stub(SomeThirdPartyClient, fn :fetch, [id] -> {:ok, id} end)
+```
+
+The shim checks NimbleOwnership for test handlers, falling back to
+the original implementation when none are installed. Bytecode
+replacement is VM-global — it must happen before any tests run.
+Tests that don't install a handler get the original module's
 behaviour automatically.
 
 ## Using Double APIs
