@@ -237,7 +237,7 @@ factories write records, reads find them — but without a database
 process, without sandbox checkout, and at pure-function speed.
 
 For a complete working example, see
-[`test/double_down/repo/ex_machina_test.exs`](../test/double_down/repo/ex_machina_test.exs)
+[`test/double_down/repo/ex_machina_test.exs`](https://github.com/mccraigmccraig/double_down/blob/main/test/double_down/repo/ex_machina_test.exs)
 in the DoubleDown source.
 
 #### Ecto.Query fallback
