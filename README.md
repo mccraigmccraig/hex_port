@@ -15,49 +15,30 @@ DoubleDown extends Jose Valim's
 [Mocks and explicit contracts](https://dashbit.co/blog/mocks-and-explicit-contracts)
 pattern:
 
-- **Flexible contract boundaries** — a contract module defines the
-  interface; a facade dispatches to the configured implementation.
-  Three ways to set this up:
-  - `defcallback` + `DoubleDown.ContractFacade` — generates the
-    behaviour, facade, and typespecs from a single declaration
-    (recommended for new code)
-  - `DoubleDown.BehaviourFacade` — generates a dispatch facade from
-    an existing vanilla `@behaviour` module you don't control
-  - `DoubleDown.DynamicFacade` — Mimic-style bytecode interception
-    for any module, no explicit contract needed
-
-  All three use the same dispatch and test double infrastructure.
-  See [Choosing a facade type](docs/getting-started.md#choosing-a-facade-type)
-  for a full comparison.
-- **Zero-cost production dispatch** — in production, facades are
-  compiled to inlined direct function calls to the configured
-  implementation. `MyContract.do_thing(args)` compiles to exactly
-  the same bytecode as `DirectImpl.do_thing(args)` — the facade
-  disappears entirely after BEAM inlining. Contract boundaries are
-  a pure architectural decision with no runtime cost.
-- **Stateful fakes** — modelling stateful dependencies like a
-  database with plain mocks is verbose and fragile, so most projects
-  just hit the real DB and accept the speed penalty. DoubleDown's
-  stateful fakes maintain in-memory state with atomic updates,
-  enabling read-after-write consistency without a database — fast
-  enough for property-based testing. The built-in Ecto Repo ships
-  with three test doubles:
-  - `Repo.Stub` — stateless stub (fire-and-forget writes)
-  - `Repo.InMemory` — closed-world stateful fake (state is the
-    complete truth, authoritative for all bare-schema reads —
-    works with ExMachina factories)
-  - `Repo.OpenInMemory` — open-world stateful fake (PK-based
-    read-after-write, fallback for other reads)
-- **Fakes with expectations** — testing "what happens when the second
-  insert fails with a constraint violation?" means either a real DB
-  or a mock that responds to each Repo call individually — verbose and
-  brittle. DoubleDown lets you layer expects over a stateful fake:
-  the first insert writes to an in-memory store, the second returns
-  an error, and subsequent reads find the first record.
-- **Dispatch logging** — when test doubles do real computation
-  (changeset validation, PK autogeneration, timestamps), the results
-  are worth asserting on. DoubleDown logs the full
-  `{contract, operation, args, result}` tuple for every call, and
+- **Zero boilerplate** — `defcallback` generates the `@behaviour`,
+  `@callback`, dispatch facade, and `@spec` from a single declaration.
+  Or generate a facade from an existing `@behaviour` module, or
+  use Mimic-style bytecode interception for any module. See
+  [Choosing a facade type](docs/getting-started.md#choosing-a-facade-type).
+- **Zero-cost production dispatch** — facades compile to inlined
+  direct calls. `MyContract.do_thing(args)` produces identical
+  bytecode to `DirectImpl.do_thing(args)` — the facade disappears
+  entirely after BEAM inlining. Contract boundaries have no
+  runtime cost.
+- **Stateful fakes with rollback** — in-memory state with atomic
+  updates, read-after-write consistency, `Ecto.Multi` transactions,
+  and rollback that restores pre-transaction state. Fast enough for
+  property-based testing.
+- **ExMachina factory integration** — `Repo.InMemory` works as a
+  drop-in replacement for the Ecto sandbox. Factory-inserted records
+  are readable via `all`, `get_by`, `aggregate` — no database, no
+  sandbox, `async: true`.
+- **Fakes with expectations** — layer expects over a stateful fake
+  to simulate failures. First insert writes to the in-memory store,
+  second returns a constraint error, subsequent reads find the first
+  record.
+- **Dispatch logging** — logs the full
+  `{contract, operation, args, result}` tuple for every call.
   `DoubleDown.Log` provides structured pattern matching over those
   logs.
 
@@ -74,7 +55,7 @@ pattern:
 | Generated `@spec` + `@doc`      | LSP-friendly on `defcallback` and `BehaviourFacade` facades                        |
 | Standard `@behaviour`           | All contracts are Mox-compatible — `@behaviour` + `@callback`                      |
 
-### Test doubles (beyond Mox)
+### Test doubles
 
 | Feature                            | Description                                                                |
 |------------------------------------|----------------------------------------------------------------------------|
@@ -82,23 +63,24 @@ pattern:
 | Stateful fakes                     | In-memory state with atomic updates via NimbleOwnership                    |
 | Expect + fake composition          | Layer expects over a stateful fake for failure simulation                  |
 | `:passthrough` expects             | Count calls without changing behaviour                                     |
-| Stubs and fakes as fallbacks       | Dispatch priority chain: expects > stubs > fake > raise                    |
+| Transaction rollback               | `rollback/1` restores pre-transaction state in InMemory fakes              |
 | Dispatch logging                   | Record `{contract, op, args, result}` for every call                       |
 | Structured log matching            | `DoubleDown.Log` — pattern-match on logged results                         |
 | Async-safe                         | Process-scoped isolation via NimbleOwnership, `async: true` out of the box |
 
-### Built-in Ecto Repo fakes
+### Built-in Ecto Repo
 
 Full `Ecto.Repo` contract (`DoubleDown.Repo`) with three test doubles:
 
-| Fake | Type | Best for |
+| Double | Type | Best for |
 |------|------|----------|
 | `Repo.Stub` | Stateless stub | Fire-and-forget writes, canned read responses |
-| `Repo.InMemory` | Closed-world stateful fake | Full in-memory store; all bare-schema reads without fallback; ExMachina factories |
-| `Repo.OpenInMemory` | Open-world stateful fake | PK-based read-after-write; fallback for other reads |
+| `Repo.InMemory` | Closed-world fake | Full in-memory store; all bare-schema reads; ExMachina factories |
+| `Repo.OpenInMemory` | Open-world fake | PK-based read-after-write; fallback for other reads |
 
-All three support `Ecto.Multi` transactions, PK autogeneration,
-changeset validation, and timestamps. See [Repo](docs/repo.md).
+All three support `Ecto.Multi` transactions with rollback, PK
+autogeneration, changeset validation, timestamps, and both changeset
+and bare struct inserts. See [Repo](docs/repo.md).
 
 ## Quick example
 
@@ -247,8 +229,12 @@ end
   structured log assertions
 - **[Process Sharing](docs/process-sharing.md)** — async safety, allow,
   global mode, supervision tree testing
-- **[Repo](docs/repo.md)** — built-in Ecto Repo contract, `Repo.Stub`,
-  `Repo.InMemory`, `Repo.OpenInMemory`, failure scenario testing
+- **[Repo](docs/repo.md)** — built-in Ecto Repo contract and production
+  config
+- **[Repo Test Doubles](docs/repo-doubles.md)** — `Repo.Stub`,
+  `Repo.InMemory`, `Repo.OpenInMemory`, ExMachina integration
+- **[Repo Testing Patterns](docs/repo-testing.md)** — failure
+  simulation, transactions, rollback, cross-contract state
 - **[Migration](docs/migration.md)** — incremental adoption, coexisting
   with direct Ecto.Repo calls
 
