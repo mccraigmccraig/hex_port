@@ -4,33 +4,43 @@
 [![Hex.pm](https://img.shields.io/hexpm/v/double_down.svg)](https://hex.pm/packages/double_down)
 [![Documentation](https://img.shields.io/badge/documentation-gray)](https://hexdocs.pm/double_down/)
 
-Builds on the Mox pattern — generates behaviours and dispatch facades
-from `defcallback` declarations — and adds stateful test doubles powerful
+Contract boundaries and test doubles for Elixir. Define a contract
+(the interface), generate a dispatch facade (what callers use), and
+swap implementations at test time — with stateful fakes powerful
 enough to test Ecto.Repo operations without a database.
 
 ## Why DoubleDown?
 
-DoubleDown extends the Mox pattern:
+DoubleDown extends Jose Valim's
+[Mocks and explicit contracts](https://dashbit.co/blog/mocks-and-explicit-contracts)
+pattern:
 
-- **Explicit contracts, zero boilerplate** — Jose Valim's
-  [Mocks and explicit contracts](https://dashbit.co/blog/mocks-and-explicit-contracts)
-  makes the case for clear boundaries between components, but the
-  Mox pattern requires a contract behaviour, a dispatch facade, and
-  config wiring for each boundary. `defcallback` generates all three
-  from a single declaration — the behaviour, facade, and typespecs
-  are always in sync.
+- **Flexible contract boundaries** — a contract module defines the
+  interface; a facade dispatches to the configured implementation.
+  Three ways to set this up:
+  - `defcallback` + `DoubleDown.Facade` — generates the behaviour,
+    facade, and typespecs from a single declaration (recommended for
+    new code)
+  - `DoubleDown.BehaviourFacade` — generates a dispatch facade from
+    an existing vanilla `@behaviour` module you don't control
+  - `DoubleDown.Dynamic` — Mimic-style bytecode interception for
+    any module, no explicit contract needed
+
+  All three use the same dispatch and test double infrastructure.
+  See [Choosing a facade type](docs/getting-started.md#choosing-a-facade-type)
+  for a full comparison.
 - **Zero-cost production dispatch** — in production, facades are
   compiled to inlined direct function calls to the configured
   implementation. `MyContract.do_thing(args)` compiles to exactly
   the same bytecode as `DirectImpl.do_thing(args)` — the facade
   disappears entirely after BEAM inlining. Contract boundaries are
   a pure architectural decision with no runtime cost.
-- **Stubs are not always enough** — modelling stateful dependencies
-  like a database with plain mocks is verbose and fragile, so most
-  projects just hit the real DB and accept the speed penalty.
-  DoubleDown's stateful fakes maintain in-memory state with atomic
-  updates, enabling read-after-write consistency without
-  a database — fast enough for property-based testing.
+- **Stateful fakes** — modelling stateful dependencies like a
+  database with plain mocks is verbose and fragile, so most projects
+  just hit the real DB and accept the speed penalty. DoubleDown's
+  stateful fakes maintain in-memory state with atomic updates,
+  enabling read-after-write consistency without a database — fast
+  enough for property-based testing.
 - **Fakes with expectations** — testing "what happens when the second
   insert fails with a constraint violation?" means either a real DB
   or a mock that responds to each Repo call individually — verbose and
@@ -46,15 +56,16 @@ DoubleDown extends the Mox pattern:
 
 ## What DoubleDown provides
 
-### System boundaries (the Mox pattern, automated)
+### Contracts and dispatch
 
-| Feature                | Description                                                     |
-|------------------------|-----------------------------------------------------------------|
-| `defcallback` declarations | Typed function signatures with parameter names and return types |
-| Contract behaviour generation   | Standard `@behaviour` + `@callback` — fully Mox-compatible            |
-| Dispatch facades       | Config-dispatched caller functions, generated automatically     |
-| Zero-cost static dispatch | Inlined direct calls in production — no overhead vs calling the impl directly |
-| LSP-friendly           | `@doc` and `@spec` on every generated function                  |
+| Feature                         | Description                                                                        |
+|---------------------------------|------------------------------------------------------------------------------------|
+| `defcallback` contracts         | Typed signatures with parameter names, `@doc` sync, pre-dispatch transforms        |
+| Vanilla behaviour facades       | `BehaviourFacade` — dispatch facade from any existing `@behaviour` module          |
+| Dynamic facades                 | `Dynamic` — Mimic-style bytecode shim, module becomes ad-hoc contract              |
+| Zero-cost static dispatch       | Inlined direct calls in production — no overhead vs calling the impl directly      |
+| Generated `@spec` + `@doc`      | LSP-friendly on `defcallback` and `BehaviourFacade` facades                        |
+| Standard `@behaviour`           | All contracts are Mox-compatible — `@behaviour` + `@callback`                      |
 
 ### Test doubles (beyond Mox)
 
@@ -68,11 +79,14 @@ DoubleDown extends the Mox pattern:
 | Dispatch logging                   | Record `{contract, op, args, result}` for every call                       |
 | Structured log matching            | `DoubleDown.Log` — pattern-match on logged results                         |
 | Built-in Ecto Repo                 | Full Ecto.Repo contract with `Repo.Test` and `Repo.InMemory` fakes        |
-| Behaviour facades                  | Dispatch facades for vanilla `@behaviour` modules — typed, no `defcallback` needed |
-| Dynamic facades                    | Mimic-style bytecode interception — fake any module without a contract     |
 | Async-safe                         | Process-scoped isolation via NimbleOwnership, `async: true` out of the box |
 
 ## Quick example
+
+This example uses `defcallback` contracts — the recommended approach
+for new code. For existing `@behaviour` modules, see
+`DoubleDown.BehaviourFacade`. For Mimic-style interception of any
+module, see `DoubleDown.Dynamic`.
 
 ### Define contracts
 
@@ -209,7 +223,7 @@ end
 - **[Testing](docs/testing.md)** — Double expect/stub/fake, stateful
   responders, cross-contract state access
 - **[Dynamic Facades](docs/dynamic.md)** — Mimic-style bytecode
-  interception, behaviour facades, fake any module without a contract
+  interception, fake any module without an explicit contract
 - **[Logging](docs/logging.md)** — dispatch logging, Log matchers,
   structured log assertions
 - **[Process Sharing](docs/process-sharing.md)** — async safety, allow,
