@@ -1,70 +1,58 @@
-# Stateless test handler for DoubleDown.Repo.
+# Stateless stub for DoubleDown.Repo.
 #
-# Provides a function handler for use with set_fn_handler. Write operations
-# apply changeset changes and return {:ok, struct}. Read operations go
-# through a user-supplied fallback function, or raise.
-#
-# ## Usage
-#
-#     DoubleDown.Testing.set_fn_handler(DoubleDown.Repo, DoubleDown.Repo.Stub.new())
-#
-#     # With fallback for reads:
-#     DoubleDown.Testing.set_fn_handler(
-#       DoubleDown.Repo,
-#       DoubleDown.Repo.Stub.new(
-#         fallback_fn: fn
-#           :all, [User] -> [%User{id: 1, name: "Alice"}]
-#           :get, [User, 1] -> %User{id: 1, name: "Alice"}
-#         end
-#       )
-#     )
+# Write operations apply changeset changes and return {:ok, struct}.
+# Read operations go through a user-supplied fallback function, or raise.
 #
 if Code.ensure_loaded?(Ecto) do
   defmodule DoubleDown.Repo.Stub do
     @behaviour DoubleDown.Contract.Dispatch.StubHandler
 
     @moduledoc """
-    Stateless test handler for `DoubleDown.Repo`.
+    Stateless stub for `DoubleDown.Repo`.
 
-    Provides a function handler via `new/1` for use with
-    `DoubleDown.Testing.set_fn_handler/2`. Write operations (`insert`, `update`,
-    `delete`) apply changeset changes and return `{:ok, struct}`. All read
-    operations go through an optional fallback function, or raise a clear
-    error.
+    Write operations (`insert`, `update`, `delete`) apply changeset
+    changes and return `{:ok, struct}` but store nothing. Read
+    operations go through an optional fallback function, or raise a
+    clear error.
 
-    This applies the same "fail when consistency cannot be proven" approach
-    as `DoubleDown.Repo.OpenInMemory` — reads never silently return `nil` or `[]`
-    because the adapter has no basis for claiming a record does or doesn't
-    exist.
+    Implements `DoubleDown.Contract.Dispatch.StubHandler`, so it can
+    be used by module name with `Double.stub`:
 
-    ## Usage
+    ## Usage with Double.stub
 
-        # Writes only — reads will raise:
-        DoubleDown.Testing.set_fn_handler(DoubleDown.Repo, DoubleDown.Repo.Stub.new())
+        # Writes only — reads will raise with a helpful message:
+        DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Stub)
 
-        # With fallback for reads:
-        DoubleDown.Testing.set_fn_handler(
-          DoubleDown.Repo,
-          DoubleDown.Repo.Stub.new(
-            fallback_fn: fn
-              :get, [User, 1] -> %User{id: 1, name: "Alice"}
-              :all, [User] -> [%User{id: 1, name: "Alice"}]
-            end
-          )
+        # With fallback for specific reads:
+        DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Stub,
+          fn
+            :get, [User, 1] -> %User{id: 1, name: "Alice"}
+            :all, [User] -> [%User{id: 1, name: "Alice"}]
+            :exists?, [User] -> true
+          end
         )
 
-        # With logging:
-        DoubleDown.Testing.set_fn_handler(DoubleDown.Repo, DoubleDown.Repo.Stub.new())
-        DoubleDown.Testing.enable_log(DoubleDown.Repo)
+        # Layer expects on top for failure simulation:
+        DoubleDown.Repo
+        |> DoubleDown.Double.stub(DoubleDown.Repo.Stub)
+        |> DoubleDown.Double.expect(:insert, fn [changeset] ->
+          {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
+        end)
 
-    ## Differences from Repo.OpenInMemory
+    ## When to use Repo.Stub
 
-    `Repo.Stub` is stateless — writes apply changesets and return `{:ok, struct}`
-    but nothing is stored. There is no read-after-write consistency.
+    Use `Repo.Stub` when your test only needs fire-and-forget writes
+    and a few canned read responses. It's the lightest-weight option —
+    no state to reason about.
 
-    `Repo.OpenInMemory` is stateful — writes store records and PK-based reads can
-    find them. Use `Repo.OpenInMemory` when your test needs read-after-write
-    consistency. Use `Repo.Stub` when you only need fire-and-forget writes.
+    For read-after-write consistency, use `Repo.InMemory` (closed-world,
+    recommended) or `Repo.OpenInMemory` (open-world, fallback-based).
+
+    | Fake | State | Reads |
+    |------|-------|-------|
+    | `Repo.Stub` | None | Fallback function or raise |
+    | `Repo.InMemory` | Complete store | Authoritative for bare schemas |
+    | `Repo.OpenInMemory` | Partial store | PK lookup in state, fallback for rest |
     """
 
     @doc """
@@ -273,7 +261,7 @@ if Code.ensure_loaded?(Ecto) do
       raise ArgumentError, """
       DoubleDown.Repo.Stub cannot service :#{operation} with args #{inspect(args)}.
 
-      The Test adapter can only answer authoritatively for:
+      Repo.Stub can only answer authoritatively for:
         - Write operations (insert, update, delete)
 
       For all other operations, register a fallback function:
