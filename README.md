@@ -172,7 +172,7 @@ defmodule MyApp.TodosTest do
     # InMemory Repo — factory inserts land here
     DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory)
 
-    # Domain model queries read from the Repo's InMemory store
+    # Domain model queries reading from the Repo's InMemory store
     # via cross-contract state access (4-arity fake)
     DoubleDown.Double.fake(MyApp.Todos.Model,
       fn operation, args, state, all_states ->
