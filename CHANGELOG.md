@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.46.3]
+
+### Fixed
+
+- FK backfill now recursively inserts parent structs when the
+  parent's PK is nil. This fixes the ExMachina pattern where
+  `build(:parent)` produces a struct with nil PK that hasn't been
+  inserted yet — matching real Ecto.Repo behaviour of recursively
+  inserting `belongs_to` parents before the child.
+
 ## [0.46.2]
 
 ### Fixed
@@ -1045,7 +1055,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `DoubleDown.Testing` with NimbleOwnership, `Repo.Test` stateless
   adapter, CI setup, Credo, Dialyzer.
 
-[Unreleased]: https://github.com/mccraigmccraig/double_down/compare/v0.46.2...HEAD
+[Unreleased]: https://github.com/mccraigmccraig/double_down/compare/v0.46.3...HEAD
+[0.46.3]: https://github.com/mccraigmccraig/double_down/compare/v0.46.2...v0.46.3
 [0.46.2]: https://github.com/mccraigmccraig/double_down/compare/v0.46.1...v0.46.2
 [0.46.1]: https://github.com/mccraigmccraig/double_down/compare/v0.46.0...v0.46.1
 [0.46.0]: https://github.com/mccraigmccraig/double_down/compare/v0.45.0...v0.46.0
