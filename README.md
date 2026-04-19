@@ -134,6 +134,24 @@ config :my_app, DoubleDown.Repo, impl: MyApp.EctoRepo
 config :my_app, MyApp.Todos.Model, impl: MyApp.Todos.Model.Ecto
 ```
 
+### Define a factory
+
+Point [ExMachina](https://hex.pm/packages/ex_machina) at your Repo
+facade (not your Ecto Repo):
+
+```elixir
+defmodule MyApp.Factory do
+  use ExMachina.Ecto, repo: MyApp.Repo
+
+  def todo_factory do
+    %Todo{
+      tenant_id: "t1",
+      title: sequence(:title, &"Todo #{&1}")
+    }
+  end
+end
+```
+
 ### Test without a database
 
 Start the ownership server in `test/test_helper.exs`:
@@ -142,78 +160,70 @@ Start the ownership server in `test/test_helper.exs`:
 DoubleDown.Testing.start()
 ```
 
-Test the orchestration with fakes and stubs — no database, full
+Test the orchestration with fakes and factories — no database, full
 async isolation:
 
 ```elixir
-setup do
-  # InMemory Repo for writes — read-after-write consistency
-  DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory)
+defmodule MyApp.TodosTest do
+  use ExUnit.Case, async: true
+  import MyApp.Factory
 
-  # Domain model queries read from the Repo's InMemory store
-  # via cross-contract state access (4-arity fake)
-  DoubleDown.Double.fake(MyApp.Todos.Model,
-    fn operation, args, state, all_states ->
-      repo = Map.get(all_states, DoubleDown.Repo, %{})
-      todos = repo |> Map.get(Todo, %{}) |> Map.values()
+  setup do
+    # InMemory Repo — factory inserts land here
+    DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory)
 
-      result =
-        case {operation, args} do
-          {:active_todos, [tenant]} ->
-            Enum.filter(todos, &(&1.tenant_id == tenant))
+    # Domain model queries read from the Repo's InMemory store
+    # via cross-contract state access (4-arity fake)
+    DoubleDown.Double.fake(MyApp.Todos.Model,
+      fn operation, args, state, all_states ->
+        repo = Map.get(all_states, DoubleDown.Repo, %{})
+        todos = repo |> Map.get(Todo, %{}) |> Map.values()
 
-          {:todo_exists?, [tenant, title]} ->
-            Enum.any?(todos, &(&1.tenant_id == tenant and &1.title == title))
-        end
+        result =
+          case {operation, args} do
+            {:active_todos, [tenant]} ->
+              Enum.filter(todos, &(&1.tenant_id == tenant))
 
-      {result, state}
-    end,
-    %{}
-  )
+            {:todo_exists?, [tenant, title]} ->
+              Enum.any?(todos, &(&1.tenant_id == tenant and &1.title == title))
+          end
 
-  :ok
-end
+        {result, state}
+      end,
+      %{}
+    )
 
-test "creates a todo when no duplicate exists" do
-  assert {:ok, todo} = MyApp.Todos.create("t1", %{title: "Ship it"})
-  assert todo.tenant_id == "t1"
+    :ok
+  end
 
-  # Read-after-write: InMemory serves from store
-  assert ^todo = MyApp.Repo.get(Todo, todo.id)
-end
+  test "creates a todo when no duplicate exists" do
+    assert {:ok, todo} = MyApp.Todos.create("t1", %{title: "Ship it"})
+    assert todo.tenant_id == "t1"
 
-test "rejects duplicate todos" do
-  # First create succeeds — record lands in InMemory store
-  assert {:ok, _} = MyApp.Todos.create("t1", %{title: "Ship it"})
+    # Read-after-write: InMemory serves from store
+    assert ^todo = MyApp.Repo.get(Todo, todo.id)
+  end
 
-  # Second create with same title — Model.todo_exists? reads from
-  # InMemory store and finds the duplicate
-  assert {:error, :duplicate} = MyApp.Todos.create("t1", %{title: "Ship it"})
-end
-```
+  test "rejects duplicate todos" do
+    # Factory insert lands in InMemory store
+    insert(:todo, tenant_id: "t1", title: "Ship it")
 
-### Testing failure scenarios
+    # Model.todo_exists? reads from InMemory store, finds the duplicate
+    assert {:error, :duplicate} = MyApp.Todos.create("t1", %{title: "Ship it"})
+  end
 
-Layer expects over the InMemory Repo to simulate database failures:
+  test "handles constraint violation on insert" do
+    # First insert fails with constraint error
+    DoubleDown.Double.expect(DoubleDown.Repo, :insert, fn [changeset] ->
+      {:error, Ecto.Changeset.add_error(changeset, :title, "taken")}
+    end)
 
-```elixir
-setup do
-  DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory)
-  DoubleDown.Double.stub(MyApp.Todos.Model, fn :todo_exists?, [_, _] -> false end)
-  :ok
-end
+    assert {:error, cs} = MyApp.Todos.create("t1", %{title: "Conflict"})
+    assert {"taken", _} = cs.errors[:title]
 
-test "handles constraint violation on insert" do
-  # First insert fails with constraint error
-  DoubleDown.Double.expect(DoubleDown.Repo, :insert, fn [changeset] ->
-    {:error, Ecto.Changeset.add_error(changeset, :title, "taken")}
-  end)
-
-  assert {:error, cs} = MyApp.Todos.create("t1", %{title: "Conflict"})
-  assert {"taken", _} = cs.errors[:title]
-
-  # Second call succeeds — expect consumed, InMemory handles it
-  assert {:ok, _} = MyApp.Todos.create("t1", %{title: "Conflict"})
+    # Second call succeeds — expect consumed, InMemory handles it
+    assert {:ok, _} = MyApp.Todos.create("t1", %{title: "Conflict"})
+  end
 end
 ```
 
