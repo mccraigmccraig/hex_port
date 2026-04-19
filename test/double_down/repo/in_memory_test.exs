@@ -178,7 +178,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
       {%DoubleDown.Contract.Dispatch.Defer{fn: raise_fn}, _} =
         InMemory.dispatch(:get!, [User, 999], store)
 
-      assert_raise ArgumentError, ~r/not found/, fn -> raise_fn.() end
+      assert_raise Ecto.NoResultsError, fn -> raise_fn.() end
     end
   end
 
@@ -235,7 +235,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
       {%DoubleDown.Contract.Dispatch.Defer{fn: raise_fn}, _} =
         InMemory.dispatch(:get_by!, [User, [name: "Nobody"]], store)
 
-      assert_raise ArgumentError, ~r/no matching record/, fn -> raise_fn.() end
+      assert_raise Ecto.NoResultsError, fn -> raise_fn.() end
     end
 
     test "raises when multiple matches" do
@@ -248,7 +248,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
       {%DoubleDown.Contract.Dispatch.Defer{fn: raise_fn}, _} =
         InMemory.dispatch(:get_by!, [User, [name: "Alice"]], store)
 
-      assert_raise ArgumentError, ~r/found 2 records/, fn -> raise_fn.() end
+      assert_raise Ecto.MultipleResultsError, fn -> raise_fn.() end
     end
   end
 
@@ -296,7 +296,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
       {%DoubleDown.Contract.Dispatch.Defer{fn: raise_fn}, _} =
         InMemory.dispatch(:one, [User], store)
 
-      assert_raise ArgumentError, ~r/found 2/, fn -> raise_fn.() end
+      assert_raise Ecto.MultipleResultsError, fn -> raise_fn.() end
     end
   end
 
@@ -313,7 +313,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
       {%DoubleDown.Contract.Dispatch.Defer{fn: raise_fn}, _} =
         InMemory.dispatch(:one!, [User], store)
 
-      assert_raise ArgumentError, ~r/found none/, fn -> raise_fn.() end
+      assert_raise Ecto.NoResultsError, fn -> raise_fn.() end
     end
 
     test "raises when multiple records" do
@@ -322,7 +322,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
       {%DoubleDown.Contract.Dispatch.Defer{fn: raise_fn}, _} =
         InMemory.dispatch(:one!, [User], store)
 
-      assert_raise ArgumentError, ~r/found 2/, fn -> raise_fn.() end
+      assert_raise Ecto.MultipleResultsError, fn -> raise_fn.() end
     end
   end
 

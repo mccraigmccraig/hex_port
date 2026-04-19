@@ -169,11 +169,7 @@ if Code.ensure_loaded?(Ecto) do
 
       case InMemoryShared.get_record(store, schema, id) do
         nil ->
-          InMemoryShared.defer_raise(
-            "expected #{inspect(schema)} with id #{inspect(id)} to exist in " <>
-              "InMemory store, but it was not found",
-            store
-          )
+          InMemoryShared.defer_raise_no_results(queryable, store)
 
         record ->
           {record, store}
@@ -212,18 +208,10 @@ if Code.ensure_loaded?(Ecto) do
           {record, store}
 
         [] ->
-          InMemoryShared.defer_raise(
-            "expected #{inspect(queryable)} matching #{inspect(clauses)} to exist in " <>
-              "InMemory store, but no matching record was found",
-            store
-          )
+          InMemoryShared.defer_raise_no_results(queryable, store)
 
         _multiple ->
-          InMemoryShared.defer_raise(
-            "expected at most one #{inspect(queryable)} matching #{inspect(clauses)}, " <>
-              "but found #{length(matching)} records in InMemory store",
-            store
-          )
+          InMemoryShared.defer_raise_multiple_results(queryable, length(matching), store)
       end
     end
 
@@ -260,11 +248,7 @@ if Code.ensure_loaded?(Ecto) do
           {record, store}
 
         _multiple ->
-          InMemoryShared.defer_raise(
-            "expected at most one #{inspect(queryable)} in InMemory store, " <>
-              "but found #{length(records)}",
-            store
-          )
+          InMemoryShared.defer_raise_multiple_results(queryable, length(records), store)
       end
     end
 
@@ -283,18 +267,10 @@ if Code.ensure_loaded?(Ecto) do
           {record, store}
 
         [] ->
-          InMemoryShared.defer_raise(
-            "expected exactly one #{inspect(queryable)} in InMemory store, " <>
-              "but found none",
-            store
-          )
+          InMemoryShared.defer_raise_no_results(queryable, store)
 
         _multiple ->
-          InMemoryShared.defer_raise(
-            "expected exactly one #{inspect(queryable)} in InMemory store, " <>
-              "but found #{length(records)}",
-            store
-          )
+          InMemoryShared.defer_raise_multiple_results(queryable, length(records), store)
       end
     end
 

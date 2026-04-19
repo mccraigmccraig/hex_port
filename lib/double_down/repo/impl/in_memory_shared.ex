@@ -267,6 +267,20 @@ if Code.ensure_loaded?(Ecto) do
       {%DoubleDown.Contract.Dispatch.Defer{fn: fn -> raise ArgumentError, message end}, store}
     end
 
+    @doc false
+    def defer_raise_no_results(queryable, store) do
+      {%DoubleDown.Contract.Dispatch.Defer{
+         fn: fn -> raise Ecto.NoResultsError, queryable: queryable end
+       }, store}
+    end
+
+    @doc false
+    def defer_raise_multiple_results(queryable, count, store) do
+      {%DoubleDown.Contract.Dispatch.Defer{
+         fn: fn -> raise Ecto.MultipleResultsError, queryable: queryable, count: count end
+       }, store}
+    end
+
     # -------------------------------------------------------------------
     # State access helpers
     # -------------------------------------------------------------------
