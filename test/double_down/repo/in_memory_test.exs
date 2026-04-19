@@ -168,6 +168,36 @@ defmodule DoubleDown.Repo.InMemoryTest do
       assert inserted.organisation_id == org.id
     end
 
+    test "backfill recursively inserts parent when parent PK is nil" do
+      store = InMemory.new()
+
+      # Parent has nil PK — simulates ExMachina's nested struct pattern
+      org = %Organisation{id: nil, name: "Acme"}
+      record = %TaskCategory{name: "Widgets", organisation: org, organisation_id: nil}
+      {{:ok, inserted}, store} = InMemory.dispatch(:insert, [record], store)
+
+      # FK should be set to the auto-generated parent PK
+      assert inserted.organisation_id != nil
+
+      # Parent should have been inserted into the store
+      {found_org, _} = InMemory.dispatch(:get, [Organisation, inserted.organisation_id], store)
+      assert found_org != nil
+      assert found_org.name == "Acme"
+    end
+
+    test "backfill recursive insert works through insert! (bang)" do
+      store = InMemory.new()
+
+      org = %Organisation{id: nil, name: "Acme"}
+      record = %TaskCategory{name: "Widgets", organisation: org, organisation_id: nil}
+      {inserted, store} = InMemory.dispatch(:insert!, [record], store)
+
+      assert inserted.organisation_id != nil
+
+      {found_org, _} = InMemory.dispatch(:get, [Organisation, inserted.organisation_id], store)
+      assert found_org != nil
+    end
+
     test "backfill works with insert!" do
       store = InMemory.new()
       org = %Organisation{id: 42, name: "Acme"}

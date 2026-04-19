@@ -100,13 +100,18 @@ if Code.ensure_loaded?(Ecto) do
       do_insert(struct, :insert, store)
     end
 
-    defp do_insert(record, action, store) do
+    # Public so it can be passed as a function reference to
+    # EctoParity.backfill_foreign_keys for recursive parent insertion.
+    @doc false
+    def do_insert(record, action, store) do
       alias DoubleDown.Repo.Impl.Autogenerate
       alias DoubleDown.Repo.Impl.EctoParity
 
+      {record, store} =
+        EctoParity.backfill_foreign_keys(record, store, &do_insert/3)
+
       record =
         record
-        |> EctoParity.backfill_foreign_keys()
         |> EctoParity.reset_associations()
         |> Autogenerate.apply_timestamps(action)
 
