@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.46.0]
+
+### Added
+
+- `query/1,2,3` and `query!/1,2,3` added to `DoubleDown.Repo`
+  contract. Raw SQL operations from ecto_sql — adding them to the
+  contract makes them interceptable via expects/stubs so code paths
+  that call `Repo.query!` can be tested without a database.
+
+- FK backfill on insert. When inserting a struct with a loaded
+  `belongs_to` association but a nil FK field, InMemory now copies
+  the parent's PK into the FK field — matching real Ecto.Repo
+  behaviour. Makes ExMachina factories work transparently:
+  `insert(:child, parent: parent)` automatically sets the FK.
+  Implemented in `Repo.Impl.EctoParity.backfill_foreign_keys/1`.
+
+- Association fields are reset to `%Ecto.Association.NotLoaded{}`
+  on insert, matching real Ecto.Repo behaviour. Struct equality
+  comparisons between `insert(:thing)` and `Repo.get!(Thing, id)`
+  now work without comparing individual fields. Implemented in
+  `Repo.Impl.EctoParity.reset_associations/1`. Runs after FK
+  backfill (which needs the loaded association to extract the FK).
+
+- `Repo.Impl.EctoParity` — new module for Ecto schema-introspection
+  concerns that make the in-memory fakes behave more like real Ecto.
+
+### Changed
+
+- InMemory's `get!`, `get_by!`, `one!` now raise
+  `Ecto.NoResultsError` (was `ArgumentError`). `one`, `one!`,
+  `get_by!` now raise `Ecto.MultipleResultsError` when multiple
+  records match (was `ArgumentError`). Matches real Ecto.Repo
+  behaviour so tests with `assert_raise Ecto.NoResultsError` work
+  without modification.
+
 ## [0.45.0]
 
 ### Added
@@ -988,7 +1023,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `DoubleDown.Testing` with NimbleOwnership, `Repo.Test` stateless
   adapter, CI setup, Credo, Dialyzer.
 
-[Unreleased]: https://github.com/mccraigmccraig/double_down/compare/v0.45.0...HEAD
+[Unreleased]: https://github.com/mccraigmccraig/double_down/compare/v0.46.0...HEAD
+[0.46.0]: https://github.com/mccraigmccraig/double_down/compare/v0.45.0...v0.46.0
 [0.45.0]: https://github.com/mccraigmccraig/double_down/compare/v0.44.0...v0.45.0
 [0.44.0]: https://github.com/mccraigmccraig/double_down/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/mccraigmccraig/double_down/compare/v0.42.0...v0.43.0
