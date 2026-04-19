@@ -111,6 +111,29 @@ if Code.ensure_loaded?(Ecto) do
                   struct()
 
     # -----------------------------------------------------------------
+    # Raw SQL Operations
+    # -----------------------------------------------------------------
+
+    @doc "Execute a raw SQL query. Returns `{:ok, result} | {:error, term()}`."
+    defcallback query(sql :: String.t()) :: {:ok, term()} | {:error, term()}
+
+    @doc "Execute a raw SQL query with parameters."
+    defcallback query(sql :: String.t(), params :: list()) :: {:ok, term()} | {:error, term()}
+
+    @doc "Execute a raw SQL query with parameters and options."
+    defcallback query(sql :: String.t(), params :: list(), opts :: keyword()) ::
+                  {:ok, term()} | {:error, term()}
+
+    @doc "Execute a raw SQL query, raising on error."
+    defcallback query!(sql :: String.t()) :: term()
+
+    @doc "Execute a raw SQL query with parameters, raising on error."
+    defcallback query!(sql :: String.t(), params :: list()) :: term()
+
+    @doc "Execute a raw SQL query with parameters and options, raising on error."
+    defcallback query!(sql :: String.t(), params :: list(), opts :: keyword()) :: term()
+
+    # -----------------------------------------------------------------
     # Bulk Operations
     # -----------------------------------------------------------------
 

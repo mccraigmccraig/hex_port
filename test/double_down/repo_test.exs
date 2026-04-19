@@ -126,6 +126,8 @@ defmodule DoubleDown.RepoTest do
                :insert_all,
                :one,
                :one!,
+               :query,
+               :query!,
                :rollback,
                :transact,
                :update,

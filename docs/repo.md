@@ -21,6 +21,7 @@ property-based testing.
 |------------------|---------------------------------------------------------------------------------|
 | **Writes**       | `insert/1`, `update/1`, `delete/1`, `insert!/1`, `update!/1`, `delete!/1`       |
 | **Bulk**         | `insert_all/3`, `update_all/3`, `delete_all/2`                                  |
+| **Raw SQL**      | `query/1,2,3`, `query!/1,2,3`                                                   |
 | **PK reads**     | `get/2`, `get!/2`                                                               |
 | **Non-PK reads** | `get_by/2`, `get_by!/2`, `one/1`, `one!/1`, `all/1`, `exists?/1`, `aggregate/3` |
 | **Transactions** | `transact/2`, `rollback/1`                                                      |
