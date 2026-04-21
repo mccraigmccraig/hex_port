@@ -229,14 +229,41 @@ if Code.ensure_loaded?(Ecto) do
     end
 
     defp run_in_transaction(fun, contract, snapshot) do
-      fun.()
+      result = fun.()
+
+      case result do
+        {:ok, _} ->
+          result
+
+        {:error, _} ->
+          do_restore_state(contract, snapshot)
+          result
+
+        {:error, _name, _value, _changes} ->
+          do_restore_state(contract, snapshot)
+          result
+
+        _other ->
+          # Non-standard return (e.g. bare value) — treat as success,
+          # matching Ecto.Repo.transaction/2 which returns {:ok, result}
+          # for non-tagged returns. The wrapping happens at the facade level.
+          result
+      end
+    rescue
+      exception ->
+        do_restore_state(contract, snapshot)
+        reraise exception, __STACKTRACE__
     catch
       {:rollback, value} ->
-        {:ok, owner_pid, _handler} =
-          DoubleDown.Contract.Dispatch.resolve_test_handler(contract)
-
-        DoubleDown.Contract.Dispatch.restore_state(contract, owner_pid, snapshot)
+        do_restore_state(contract, snapshot)
         {:error, value}
+    end
+
+    defp do_restore_state(contract, snapshot) do
+      {:ok, owner_pid, _handler} =
+        DoubleDown.Contract.Dispatch.resolve_test_handler(contract)
+
+      DoubleDown.Contract.Dispatch.restore_state(contract, owner_pid, snapshot)
     end
 
     # -------------------------------------------------------------------

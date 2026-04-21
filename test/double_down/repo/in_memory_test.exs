@@ -925,5 +925,65 @@ defmodule DoubleDown.Repo.InMemoryTest do
       greeter_state = DoubleDown.Contract.Dispatch.get_state(DoubleDown.Test.Greeter)
       assert greeter_state == %{counter: 0}
     end
+
+    test "{:error, _} return from callback restores state" do
+      {:ok, _alice} = DoubleDown.Test.Repo.insert(User.changeset(%{name: "Alice"}))
+
+      result =
+        DoubleDown.Test.Repo.transact(
+          fn ->
+            {:ok, _} = DoubleDown.Test.Repo.insert(User.changeset(%{name: "Bob"}))
+            {:error, :something_went_wrong}
+          end,
+          []
+        )
+
+      assert {:error, :something_went_wrong} = result
+
+      # Bob was rolled back, Alice survives
+      users = DoubleDown.Test.Repo.all(User)
+      assert length(users) == 1
+      assert hd(users).name == "Alice"
+    end
+
+    test "raised exception restores state and re-raises" do
+      {:ok, _alice} = DoubleDown.Test.Repo.insert(User.changeset(%{name: "Alice"}))
+
+      assert_raise RuntimeError, "boom", fn ->
+        DoubleDown.Test.Repo.transact(
+          fn ->
+            {:ok, _} = DoubleDown.Test.Repo.insert(User.changeset(%{name: "Bob"}))
+            raise "boom"
+          end,
+          []
+        )
+      end
+
+      # Bob was rolled back, Alice survives
+      users = DoubleDown.Test.Repo.all(User)
+      assert length(users) == 1
+      assert hd(users).name == "Alice"
+    end
+
+    test "failed Ecto.Multi step restores state" do
+      {:ok, _alice} = DoubleDown.Test.Repo.insert(User.changeset(%{name: "Alice"}))
+
+      # Build a Multi with a valid insert followed by an explicit error
+      multi =
+        Ecto.Multi.new()
+        |> Ecto.Multi.insert(:bob, User.changeset(%{name: "Bob"}))
+        |> Ecto.Multi.run(:fail, fn _repo, _changes ->
+          {:error, :intentional_failure}
+        end)
+
+      result = DoubleDown.Test.Repo.transact(multi, [])
+
+      assert {:error, :fail, :intentional_failure, %{bob: %User{name: "Bob"}}} = result
+
+      # Bob was rolled back despite the successful insert step, Alice survives
+      users = DoubleDown.Test.Repo.all(User)
+      assert length(users) == 1
+      assert hd(users).name == "Alice"
+    end
   end
 end
