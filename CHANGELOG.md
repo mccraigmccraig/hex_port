@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.47.1]
+
+### Fixed
+
+- Code formatting.
+
 ## [0.47.0]
 
 ### Fixed
@@ -1108,7 +1114,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `DoubleDown.Testing` with NimbleOwnership, `Repo.Test` stateless
   adapter, CI setup, Credo, Dialyzer.
 
-[Unreleased]: https://github.com/mccraigmccraig/double_down/compare/v0.47.0...HEAD
+[Unreleased]: https://github.com/mccraigmccraig/double_down/compare/v0.47.1...HEAD
+[0.47.1]: https://github.com/mccraigmccraig/double_down/compare/v0.47.0...v0.47.1
 [0.47.0]: https://github.com/mccraigmccraig/double_down/compare/v0.46.3...v0.47.0
 [0.46.3]: https://github.com/mccraigmccraig/double_down/compare/v0.46.2...v0.46.3
 [0.46.2]: https://github.com/mccraigmccraig/double_down/compare/v0.46.1...v0.46.2
