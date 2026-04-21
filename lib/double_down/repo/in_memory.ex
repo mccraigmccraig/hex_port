@@ -327,9 +327,8 @@ if Code.ensure_loaded?(Ecto) do
                  |> Enum.map(&DoubleDown.Repo.Impl.Autogenerate.get_primary_key/1)
                  |> Enum.filter(&is_integer/1)
                end) do
-            {:error, {:no_autogenerate, _message}} ->
-              id = DoubleDown.Repo.Impl.Autogenerate.get_primary_key(record)
-              {count + 1, [record | acc], InMemoryShared.put_record(st, schema, id, record)}
+            {:error, {:no_autogenerate, message}} ->
+              raise ArgumentError, message
 
             {id, record} ->
               {count + 1, [record | acc], InMemoryShared.put_record(st, schema, id, record)}
