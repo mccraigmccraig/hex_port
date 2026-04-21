@@ -745,14 +745,16 @@ defmodule DoubleDown.Repo.OpenInMemoryTest do
       end
     end
 
-    test "get_by! with PK and extra fields not matching returns nil" do
+    test "get_by! with PK and extra fields not matching raises Ecto.NoResultsError" do
       alice = %User{id: 1, name: "Alice"}
       state = Repo.OpenInMemory.new(seed: [alice])
       DoubleDown.Testing.set_stateful_handler(Repo, &Repo.OpenInMemory.dispatch/4, state)
 
-      # get_by! returns nil when PK found but extra fields don't match
-      # (this mirrors get_by behaviour — the bang is about "no fallback", not "must find")
-      assert nil == TestRepo.get_by!(User, id: 1, name: "NotAlice")
+      # get_by! raises when PK found but extra fields don't match,
+      # matching real Ecto.Repo.get_by!/2 behaviour
+      assert_raise Ecto.NoResultsError, fn ->
+        TestRepo.get_by!(User, id: 1, name: "NotAlice")
+      end
     end
   end
 

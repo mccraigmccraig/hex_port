@@ -324,7 +324,11 @@ if Code.ensure_loaded?(Ecto) do
               if InMemoryShared.fields_match?(record, remaining_clauses) do
                 {record, store}
               else
-                {nil, store}
+                if operation == :get_by! do
+                  InMemoryShared.defer_raise_no_results(queryable, store)
+                else
+                  {nil, store}
+                end
               end
           end
 
