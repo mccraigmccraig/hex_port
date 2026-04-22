@@ -213,4 +213,52 @@ defmodule DoubleDown.Contract.DispatchTest do
       assert 8 = Counter.Port.get_count()
     end
   end
+
+  # -- handler_active?/1 --
+
+  describe "handler_active?/1" do
+    test "returns false when no handler is installed" do
+      refute DoubleDown.Contract.Dispatch.handler_active?(Greeter)
+    end
+
+    test "returns true after a fn handler is installed" do
+      DoubleDown.Testing.set_fn_handler(Greeter, fn
+        :greet, [name] -> "Hi, #{name}!"
+      end)
+
+      assert DoubleDown.Contract.Dispatch.handler_active?(Greeter)
+    end
+
+    test "returns true after Double.fake/2 is called" do
+      DoubleDown.Double.fake(Greeter, Greeter.Impl)
+
+      assert DoubleDown.Contract.Dispatch.handler_active?(Greeter)
+    end
+
+    test "respects $callers chain — handler visible in spawned child" do
+      DoubleDown.Testing.set_fn_handler(Greeter, fn
+        :greet, [name] -> "Hi, #{name}!"
+      end)
+
+      # Task.async sets $callers to [self()], so the child can see
+      # the parent's handler via resolve_test_handler's callers walk.
+      result =
+        Task.async(fn ->
+          DoubleDown.Contract.Dispatch.handler_active?(Greeter)
+        end)
+        |> Task.await()
+
+      assert result == true
+    end
+
+    test "returns false for a different contract with no handler" do
+      DoubleDown.Testing.set_fn_handler(Greeter, fn
+        :greet, [name] -> "Hi, #{name}!"
+      end)
+
+      # Greeter has a handler, but Counter does not
+      assert DoubleDown.Contract.Dispatch.handler_active?(Greeter)
+      refute DoubleDown.Contract.Dispatch.handler_active?(Counter)
+    end
+  end
 end
