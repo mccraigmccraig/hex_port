@@ -162,6 +162,26 @@ defmodule DoubleDown.Contract.Dispatch do
     end
   end
 
+  @doc """
+  Check whether the calling process has a test handler installed for
+  the given contract.
+
+  Returns `true` when a handler is active (via `DoubleDown.Double.fake/2`,
+  `expect/3`, etc.), `false` otherwise. Useful for test infrastructure that
+  needs to skip real-DB side-effects (e.g. setting Postgres session variables)
+  when an in-memory handler is intercepting Repo calls.
+
+  Respects the `$callers` chain, so handlers installed in a parent process
+  are visible to spawned children.
+  """
+  @spec handler_active?(module()) :: boolean()
+  def handler_active?(contract) do
+    case resolve_test_handler(contract) do
+      {:ok, _owner_pid, _handler} -> true
+      :none -> false
+    end
+  end
+
   # -- Handler invocation --
 
   @doc false
