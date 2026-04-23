@@ -111,6 +111,33 @@ if Code.ensure_loaded?(Ecto) do
                   struct()
 
     # -----------------------------------------------------------------
+    # Upsert Operations
+    # -----------------------------------------------------------------
+
+    @doc """
+    Insert or update a record depending on whether it has been loaded.
+
+    If the changeset's data has `:loaded` state, delegates to `update`;
+    otherwise delegates to `insert`. Mirrors `Ecto.Repo.insert_or_update/2`.
+    """
+    defcallback insert_or_update(changeset :: Ecto.Changeset.t()) ::
+                  {:ok, struct()} | {:error, Ecto.Changeset.t()}
+
+    @doc "Insert or update a record with options."
+    defcallback insert_or_update(changeset :: Ecto.Changeset.t(), opts :: keyword()) ::
+                  {:ok, struct()} | {:error, Ecto.Changeset.t()}
+
+    @doc """
+    Insert or update a record, raising on failure.
+
+    Mirrors `Ecto.Repo.insert_or_update!/2`.
+    """
+    defcallback insert_or_update!(changeset :: Ecto.Changeset.t()) :: struct()
+
+    @doc "Insert or update a record with options, raising on failure."
+    defcallback insert_or_update!(changeset :: Ecto.Changeset.t(), opts :: keyword()) :: struct()
+
+    # -----------------------------------------------------------------
     # Raw SQL Operations
     # -----------------------------------------------------------------
 
@@ -241,6 +268,91 @@ if Code.ensure_loaded?(Ecto) do
                   opts :: keyword()
                 ) :: term()
 
+    @doc """
+    Fetch all records matching the given clauses.
+
+    Similar to `get_by`, but returns all matching records as a list
+    instead of just the first. New in Ecto 3.13. Mirrors `Ecto.Repo.all_by/3`.
+    """
+    defcallback all_by(queryable :: Ecto.Queryable.t(), clauses :: keyword() | map()) ::
+                  list(struct())
+
+    @doc "Fetch all records matching the given clauses with options."
+    defcallback all_by(
+                  queryable :: Ecto.Queryable.t(),
+                  clauses :: keyword() | map(),
+                  opts :: keyword()
+                ) :: list(struct())
+
+    # -----------------------------------------------------------------
+    # Reload Operations
+    # -----------------------------------------------------------------
+
+    @doc """
+    Reload a struct or list of structs from the data store.
+
+    Re-fetches the record by primary key. Returns `nil` if not found
+    (for a single struct) or `nil` in the corresponding list position
+    (for a list). Mirrors `Ecto.Repo.reload/2`.
+    """
+    defcallback reload(struct_or_structs :: struct() | list(struct())) ::
+                  struct() | nil | list(struct() | nil)
+
+    @doc "Reload a struct or list of structs with options."
+    defcallback reload(struct_or_structs :: struct() | list(struct()), opts :: keyword()) ::
+                  struct() | nil | list(struct() | nil)
+
+    @doc """
+    Reload a struct or list of structs, raising if any are not found.
+
+    Mirrors `Ecto.Repo.reload!/2`.
+    """
+    defcallback reload!(struct_or_structs :: struct() | list(struct())) ::
+                  struct() | list(struct())
+
+    @doc "Reload a struct or list of structs with options, raising if not found."
+    defcallback reload!(struct_or_structs :: struct() | list(struct()), opts :: keyword()) ::
+                  struct() | list(struct())
+
+    # -----------------------------------------------------------------
+    # Preload Operations
+    # -----------------------------------------------------------------
+
+    @doc """
+    Preload associations on a struct, list of structs, or nil.
+
+    Uses schema reflection to resolve associations from the in-memory
+    store (when using InMemory fakes) or delegates to the real Repo.
+    Mirrors `Ecto.Repo.preload/3`.
+    """
+    defcallback preload(
+                  structs_or_struct_or_nil :: list(struct()) | struct() | nil,
+                  preloads :: term()
+                ) :: list(struct()) | struct() | nil
+
+    @doc "Preload associations with options."
+    defcallback preload(
+                  structs_or_struct_or_nil :: list(struct()) | struct() | nil,
+                  preloads :: term(),
+                  opts :: keyword()
+                ) :: list(struct()) | struct() | nil
+
+    # -----------------------------------------------------------------
+    # Load Operations
+    # -----------------------------------------------------------------
+
+    @doc """
+    Load a schema struct or map from raw data.
+
+    Coerces raw data (map, keyword list, or `{columns, values}` tuple)
+    into a schema struct using Ecto's type system. Stateless — does not
+    touch the data store. Mirrors `Ecto.Repo.load/2`.
+    """
+    defcallback load(
+                  schema_or_map :: module() | map(),
+                  data :: map() | keyword() | {list(), list()}
+                ) :: struct() | map()
+
     # -----------------------------------------------------------------
     # Transaction Operations
     # -----------------------------------------------------------------
@@ -309,5 +421,13 @@ if Code.ensure_loaded?(Ecto) do
     a transaction raises.
     """
     defcallback rollback(value :: term()) :: no_return()
+
+    @doc """
+    Check whether the current process is inside a transaction.
+
+    Returns `true` if called from within a `transact` callback,
+    `false` otherwise. Mirrors `Ecto.Repo.in_transaction?/0`.
+    """
+    defcallback in_transaction?() :: boolean()
   end
 end
