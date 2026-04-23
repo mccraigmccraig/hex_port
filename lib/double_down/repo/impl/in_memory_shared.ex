@@ -127,6 +127,7 @@ if Code.ensure_loaded?(Ecto) do
           {%DoubleDown.Contract.Dispatch.Defer{fn: fn -> raise ArgumentError, message end}, store}
 
         {id, record} ->
+          record = Ecto.put_meta(record, state: :loaded)
           {{:ok, record}, put_record(store, schema, id, record)}
       end
     end
@@ -138,6 +139,7 @@ if Code.ensure_loaded?(Ecto) do
 
     def dispatch_update([changeset], store) do
       record = DoubleDown.Repo.Impl.Autogenerate.apply_changes(changeset, :update)
+      record = Ecto.put_meta(record, state: :loaded)
       schema = record.__struct__
       id = DoubleDown.Repo.Impl.Autogenerate.get_primary_key(record)
       {{:ok, record}, put_record(store, schema, id, record)}
@@ -195,6 +197,27 @@ if Code.ensure_loaded?(Ecto) do
     def dispatch_delete!(args, store) do
       {{:ok, record}, new_store} = dispatch_delete(args, store)
       {record, new_store}
+    end
+
+    # -------------------------------------------------------------------
+    # Insert-or-update operations
+    # -------------------------------------------------------------------
+
+    @doc false
+    def dispatch_insert_or_update([%Ecto.Changeset{} = changeset], store) do
+      if Ecto.get_meta(changeset.data, :state) == :loaded do
+        dispatch_update([changeset], store)
+      else
+        dispatch_insert([changeset], store)
+      end
+    end
+
+    @doc false
+    def dispatch_insert_or_update!(args, store) do
+      case dispatch_insert_or_update(args, store) do
+        {{:ok, record}, new_store} -> {record, new_store}
+        {{:error, changeset}, store} -> bang_raise(:insert_or_update!, changeset, store)
+      end
     end
 
     defp bang_raise(action, %Ecto.Changeset{} = changeset, store) do

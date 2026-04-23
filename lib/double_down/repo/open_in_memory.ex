@@ -171,6 +171,12 @@ if Code.ensure_loaded?(Ecto) do
     def dispatch(_contract, :delete, [record], store),
       do: InMemoryShared.dispatch_delete([record], store)
 
+    def dispatch(_contract, :insert_or_update, [changeset], store),
+      do: InMemoryShared.dispatch_insert_or_update([changeset], store)
+
+    def dispatch(_contract, :insert_or_update!, [changeset], store),
+      do: InMemoryShared.dispatch_insert_or_update!([changeset], store)
+
     def dispatch(_contract, :insert!, [changeset], store),
       do: InMemoryShared.dispatch_insert!([changeset], store)
 
@@ -214,6 +220,12 @@ if Code.ensure_loaded?(Ecto) do
 
     def dispatch(contract, :delete, [record, _opts], store),
       do: dispatch(contract, :delete, [record], store)
+
+    def dispatch(contract, :insert_or_update, [changeset, _opts], store),
+      do: dispatch(contract, :insert_or_update, [changeset], store)
+
+    def dispatch(contract, :insert_or_update!, [changeset, _opts], store),
+      do: dispatch(contract, :insert_or_update!, [changeset], store)
 
     def dispatch(contract, :insert!, [changeset, _opts], store),
       do: dispatch(contract, :insert!, [changeset], store)

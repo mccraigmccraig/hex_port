@@ -384,6 +384,80 @@ defmodule DoubleDown.Repo.OpenInMemoryTest do
   end
 
   # -------------------------------------------------------------------
+  # insert_or_update / insert_or_update!
+  # -------------------------------------------------------------------
+
+  describe "insert_or_update" do
+    setup do
+      DoubleDown.Double.fake(DoubleDown.Repo, Repo.OpenInMemory)
+      :ok
+    end
+
+    test "inserts when changeset data is :built (new struct)" do
+      cs = User.changeset(%{name: "Alice"})
+      assert Ecto.get_meta(cs.data, :state) == :built
+
+      {:ok, user} = TestRepo.insert_or_update(cs)
+      assert user.name == "Alice"
+      assert user.id != nil
+    end
+
+    test "updates when changeset data is :loaded (existing struct)" do
+      {:ok, user} = TestRepo.insert(User.changeset(%{name: "Alice"}))
+      assert Ecto.get_meta(user, :state) == :loaded
+
+      cs = User.changeset(user, %{name: "Alice Updated"})
+      {:ok, updated} = TestRepo.insert_or_update(cs)
+      assert updated.name == "Alice Updated"
+      assert updated.id == user.id
+    end
+
+    test "returns error for invalid changeset" do
+      cs =
+        User.changeset(%{name: "Alice"})
+        |> Ecto.Changeset.add_error(:name, "is bad")
+
+      assert {:error, %Ecto.Changeset{}} = TestRepo.insert_or_update(cs)
+    end
+
+    test "accepts opts" do
+      cs = User.changeset(%{name: "Alice"})
+      {:ok, user} = TestRepo.insert_or_update(cs, returning: true)
+      assert user.name == "Alice"
+    end
+  end
+
+  describe "insert_or_update!" do
+    setup do
+      DoubleDown.Double.fake(DoubleDown.Repo, Repo.OpenInMemory)
+      :ok
+    end
+
+    test "inserts new struct and returns record" do
+      cs = User.changeset(%{name: "Bob"})
+      user = TestRepo.insert_or_update!(cs)
+      assert user.name == "Bob"
+    end
+
+    test "updates loaded struct and returns record" do
+      {:ok, user} = TestRepo.insert(User.changeset(%{name: "Bob"}))
+      cs = User.changeset(user, %{name: "Bob Updated"})
+      updated = TestRepo.insert_or_update!(cs)
+      assert updated.name == "Bob Updated"
+    end
+
+    test "raises on invalid changeset" do
+      cs =
+        User.changeset(%{name: "Bob"})
+        |> Ecto.Changeset.add_error(:name, "is bad")
+
+      assert_raise Ecto.InvalidChangesetError, fn ->
+        TestRepo.insert_or_update!(cs)
+      end
+    end
+  end
+
+  # -------------------------------------------------------------------
   # Primary key autogeneration variants
   # -------------------------------------------------------------------
 
