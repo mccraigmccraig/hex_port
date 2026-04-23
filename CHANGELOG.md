@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Repo API expansion.** Six new operations added to `DoubleDown.Repo`
+  contract and both InMemory fakes (`Repo.InMemory`, `Repo.OpenInMemory`):
+
+  - `insert_or_update/1,2` and `insert_or_update!/1,2` — checks
+    `Ecto.get_meta(changeset.data, :state)` to delegate to insert or
+    update. Fully authoritative in both fakes.
+  - `reload/1,2` and `reload!/1,2` — re-fetches by PK from the store.
+    Handles single structs and lists. `reload!` raises on not-found.
+  - `preload/2,3` — resolves associations from the in-memory store
+    using Ecto schema reflection (`__schema__(:association, name)`).
+    Supports `has_many`, `has_one`, `belongs_to`, `many_to_many`
+    (when join schema is in store), `has_through` (by chaining),
+    nested preloads, list-of-structs, and static `where` clauses on
+    associations. New module `DoubleDown.Repo.Impl.Preloader`.
+  - `all_by/2,3` — scan-and-filter like `get_by` but returns all
+    matching records as a list. New in Ecto 3.13.
+  - `load/2` — stateless coercion of raw data into a schema struct
+    via `Ecto.Schema.Loader.unsafe_load`. Supports map, keyword list,
+    and `{columns, values}` tuple inputs.
+  - `in_transaction?/0` — reads the process dictionary flag already
+    used by `transact`/`rollback`. Returns boolean.
+
+### Fixed
+
+- **InMemory insert/update now sets meta state to `:loaded`** on
+  returned structs, matching real `Ecto.Repo` behaviour. Previously
+  returned structs with `:built` state, which caused `insert_or_update`
+  to misclassify already-persisted records as new.
+
 ## [0.47.2]
 
 ### Added
