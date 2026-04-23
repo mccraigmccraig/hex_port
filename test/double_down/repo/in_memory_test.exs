@@ -891,6 +891,47 @@ defmodule DoubleDown.Repo.InMemoryTest do
         InMemory.dispatch(DoubleDown.Repo, :insert_all, [ManualPkRecord, entries, []], store)
       end
     end
+
+    test "returning: field list returns maps with only those fields" do
+      store = InMemory.new()
+      entries = [%{name: "Alice", email: "a@b.com"}, %{name: "Bob", email: "b@b.com"}]
+
+      {{2, returned}, _store} =
+        InMemory.dispatch(
+          DoubleDown.Repo,
+          :insert_all,
+          [User, entries, [returning: [:id, :name]]],
+          store
+        )
+
+      assert length(returned) == 2
+      assert [%{name: "Alice"}, %{name: "Bob"}] = returned
+      # Should not contain fields outside the returning list
+      refute Map.has_key?(hd(returned), :email)
+    end
+
+    test "silently ignores on_conflict option" do
+      store = InMemory.new()
+      entries = [%{name: "Alice"}]
+
+      {{1, nil}, _store} =
+        InMemory.dispatch(
+          DoubleDown.Repo,
+          :insert_all,
+          [User, entries, [on_conflict: :nothing, conflict_target: [:email]]],
+          store
+        )
+    end
+
+    test "raises descriptive error for binary table name source" do
+      store = InMemory.new()
+      entries = [%{name: "Alice"}]
+
+      {%DoubleDown.Contract.Dispatch.Defer{fn: raise_fn}, _} =
+        InMemory.dispatch(DoubleDown.Repo, :insert_all, ["users", entries, []], store)
+
+      assert_raise ArgumentError, ~r/does not support binary table name/, fn -> raise_fn.() end
+    end
   end
 
   describe "delete_all" do

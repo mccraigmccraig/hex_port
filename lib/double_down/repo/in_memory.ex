@@ -82,6 +82,25 @@ if Code.ensure_loaded?(Ecto) do
     | **`Repo.InMemory`** | **Complete store** | **All bare-schema reads; ExMachina factories** |
     | `Repo.OpenInMemory` | Partial store | PK reads in state, fallback for rest |
 
+    ## Limitations
+
+    The following `insert_all` options are silently ignored because they
+    depend on database constraints that don't exist in memory:
+
+    - `on_conflict` — upsert behaviour (`:nothing`, `{:replace, fields}`, etc.)
+    - `conflict_target` — which fields/index define the conflict
+
+    This is intentional: test code should match production code without
+    modification. Testing constraint behaviour requires a real database
+    via `DataCase`.
+
+    When `returning:` is a list of fields, `insert_all` returns maps
+    containing only those fields (matching Ecto adapter behaviour).
+    `returning: true` returns full structs.
+
+    Binary table name sources (e.g. `"users"`) are not supported by
+    `insert_all` — use a fallback function or `Double.expect` for these.
+
     ## See also
 
     - `DoubleDown.Repo.OpenInMemory` — open-world variant where absence
@@ -399,16 +418,37 @@ if Code.ensure_loaded?(Ecto) do
           end
         end)
 
-      returning? = Keyword.get(opts, :returning, false)
+      returning = Keyword.get(opts, :returning, false)
 
       result =
-        if returning? do
-          {count, Enum.reverse(records)}
-        else
-          {count, nil}
+        case returning do
+          false ->
+            {count, nil}
+
+          true ->
+            {count, Enum.reverse(records)}
+
+          fields when is_list(fields) ->
+            returned = records |> Enum.reverse() |> Enum.map(&Map.take(&1, fields))
+            {count, returned}
         end
 
       {result, new_store}
+    end
+
+    def dispatch(_contract, :insert_all, [source, _entries, _opts], store)
+        when is_binary(source) do
+      InMemoryShared.defer_raise(
+        """
+        DoubleDown.Repo.InMemory does not support binary table name sources \
+        for insert_all (got #{inspect(source)}).
+
+        InMemory requires an atom schema module to determine struct types \
+        and primary keys. Use a fallback function or Double.expect to handle \
+        binary source insert_all calls.
+        """,
+        store
+      )
     end
 
     def dispatch(contract, :insert_all, args, store),
