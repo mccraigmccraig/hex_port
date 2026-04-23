@@ -164,7 +164,8 @@ defmodule DoubleDown.ContractFacade do
 
     key_helpers = Enum.map(operations, &Codegen.generate_key_helper(&1, contract))
 
-    moduledoc = Codegen.generate_moduledoc(contract, otp_app)
+    existing_moduledoc = Module.get_attribute(env.module, :moduledoc)
+    moduledoc = Codegen.generate_moduledoc(contract, otp_app, existing_moduledoc)
 
     quote do
       unquote(moduledoc)

@@ -32,3 +32,13 @@ end
 defmodule DoubleDown.Test.AliasedTypes.Port do
   use DoubleDown.ContractFacade, contract: DoubleDown.Test.AliasedTypes, otp_app: :double_down
 end
+
+defmodule DoubleDown.Test.Greeter.PortWithUserDoc do
+  @moduledoc "User-provided documentation for the greeter facade."
+  use DoubleDown.ContractFacade, contract: DoubleDown.Test.Greeter, otp_app: :double_down
+end
+
+defmodule DoubleDown.Test.Greeter.PortWithFalseDoc do
+  @moduledoc false
+  use DoubleDown.ContractFacade, contract: DoubleDown.Test.Greeter, otp_app: :double_down
+end

@@ -229,16 +229,34 @@ defmodule DoubleDown.Facade.Codegen do
   # -------------------------------------------------------------------
 
   @doc false
-  def generate_moduledoc(contract, otp_app) do
-    quote do
-      @moduledoc """
-      Dispatch facade for `#{inspect(unquote(contract))}`.
+  def generate_moduledoc(contract, otp_app, existing_moduledoc \\ nil) do
+    generated =
+      """
+      Dispatch facade for `#{inspect(contract)}`.
 
       Dispatches calls to the configured implementation via
       `DoubleDown.Contract.Dispatch`. In production, resolves from application
-      config (`#{inspect(unquote(otp_app))}`). In tests, resolves
-      from `DoubleDown.Testing` handlers.
+      config (`#{inspect(otp_app)}`). In tests, resolves
+      from `DoubleDown.Testing` handlers.\
       """
+
+    combined =
+      case existing_moduledoc do
+        # User wrote @moduledoc false — respect it, suppress all docs
+        {_, false} ->
+          false
+
+        # User provided a moduledoc — prepend it, append generated info
+        {_, user_doc} when is_binary(user_doc) ->
+          String.trim_trailing(user_doc) <> "\n\n---\n\n" <> generated
+
+        # No user moduledoc — use generated only
+        _ ->
+          generated
+      end
+
+    quote do
+      @moduledoc unquote(combined)
     end
   end
 end

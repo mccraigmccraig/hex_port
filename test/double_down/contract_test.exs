@@ -93,6 +93,23 @@ defmodule DoubleDown.ContractTest do
       assert doc =~ "DoubleDown.Test.Greeter"
     end
 
+    test "user-provided @moduledoc is combined with generated moduledoc" do
+      {:docs_v1, _anno, _lang, _format, module_doc, _meta, _docs} =
+        Code.fetch_docs(DoubleDown.Test.Greeter.PortWithUserDoc)
+
+      assert %{"en" => doc} = module_doc
+      assert doc =~ "User-provided documentation for the greeter facade."
+      assert doc =~ "Dispatch facade"
+      assert doc =~ "DoubleDown.Test.Greeter"
+    end
+
+    test "@moduledoc false suppresses all documentation" do
+      {:docs_v1, _anno, _lang, _format, module_doc, _meta, _docs} =
+        Code.fetch_docs(DoubleDown.Test.Greeter.PortWithFalseDoc)
+
+      assert :hidden = module_doc
+    end
+
     test "Port stores @double_down_contract module attribute" do
       # The contract module reference is captured and used by dispatch
       # We verify this indirectly — dispatch resolves using it.
