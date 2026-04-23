@@ -455,6 +455,12 @@ defmodule DoubleDown.Repo.OpenInMemoryTest do
         TestRepo.insert_or_update!(cs)
       end
     end
+
+    test "accepts opts" do
+      cs = User.changeset(%{name: "Bob"})
+      user = TestRepo.insert_or_update!(cs, returning: true)
+      assert user.name == "Bob"
+    end
   end
 
   # -------------------------------------------------------------------

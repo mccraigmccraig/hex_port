@@ -140,6 +140,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `update_all`, `delete_all` always delegate to fallback and do not
   mutate in-memory state (unlike InMemory).
 
+- **Test coverage:** `insert_or_update!` opts-accepting 2-arity variant
+  tested through InMemory and OpenInMemory.
+
 ## [0.47.2]
 
 ### Added
