@@ -122,6 +122,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `FunctionClauseError`, it is misreported as "Unexpected call" — a
   known Mox-shared limitation.
 
+- **Stale "X.Port" placeholder fixed** in `Testing.enable_log/1` doc.
+
 ## [0.47.2]
 
 ### Added

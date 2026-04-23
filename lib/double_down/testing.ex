@@ -93,8 +93,8 @@ defmodule DoubleDown.Testing do
   @doc """
   Enable dispatch logging for a contract.
 
-  After enabling, all dispatches through `X.Port` will be recorded.
-  Retrieve with `get_log/1`.
+  After enabling, all dispatches through the contract's facade will be
+  recorded. Retrieve with `get_log/1`.
   """
   @spec enable_log(module()) :: :ok
   def enable_log(contract) do
