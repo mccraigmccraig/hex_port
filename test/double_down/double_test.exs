@@ -1124,10 +1124,8 @@ defmodule DoubleDown.DoubleTest do
       assert error.message =~ "increment"
     end
 
-    test "raises when called with no handlers" do
-      assert_raise RuntimeError, ~r/no handlers were installed/, fn ->
-        Double.verify!()
-      end
+    test "returns :ok when called with no handlers" do
+      assert :ok = Double.verify!()
     end
   end
 

@@ -952,15 +952,17 @@ defmodule DoubleDown.Double do
   defp do_verify!(pid) do
     owned = NimbleOwnership.get_owned(@ownership_server, pid)
 
-    contracts =
-      case owned do
-        %{@contracts_key => contracts} ->
-          contracts
+    case owned do
+      %{@contracts_key => contracts} ->
+        verify_contracts!(owned, contracts)
 
-        _ ->
-          raise "DoubleDown.Double.verify! called but no handlers were installed"
-      end
+      _ ->
+        # No Double-managed handlers installed — nothing to verify.
+        :ok
+    end
+  end
 
+  defp verify_contracts!(owned, contracts) do
     unconsumed =
       Enum.flat_map(contracts, fn contract ->
         state_key = Module.concat(DoubleDown.State, contract)
