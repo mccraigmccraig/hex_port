@@ -1767,4 +1767,44 @@ defmodule DoubleDown.Repo.OpenInMemoryTest do
       )
     end
   end
+
+  # -------------------------------------------------------------------
+  # query / query! — raw SQL, always fallback
+  # -------------------------------------------------------------------
+
+  describe "query" do
+    test "delegates to fallback" do
+      DoubleDown.Double.fake(DoubleDown.Repo, Repo.OpenInMemory, [],
+        fallback_fn: fn _contract, :query, ["SELECT 1"], _state -> {:ok, %{rows: [[1]]}} end
+      )
+
+      assert {:ok, %{rows: [[1]]}} = TestRepo.query("SELECT 1")
+    end
+
+    test "raises helpful error when no fallback" do
+      DoubleDown.Double.fake(DoubleDown.Repo, Repo.OpenInMemory)
+
+      assert_raise ArgumentError, ~r/cannot service :query/, fn ->
+        TestRepo.query("SELECT 1")
+      end
+    end
+  end
+
+  describe "query!" do
+    test "delegates to fallback" do
+      DoubleDown.Double.fake(DoubleDown.Repo, Repo.OpenInMemory, [],
+        fallback_fn: fn _contract, :query!, ["SELECT 1"], _state -> %{rows: [[1]]} end
+      )
+
+      assert %{rows: [[1]]} = TestRepo.query!("SELECT 1")
+    end
+
+    test "raises helpful error when no fallback" do
+      DoubleDown.Double.fake(DoubleDown.Repo, Repo.OpenInMemory)
+
+      assert_raise ArgumentError, ~r/cannot service :query!/, fn ->
+        TestRepo.query!("SELECT 1")
+      end
+    end
+  end
 end

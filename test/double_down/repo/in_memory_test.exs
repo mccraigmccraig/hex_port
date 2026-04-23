@@ -1433,4 +1433,81 @@ defmodule DoubleDown.Repo.InMemoryTest do
       assert length(DoubleDown.Test.Repo.all(NoPkEvent)) == 2
     end
   end
+
+  # -------------------------------------------------------------------
+  # query / query! — raw SQL, always fallback
+  # -------------------------------------------------------------------
+
+  describe "query" do
+    test "delegates to fallback" do
+      store =
+        InMemory.new([],
+          fallback_fn: fn _contract, :query, ["SELECT 1"], _state -> {:ok, %{rows: [[1]]}} end
+        )
+
+      {{:ok, %{rows: [[1]]}}, _} = InMemory.dispatch(DoubleDown.Repo, :query, ["SELECT 1"], store)
+    end
+
+    test "delegates to fallback with params" do
+      store =
+        InMemory.new([],
+          fallback_fn: fn _contract, :query, ["SELECT $1", [42]], _state -> {:ok, %{rows: [[42]]}} end
+        )
+
+      {{:ok, %{rows: [[42]]}}, _} = InMemory.dispatch(DoubleDown.Repo, :query, ["SELECT $1", [42]], store)
+    end
+
+    test "raises helpful error when no fallback" do
+      store = InMemory.new()
+
+      {%DoubleDown.Contract.Dispatch.Defer{fn: raise_fn}, _} =
+        InMemory.dispatch(DoubleDown.Repo, :query, ["SELECT 1"], store)
+
+      assert_raise ArgumentError, ~r/cannot service :query/, fn -> raise_fn.() end
+    end
+  end
+
+  describe "query!" do
+    test "delegates to fallback" do
+      store =
+        InMemory.new([],
+          fallback_fn: fn _contract, :query!, ["SELECT 1"], _state -> %{rows: [[1]]} end
+        )
+
+      {%{rows: [[1]]}, _} = InMemory.dispatch(DoubleDown.Repo, :query!, ["SELECT 1"], store)
+    end
+
+    test "raises helpful error when no fallback" do
+      store = InMemory.new()
+
+      {%DoubleDown.Contract.Dispatch.Defer{fn: raise_fn}, _} =
+        InMemory.dispatch(DoubleDown.Repo, :query!, ["SELECT 1"], store)
+
+      assert_raise ArgumentError, ~r/cannot service :query!/, fn -> raise_fn.() end
+    end
+  end
+
+  # -------------------------------------------------------------------
+  # Catch-all dispatch — unrecognised operations delegate to fallback
+  # -------------------------------------------------------------------
+
+  describe "catch-all dispatch" do
+    test "unrecognised operation delegates to fallback" do
+      store =
+        InMemory.new([],
+          fallback_fn: fn _contract, :some_future_op, [42], _state -> :handled end
+        )
+
+      {:handled, _} = InMemory.dispatch(DoubleDown.Repo, :some_future_op, [42], store)
+    end
+
+    test "unrecognised operation raises helpful error when no fallback" do
+      store = InMemory.new()
+
+      {%DoubleDown.Contract.Dispatch.Defer{fn: raise_fn}, _} =
+        InMemory.dispatch(DoubleDown.Repo, :some_future_op, [42], store)
+
+      assert_raise ArgumentError, ~r/cannot service :some_future_op/, fn -> raise_fn.() end
+    end
+  end
 end

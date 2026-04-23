@@ -459,6 +459,16 @@ if Code.ensure_loaded?(Ecto) do
       do: dispatch(contract, :update_all, [queryable, updates], store)
 
     # -----------------------------------------------------------------
+    # Raw SQL operations — always fallback
+    # -----------------------------------------------------------------
+
+    def dispatch(contract, :query, args, store),
+      do: dispatch_via_fallback(contract, :query, args, store)
+
+    def dispatch(contract, :query!, args, store),
+      do: dispatch_via_fallback(contract, :query!, args, store)
+
+    # -----------------------------------------------------------------
     # Transaction operations — delegate to Shared
     # -----------------------------------------------------------------
 
@@ -470,6 +480,13 @@ if Code.ensure_loaded?(Ecto) do
 
     def dispatch(_contract, :in_transaction?, [], store),
       do: InMemoryShared.dispatch_in_transaction?(store)
+
+    # -----------------------------------------------------------------
+    # Catch-all — delegate unrecognised operations to fallback
+    # -----------------------------------------------------------------
+
+    def dispatch(contract, operation, args, store),
+      do: dispatch_via_fallback(contract, operation, args, store)
 
     # -----------------------------------------------------------------
     # Fallback dispatch (closed-world error messages)
