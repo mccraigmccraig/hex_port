@@ -220,6 +220,76 @@ if Code.ensure_loaded?(Ecto) do
       end
     end
 
+    # -------------------------------------------------------------------
+    # Reload operations
+    # -------------------------------------------------------------------
+
+    @doc false
+    def dispatch_reload([structs], store) when is_list(structs) do
+      results =
+        Enum.map(structs, fn struct ->
+          schema = struct.__struct__
+          id = DoubleDown.Repo.Impl.Autogenerate.get_primary_key(struct)
+          get_record(store, schema, id)
+        end)
+
+      {results, store}
+    end
+
+    def dispatch_reload([struct], store) do
+      schema = struct.__struct__
+      id = DoubleDown.Repo.Impl.Autogenerate.get_primary_key(struct)
+      {get_record(store, schema, id), store}
+    end
+
+    @doc false
+    def dispatch_reload!([structs], store) when is_list(structs) do
+      results =
+        Enum.map(structs, fn struct ->
+          schema = struct.__struct__
+          id = DoubleDown.Repo.Impl.Autogenerate.get_primary_key(struct)
+
+          case get_record(store, schema, id) do
+            nil -> :reload_failed
+            record -> record
+          end
+        end)
+
+      case Enum.find(results, &(&1 == :reload_failed)) do
+        nil ->
+          {results, store}
+
+        _ ->
+          failed_index = Enum.find_index(results, &(&1 == :reload_failed))
+          failed_struct = Enum.at(structs, failed_index)
+
+          {%DoubleDown.Contract.Dispatch.Defer{
+             fn: fn ->
+               raise RuntimeError,
+                     "could not reload #{inspect(failed_struct)}, maybe it doesn't exist or was deleted"
+             end
+           }, store}
+      end
+    end
+
+    def dispatch_reload!([struct], store) do
+      schema = struct.__struct__
+      id = DoubleDown.Repo.Impl.Autogenerate.get_primary_key(struct)
+
+      case get_record(store, schema, id) do
+        nil ->
+          {%DoubleDown.Contract.Dispatch.Defer{
+             fn: fn ->
+               raise RuntimeError,
+                     "could not reload #{inspect(struct)}, maybe it doesn't exist or was deleted"
+             end
+           }, store}
+
+        record ->
+          {record, store}
+      end
+    end
+
     defp bang_raise(action, %Ecto.Changeset{} = changeset, store) do
       {%DoubleDown.Contract.Dispatch.Defer{
          fn: fn ->

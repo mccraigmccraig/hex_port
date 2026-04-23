@@ -833,6 +833,56 @@ defmodule DoubleDown.Repo.OpenInMemoryTest do
   end
 
   # -------------------------------------------------------------------
+  # reload / reload! (PK-based, authoritative from state)
+  # -------------------------------------------------------------------
+
+  describe "reload (open-world)" do
+    setup do
+      DoubleDown.Double.fake(DoubleDown.Repo, Repo.OpenInMemory)
+      :ok
+    end
+
+    test "reloads existing record from state" do
+      {:ok, user} = TestRepo.insert(User.changeset(%{name: "Alice"}))
+      reloaded = TestRepo.reload(user)
+      assert reloaded.name == "Alice"
+    end
+
+    test "returns nil for missing record" do
+      missing = %User{id: 999, name: "Ghost"}
+      assert TestRepo.reload(missing) == nil
+    end
+
+    test "reflects updated values" do
+      {:ok, user} = TestRepo.insert(User.changeset(%{name: "Alice"}))
+      {:ok, _} = TestRepo.update(User.changeset(user, %{name: "Updated"}))
+      reloaded = TestRepo.reload(user)
+      assert reloaded.name == "Updated"
+    end
+  end
+
+  describe "reload! (open-world)" do
+    setup do
+      DoubleDown.Double.fake(DoubleDown.Repo, Repo.OpenInMemory)
+      :ok
+    end
+
+    test "reloads existing record" do
+      {:ok, user} = TestRepo.insert(User.changeset(%{name: "Alice"}))
+      reloaded = TestRepo.reload!(user)
+      assert reloaded.name == "Alice"
+    end
+
+    test "raises for missing record" do
+      missing = %User{id: 999, name: "Ghost"}
+
+      assert_raise RuntimeError, ~r/could not reload/, fn ->
+        TestRepo.reload!(missing)
+      end
+    end
+  end
+
+  # -------------------------------------------------------------------
   # all_by (open-world — always fallback)
   # -------------------------------------------------------------------
 

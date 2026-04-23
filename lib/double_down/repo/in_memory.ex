@@ -168,6 +168,22 @@ if Code.ensure_loaded?(Ecto) do
       do: InMemoryShared.dispatch_delete!([record], store)
 
     # -----------------------------------------------------------------
+    # Reload — closed-world
+    # -----------------------------------------------------------------
+
+    def dispatch(_contract, :reload, [struct_or_structs, _opts], store),
+      do: InMemoryShared.dispatch_reload([struct_or_structs], store)
+
+    def dispatch(_contract, :reload, [struct_or_structs], store),
+      do: InMemoryShared.dispatch_reload([struct_or_structs], store)
+
+    def dispatch(_contract, :reload!, [struct_or_structs, _opts], store),
+      do: InMemoryShared.dispatch_reload!([struct_or_structs], store)
+
+    def dispatch(_contract, :reload!, [struct_or_structs], store),
+      do: InMemoryShared.dispatch_reload!([struct_or_structs], store)
+
+    # -----------------------------------------------------------------
     # PK reads — closed-world: nil/raise on miss
     # -----------------------------------------------------------------
 

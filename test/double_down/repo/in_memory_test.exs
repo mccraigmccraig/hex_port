@@ -536,6 +536,92 @@ defmodule DoubleDown.Repo.InMemoryTest do
   end
 
   # -------------------------------------------------------------------
+  # reload / reload! — closed-world
+  # -------------------------------------------------------------------
+
+  describe "reload (closed-world)" do
+    setup do
+      DoubleDown.Double.fake(DoubleDown.Repo, InMemory)
+      :ok
+    end
+
+    test "reloads existing record" do
+      {:ok, user} = DoubleDown.Test.Repo.insert(User.changeset(%User{}, %{name: "Alice"}))
+      reloaded = DoubleDown.Test.Repo.reload(user)
+      assert reloaded.name == "Alice"
+      assert reloaded.id == user.id
+    end
+
+    test "returns nil for missing record" do
+      missing = %User{id: 999, name: "Ghost"}
+      assert DoubleDown.Test.Repo.reload(missing) == nil
+    end
+
+    test "reflects updated values" do
+      {:ok, user} = DoubleDown.Test.Repo.insert(User.changeset(%User{}, %{name: "Alice"}))
+      {:ok, _} = DoubleDown.Test.Repo.update(User.changeset(user, %{name: "Updated"}))
+      reloaded = DoubleDown.Test.Repo.reload(user)
+      assert reloaded.name == "Updated"
+    end
+
+    test "reloads a list of structs" do
+      {:ok, alice} = DoubleDown.Test.Repo.insert(User.changeset(%User{}, %{name: "Alice"}))
+      {:ok, bob} = DoubleDown.Test.Repo.insert(User.changeset(%User{}, %{name: "Bob"}))
+      missing = %User{id: 999, name: "Ghost"}
+
+      result = DoubleDown.Test.Repo.reload([alice, bob, missing])
+      assert length(result) == 3
+      assert Enum.at(result, 0).name == "Alice"
+      assert Enum.at(result, 1).name == "Bob"
+      assert Enum.at(result, 2) == nil
+    end
+
+    test "accepts opts" do
+      {:ok, user} = DoubleDown.Test.Repo.insert(User.changeset(%User{}, %{name: "Alice"}))
+      reloaded = DoubleDown.Test.Repo.reload(user, prefix: "public")
+      assert reloaded.name == "Alice"
+    end
+  end
+
+  describe "reload! (closed-world)" do
+    setup do
+      DoubleDown.Double.fake(DoubleDown.Repo, InMemory)
+      :ok
+    end
+
+    test "reloads existing record" do
+      {:ok, user} = DoubleDown.Test.Repo.insert(User.changeset(%User{}, %{name: "Alice"}))
+      reloaded = DoubleDown.Test.Repo.reload!(user)
+      assert reloaded.name == "Alice"
+    end
+
+    test "raises for missing record" do
+      missing = %User{id: 999, name: "Ghost"}
+
+      assert_raise RuntimeError, ~r/could not reload/, fn ->
+        DoubleDown.Test.Repo.reload!(missing)
+      end
+    end
+
+    test "reloads list of structs" do
+      {:ok, alice} = DoubleDown.Test.Repo.insert(User.changeset(%User{}, %{name: "Alice"}))
+      {:ok, bob} = DoubleDown.Test.Repo.insert(User.changeset(%User{}, %{name: "Bob"}))
+
+      result = DoubleDown.Test.Repo.reload!([alice, bob])
+      assert length(result) == 2
+    end
+
+    test "raises for list with missing record" do
+      {:ok, alice} = DoubleDown.Test.Repo.insert(User.changeset(%User{}, %{name: "Alice"}))
+      missing = %User{id: 999, name: "Ghost"}
+
+      assert_raise RuntimeError, ~r/could not reload/, fn ->
+        DoubleDown.Test.Repo.reload!([alice, missing])
+      end
+    end
+  end
+
+  # -------------------------------------------------------------------
   # all_by — closed-world
   # -------------------------------------------------------------------
 
