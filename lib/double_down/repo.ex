@@ -54,6 +54,17 @@ if Code.ensure_loaded?(Ecto) do
 
     Raise-on-not-found variants (`get!/2`, `get_by!/2`, `one!/1`) mirror
     Ecto's semantics.
+
+    ## Relationship to Ecto.Repo
+
+    This module is a `DoubleDown.Contract`, not an `Ecto.Repo` behaviour
+    implementation. It mirrors most of the `Ecto.Repo` API but differs in
+    two ways:
+
+    - **`transact` instead of `transaction`** — clearer name, same semantics.
+    - **Some rarely-used callbacks omitted** — `checkout/1`, `checked_out?/0`,
+      `put_dynamic_repo/1`, `get_dynamic_repo/0`, `to_sql/2` are not included.
+      These can be added incrementally if needed.
     """
 
     use DoubleDown.Contract

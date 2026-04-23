@@ -131,6 +131,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `InMemoryShared`, `Preloader` added to the Internals group in
   `mix.exs` so they appear in hexdocs.
 
+- **`DoubleDown.Repo` moduledoc** now explains relationship to
+  `Ecto.Repo` — why it's a DoubleDown contract not an Ecto behaviour,
+  `transact` vs `transaction` naming, and which callbacks are
+  intentionally excluded.
+
 ## [0.47.2]
 
 ### Added
