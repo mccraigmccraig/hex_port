@@ -223,6 +223,8 @@ defmodule DoubleDown.DynamicFacade do
     [h | rename_module_attribute(t, new_name)]
   end
 
+  defp rename_module_attribute([], _new_name), do: []
+
   defp create_shim(module, functions) do
     contents =
       for {name, arity} <- functions do
@@ -239,9 +241,13 @@ defmodule DoubleDown.DynamicFacade do
         end
       end
 
-    Code.compiler_options(ignore_module_conflict: true)
-    Module.create(module, contents, Macro.Env.location(__ENV__))
-    Code.compiler_options(ignore_module_conflict: false)
+    prev = Code.compiler_options(ignore_module_conflict: true)
+
+    try do
+      Module.create(module, contents, Macro.Env.location(__ENV__))
+    after
+      Code.compiler_options(ignore_module_conflict: prev[:ignore_module_conflict])
+    end
   end
 
   # -- Registry --
