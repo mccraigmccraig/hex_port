@@ -156,6 +156,18 @@ defmodule DoubleDown.Double do
   This is a higher-level convenience built on `set_stateful_handler`.
   It does not replace `set_fn_handler` or `set_stateful_handler` —
   those remain for cases that don't fit the expect/stub pattern.
+
+  ## Known limitations
+
+  **FunctionClauseError in fallback bodies:** When a stub or fake
+  fallback function has no matching clause for an operation, DoubleDown
+  catches the `FunctionClauseError` and raises a helpful "Unexpected
+  call" error instead. However, if a fallback clause *does* match but
+  its body internally calls a function that raises `FunctionClauseError`,
+  that exception is also caught and misreported as "Unexpected call".
+  This is a known limitation shared with Mox. If you see a surprising
+  "Unexpected call" error, check whether your fallback body contains
+  code that might raise `FunctionClauseError`.
   """
 
   @ownership_server DoubleDown.Contract.Dispatch.Ownership
@@ -881,6 +893,10 @@ defmodule DoubleDown.Double do
     result = fallback_fn.(operation, args)
     {result, state}
   rescue
+    # NOTE: This rescue cannot distinguish between a FunctionClauseError from
+    # the top-level fallback_fn (no matching clause) and one raised deeper in
+    # the call stack (a bug in the fallback body). See "Known limitations" in
+    # the moduledoc.
     FunctionClauseError ->
       msg = unexpected_call_message(state.contract, state, operation, args)
       {%DoubleDown.Contract.Dispatch.Defer{fn: fn -> reraise msg, __STACKTRACE__ end}, state}
@@ -907,6 +923,8 @@ defmodule DoubleDown.Double do
         )
     end
   rescue
+    # NOTE: Same limitation as invoke_fn_fallback — see "Known limitations"
+    # in the moduledoc.
     FunctionClauseError ->
       msg = unexpected_call_message(state.contract, state, operation, args)
       {%DoubleDown.Contract.Dispatch.Defer{fn: fn -> reraise msg, __STACKTRACE__ end}, state}
