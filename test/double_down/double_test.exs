@@ -104,51 +104,8 @@ defmodule DoubleDown.DoubleTest do
       assert "stub: B" = Greeter.Port.greet("B")
       assert "stub: C" = Greeter.Port.greet("C")
     end
-  end
 
-  # ── stateful per-operation stubs ────────────────────────────
-
-  describe "stateful per-operation stubs" do
-    test "2-arity stub receives and updates fallback state" do
-      Counter
-      |> Double.fake(
-        fn
-          _contract, :increment, [n], count -> {count + n, count + n}
-          _contract, :get_count, [], count -> {count, count}
-        end,
-        0
-      )
-      |> Double.stub(:increment, fn [n], count ->
-        # Always double the increment
-        {count + n * 2, count + n * 2}
-      end)
-
-      assert 10 = Counter.Port.increment(5)
-      assert 16 = Counter.Port.increment(3)
-      assert 16 = Counter.Port.get_count()
-    end
-
-    test "3-arity stub receives all_states" do
-      Greeter
-      |> Double.fake(
-        fn _contract, :greet, [name], state -> {"Hello #{name}", state} end,
-        %{greeted: []}
-      )
-
-      Counter
-      |> Double.fake(
-        fn _contract, :get_count, [], count -> {count, count} end,
-        0
-      )
-      |> Double.stub(:get_count, fn [], _state, all_states ->
-        greeter_state = Map.get(all_states, Greeter)
-        {greeter_state, 0}
-      end)
-
-      assert %{greeted: []} = Counter.Port.get_count()
-    end
-
-    test "1-arity stub can return passthrough()" do
+    test "stub can return passthrough() to delegate to fallback" do
       Counter
       |> Double.fake(
         fn
@@ -171,59 +128,6 @@ defmodule DoubleDown.DoubleTest do
       assert {:error, :overflow} = Counter.Port.increment(200)
       # State from first call preserved
       assert 5 = Counter.Port.get_count()
-    end
-
-    test "2-arity stub can return passthrough()" do
-      Counter
-      |> Double.fake(
-        fn
-          _contract, :increment, [n], count -> {count + n, count + n}
-          _contract, :get_count, [], count -> {count, count}
-        end,
-        0
-      )
-      |> Double.stub(:increment, fn [n], count ->
-        if count + n > 100 do
-          {{:error, :overflow}, count}
-        else
-          Double.passthrough()
-        end
-      end)
-
-      assert 50 = Counter.Port.increment(50)
-      assert 90 = Counter.Port.increment(40)
-      # This would exceed 100 — stub handles it
-      assert {:error, :overflow} = Counter.Port.increment(20)
-      assert 90 = Counter.Port.get_count()
-    end
-
-    test "raises at stub time if no stateful fake — 2-arity" do
-      Double.stub(Counter, :get_count, fn [] -> 0 end)
-
-      assert_raise ArgumentError, ~r/no stateful fake is configured/, fn ->
-        Double.stub(Counter, :increment, fn [_n], _state -> {0, 0} end)
-      end
-    end
-
-    test "raises at stub time if no stateful fake — 3-arity" do
-      Double.stub(Counter, :get_count, fn [] -> 0 end)
-
-      assert_raise ArgumentError, ~r/no stateful fake is configured/, fn ->
-        Double.stub(Counter, :increment, fn [_n], _state, _all -> {0, 0} end)
-      end
-    end
-
-    test "raises at dispatch time if 2-arity stub returns bare value" do
-      Counter
-      |> Double.fake(
-        fn _contract, :increment, [n], count -> {count + n, count + n} end,
-        0
-      )
-      |> Double.stub(:increment, fn [_n], _state -> 42 end)
-
-      assert_raise ArgumentError, ~r/must return \{result, new_state\}/, fn ->
-        Counter.Port.increment(5)
-      end
     end
   end
 

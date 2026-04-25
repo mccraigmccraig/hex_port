@@ -297,19 +297,14 @@ defmodule DoubleDown.Double do
   ## Per-operation stub
 
   The function receives the argument list and returns the result.
+  Stubs are stateless — for stateful per-operation overrides, use
+  `expect/4` with a 2-arity or 3-arity responder.
+
   Stubs handle any number of calls and are used after all expectations
   for an operation are consumed. Setting a stub twice for the same
   operation replaces the previous one.
 
-  The function may be:
-
-    * **1-arity** `fn [args] -> result end` — stateless
-    * **2-arity** `fn [args], state -> {result, new_state} end` — stateful
-      (requires `fake/3` first)
-    * **3-arity** `fn [args], state, all_states -> {result, new_state} end` —
-      cross-contract state access (requires `fake/3` first)
-
-  Any arity may return `Double.passthrough()` to delegate to the
+  The stub may return `Double.passthrough()` to delegate to the
   fallback/fake for that specific call.
 
       DoubleDown.Double.stub(MyContract, :list, fn [_] -> [] end)
@@ -368,11 +363,9 @@ defmodule DoubleDown.Double do
 
   # stub/3 — per-operation stub OR StubHandler module with fallback_fn
   #
-  # Disambiguation: if the second arg is an atom and the third is a 3-arity
-  # function or nil, check if the second arg is a StubHandler module.
-  # Per-operation stubs have a 1/2/3-arity function as the third arg.
-  # Note: 3-arity is ambiguous (could be StubHandler fallback or per-op
-  # stateful stub with all_states), so we check stub_handler? first.
+  # Disambiguation: if the second arg is an atom and the third is a function
+  # or nil, check if the second arg is a StubHandler module.
+  # Per-operation stubs are 1-arity; StubHandler fallbacks are 3-arity.
   @spec stub(module(), atom(), function() | nil) :: module()
   def stub(contract, module_or_operation, fun_or_fallback)
 
@@ -394,14 +387,8 @@ defmodule DoubleDown.Double do
     end
   end
 
-  defp do_per_op_stub(contract, operation, fun)
-       when is_function(fun, 1) or is_function(fun, 2) or is_function(fun, 3) do
+  defp do_per_op_stub(contract, operation, fun) when is_function(fun, 1) do
     ensure_handler_installed(contract)
-
-    # Stateful stubs (2-arity, 3-arity) require a stateful fake
-    if not is_function(fun, 1) do
-      validate_stateful_fake_exists!(contract, operation, fun)
-    end
 
     update_handler_state(contract, fn state ->
       %{state | stubs: Map.put(state.stubs, operation, fun)}
@@ -813,7 +800,7 @@ defmodule DoubleDown.Double do
     end
   end
 
-  # Invoke a per-operation stub. Same arity dispatch as invoke_expect.
+  # Invoke a per-operation stub. Always 1-arity (stateless).
   defp invoke_stub(fun, args, state, all_states, operation)
        when is_function(fun, 1) do
     case fun.(args) do
@@ -822,34 +809,6 @@ defmodule DoubleDown.Double do
 
       result ->
         {result, state}
-    end
-  end
-
-  defp invoke_stub(fun, args, state, all_states, operation)
-       when is_function(fun, 2) do
-    case fun.(args, state.fallback_state) do
-      %DoubleDown.Contract.Dispatch.Passthrough{} ->
-        invoke_fallback_or_raise(state, operation, args, all_states)
-
-      {result, new_fallback_state} ->
-        {result, %{state | fallback_state: new_fallback_state}}
-
-      other ->
-        raise_bad_stateful_responder_return(:stub, operation, 2, other)
-    end
-  end
-
-  defp invoke_stub(fun, args, state, all_states, operation)
-       when is_function(fun, 3) do
-    case fun.(args, state.fallback_state, all_states) do
-      %DoubleDown.Contract.Dispatch.Passthrough{} ->
-        invoke_fallback_or_raise(state, operation, args, all_states)
-
-      {result, new_fallback_state} ->
-        {result, %{state | fallback_state: new_fallback_state}}
-
-      other ->
-        raise_bad_stateful_responder_return(:stub, operation, 3, other)
     end
   end
 
