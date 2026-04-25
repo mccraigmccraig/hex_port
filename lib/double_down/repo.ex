@@ -61,7 +61,11 @@ if Code.ensure_loaded?(Ecto) do
     implementation. It mirrors most of the `Ecto.Repo` API but differs in
     two ways:
 
-    - **`transact` instead of `transaction`** — clearer name, same semantics.
+    - **`transact` is the preferred name for `transaction`** — both are
+      supported. `transact` is recommended for new code; `transaction` is
+      provided for compatibility with existing `Ecto.Repo` call sites so
+      that production code works unchanged through both ContractFacade and
+      DynamicFacade routes.
     - **Some rarely-used callbacks omitted** — `checkout/1`, `checked_out?/0`,
       `put_dynamic_repo/1`, `get_dynamic_repo/0`, `to_sql/2` are not included.
       These can be added incrementally if needed.
@@ -438,21 +442,46 @@ if Code.ensure_loaded?(Ecto) do
                 end
 
     @doc """
+    Run a function or `Ecto.Multi` inside a database transaction.
+
+    Alias for `transact/2` — provided for compatibility with existing
+    `Ecto.Repo.transaction/2` call sites. `transact/2` is the preferred
+    name for new code; the two are functionally identical.
+
+    See `transact/2` for full documentation.
+    """
+    defcallback transaction(fun_or_multi :: term(), opts :: keyword()) ::
+                  {:ok, term()} | {:error, term()} | {:error, term(), term(), term()},
+                pre_dispatch: fn args, facade_mod ->
+                  case args do
+                    [fun, opts] when is_function(fun, 1) ->
+                      [fn -> fun.(facade_mod) end, opts]
+
+                    [%Ecto.Multi{} = _multi, opts] ->
+                      [Enum.at(args, 0), Keyword.put(opts, DoubleDown.Repo.Facade, facade_mod)]
+
+                    [fun, _opts] when is_function(fun, 0) ->
+                      args
+                  end
+                end
+
+    @doc """
     Roll back the current transaction.
 
-    Throws `{:rollback, value}`, which is caught by `transact` and
-    returned as `{:error, value}`. Mirrors `Ecto.Repo.rollback/1`.
+    Throws `{:rollback, value}`, which is caught by `transact` or
+    `transaction` and returned as `{:error, value}`.
+    Mirrors `Ecto.Repo.rollback/1`.
 
-    Must be called from within a `transact` callback. Calling outside
-    a transaction raises.
+    Must be called from within a `transact`/`transaction` callback.
+    Calling outside a transaction raises.
     """
     defcallback rollback(value :: term()) :: no_return()
 
     @doc """
     Check whether the current process is inside a transaction.
 
-    Returns `true` if called from within a `transact` callback,
-    `false` otherwise. Mirrors `Ecto.Repo.in_transaction?/0`.
+    Returns `true` if called from within a `transact` or `transaction`
+    callback, `false` otherwise. Mirrors `Ecto.Repo.in_transaction?/0`.
     """
     defcallback in_transaction?() :: boolean()
   end
