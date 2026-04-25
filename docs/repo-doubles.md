@@ -56,9 +56,9 @@ DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Stub)
 # With fallback for reads:
 DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Stub,
   fn
-    :get, [User, 1] -> %User{id: 1, name: "Alice"}
-    :all, [User] -> [%User{id: 1, name: "Alice"}]
-    :exists?, [User] -> true
+    _contract, :get, [User, 1] -> %User{id: 1, name: "Alice"}
+    _contract, :all, [User] -> [%User{id: 1, name: "Alice"}]
+    _contract, :exists?, [User] -> true
   end
 )
 ```
@@ -117,7 +117,7 @@ DoubleDown.Double.fake(
   DoubleDown.Repo.InMemory,
   [],
   fallback_fn: fn
-    :all, [%Ecto.Query{}], _state -> []
+    _contract, :all, [%Ecto.Query{}], _state -> []
   end
 )
 ```
@@ -266,8 +266,8 @@ DoubleDown.Double.fake(
   DoubleDown.Repo.OpenInMemory,
   [%User{id: 1, name: "Alice", email: "alice@example.com"}],
   fallback_fn: fn
-    :get_by, [User, [email: email]], _state -> %User{id: 1, email: email}
-    :all, [User], state -> state |> Map.get(User, %{}) |> Map.values()
+    _contract, :get_by, [User, [email: email]], _state -> %User{id: 1, email: email}
+    _contract, :all, [User], state -> state |> Map.get(User, %{}) |> Map.values()
   end
 )
 ```

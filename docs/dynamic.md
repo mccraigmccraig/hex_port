@@ -77,9 +77,11 @@ end
 
 ```elixir
 # Function stub
-DoubleDown.Double.stub(SomeClient, fn
-  :fetch, [id] -> {:ok, %{id: id}}
-  :list, [] -> []
+DoubleDown.Double.stub(SomeClient, fn _contract, operation, args ->
+  case {operation, args} do
+    {:fetch, [id]} -> {:ok, %{id: id}}
+    {:list, []} -> []
+  end
 end)
 
 # Per-operation stub

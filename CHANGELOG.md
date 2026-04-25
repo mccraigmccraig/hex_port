@@ -39,6 +39,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   raises if any handler already exists. Clear error messages direct users
   to use one API exclusively or call `reset()` first.
 
+- **Per-operation fakes.** `Double.fake(contract, :operation, fn [args], state -> {result, new_state} end)`
+  installs a permanent stateful override for a single operation,
+  reading and writing the fallback fake's state. Requires a stateful
+  fallback fake to be installed first. Replaces the removed "stateful
+  stubs" with the correct abstraction — per-op fakes are fakes
+  (stateful, real logic), not stubs (stateless, canned values).
+  Dispatch priority: expects > per-op fakes > per-op stubs > fallback > raise.
+
 ### Changed
 
 - **Breaking: fn handler signature changed from 2-arity to 3-arity.**

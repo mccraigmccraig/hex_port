@@ -7,7 +7,7 @@ transactions, cross-contract state access, and dispatch logging.
 
 ## Error simulation with Repo.Stub
 
-Use a 2-arity function fallback (`Repo.Stub.new/1` returns one) as
+Use a 3-arity function fallback (`Repo.Stub.new/1` returns one) as
 the Double's fallback stub, and add expects for the operations that
 should fail:
 
@@ -108,7 +108,7 @@ responder is the InMemory store (`%{Schema => %{pk => record}}`):
 # 2-arity expect: reject duplicate emails, otherwise passthrough
 DoubleDown.Repo
 |> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
-|> DoubleDown.Double.stub(:insert, fn [changeset], state ->
+|> DoubleDown.Double.fake(:insert, fn [changeset], state ->
   existing_emails =
     state
     |> Map.get(User, %{})
@@ -136,7 +136,7 @@ This is more powerful than 1-arity expects because:
   guess `times: N`
 
 See [Stateful expect responders](testing.md#stateful-expect-responders)
-and [Stateful per-operation stubs](testing.md#stateful-per-operation-stubs)
+and [Per-operation fakes](testing.md#per-operation-fakes)
 in the Testing guide for the full API.
 
 ## Transactions

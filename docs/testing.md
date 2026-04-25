@@ -95,7 +95,7 @@ handler module or a function.
 #### Stateless stubs
 
 Stubs provide canned responses without maintaining state. Use
-`Double.stub` with a `StubHandler` module or a 2-arity function:
+`Double.stub` with a `StubHandler` module or a 3-arity function:
 
 ```elixir
 # StubHandler module (e.g. Repo.Stub)
@@ -104,16 +104,18 @@ DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Stub)
 # StubHandler with a fallback function for reads
 DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Stub,
   fn
-    :get, [User, 1] -> %User{id: 1, name: "Alice"}
-    :all, [User] -> [%User{id: 1, name: "Alice"}]
+    _contract, :get, [User, 1] -> %User{id: 1, name: "Alice"}
+    _contract, :all, [User] -> [%User{id: 1, name: "Alice"}]
   end
 )
 
-# 2-arity function fallback
+# 3-arity function fallback
 MyApp.Todos
-|> DoubleDown.Double.stub(fn
-  :list_todos, [_] -> []
-  :get_todo, [id] -> {:ok, %Todo{id: id}}
+|> DoubleDown.Double.stub(fn _contract, operation, args ->
+  case {operation, args} do
+    {:list_todos, [_]} -> []
+    {:get_todo, [id]} -> {:ok, %Todo{id: id}}
+  end
 end)
 ```
 
@@ -134,9 +136,9 @@ end)
 # With seed data and options
 DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory,
   [%User{id: 1, name: "Alice"}],
-  fallback_fn: fn :all, [User], state -> Map.values(state[User]) end)
+  fallback_fn: fn _contract, :all, [User], state -> Map.values(state[User]) end)
 
-# 3-arity function fake (equivalent to FakeHandler)
+# 4-arity function fake (equivalent to FakeHandler)
 DoubleDown.Double.fake(DoubleDown.Repo,
   &DoubleDown.Repo.InMemory.dispatch/4,
   DoubleDown.Repo.InMemory.new())
@@ -200,7 +202,7 @@ end
 
 #### Dispatch priority
 
-Expects > per-operation stubs > fallback (stub/fake) > raise.
+Expects > per-op fakes > per-operation stubs > fallback (stub/fake) > raise.
 Stubs, stateful fakes, and module fakes are mutually exclusive —
 setting one replaces any previous fallback.
 
@@ -302,20 +304,23 @@ state left by the previous one. When a 1-arity expect fires
 between stateful expects, the state is unchanged (1-arity expects
 don't touch state).
 
-### Stateful per-operation stubs
+### Per-operation fakes
 
-Per-operation stubs support the same arities as expects — 1-arity
-(stateless), 2-arity (stateful), and 3-arity (cross-contract).
-All arities can return `Double.passthrough()`.
+Per-operation fakes let you override a single operation with a
+stateful handler while the rest of the contract delegates to the
+fallback fake. They support 2-arity (own state) and 3-arity
+(own state + cross-contract snapshot), and can return
+`Double.passthrough()` to delegate to the fallback.
 
-This is the natural fit when you want to intercept every call to
-an operation and decide per-call whether to handle or delegate,
-without knowing the call count in advance:
+A stateful fallback fake (`fake/3`) must be configured **before**
+calling `Double.fake/4` — the per-operation fake shares the
+fallback's state.
 
 ```elixir
+# 2-arity — receives [args] and own state
 DoubleDown.Repo
 |> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
-|> DoubleDown.Double.stub(:insert, fn [changeset], state ->
+|> DoubleDown.Double.fake(:insert, fn [changeset], state ->
   existing_emails =
     state
     |> Map.get(User, %{})
@@ -328,11 +333,17 @@ DoubleDown.Repo
     DoubleDown.Double.passthrough()
   end
 end)
+
+# 3-arity — receives [args], own state, and all_states snapshot
+DoubleDown.Repo
+|> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
+|> DoubleDown.Double.fake(:insert, fn [changeset], state, all_states ->
+  {result, state}
+end)
 ```
 
-Unlike expects, stubs are not consumed — they handle every call
-indefinitely. Stateful stubs require `fake/3` to be called first,
-same as stateful expects.
+Unlike expects, per-operation fakes are **permanent** — they are
+not consumed and handle every call indefinitely.
 
 ### Passthrough limitation
 
@@ -364,11 +375,11 @@ contract's own state, they receive a read-only snapshot of all
 contract states as a 4th argument:
 
 ```elixir
-# 3-arity (default) — own state only
-fn operation, args, state -> {result, new_state} end
+# 4-arity (default) — own state only
+fn contract, operation, args, state -> {result, new_state} end
 
-# 4-arity — own state + read-only global snapshot
-fn operation, args, state, all_states -> {result, new_state} end
+# 5-arity — own state + read-only global snapshot
+fn contract, operation, args, state, all_states -> {result, new_state} end
 ```
 
 The `all_states` map is keyed by contract module:
@@ -394,14 +405,14 @@ the sentinel is detected and a clear error is raised.
 - The handler return must be `{result, new_own_state}` — returning
   the global map raises `ArgumentError`
 
-4-arity handlers work with both `DoubleDown.Double.fake/3` and
+5-arity handlers work with both `DoubleDown.Double.fake/3` and
 `DoubleDown.Testing.set_stateful_handler/3`:
 
 ```elixir
-# With Double.fake — supports expects and stubs alongside the 4-arity fake
+# With Double.fake — supports expects and stubs alongside the 5-arity fake
 MyApp.Queries
 |> DoubleDown.Double.fake(
-  fn operation, args, state, all_states ->
+  fn _contract, operation, args, state, all_states ->
     repo_state = Map.get(all_states, DoubleDown.Repo, %{})
     # ... query the repo state ...
     {result, state}
@@ -412,7 +423,7 @@ MyApp.Queries
 # With set_stateful_handler — lower-level, no expect/stub support
 DoubleDown.Testing.set_stateful_handler(
   MyApp.Queries,
-  fn operation, args, state, all_states ->
+  fn _contract, operation, args, state, all_states ->
     {result, state}
   end,
   %{}
@@ -505,12 +516,12 @@ internally. The low-level handler APIs are still available but
 there's probably never a need to use them directly:
 
 - `set_handler(contract, module)` — register a module handler
-- `set_fn_handler(contract, fn op, args -> result end)` — register
-  a 2-arity function handler
-- `set_stateful_handler(contract, fn op, args, state -> {result, state} end, init)` —
-  register a 3-arity stateful handler
-- `set_stateful_handler(contract, fn op, args, state, all_states -> {result, state} end, init)` —
-  register a 4-arity stateful handler with cross-contract state access
+- `set_fn_handler(contract, fn contract, op, args -> result end)` — register
+  a 3-arity function handler
+- `set_stateful_handler(contract, fn contract, op, args, state -> {result, state} end, init)` —
+  register a 4-arity stateful handler
+- `set_stateful_handler(contract, fn contract, op, args, state, all_states -> {result, state} end, init)` —
+  register a 5-arity stateful handler with cross-contract state access
 
 These are the primitives that power `Double.stub`, `Double.fake`,
 and `Double.expect`.
