@@ -12,7 +12,7 @@ defmodule DoubleDown.Contract.Dispatch.HandlerMeta do
   * `HandlerMeta.Module` — delegate to a module implementing the contract behaviour
   * `HandlerMeta.Fn` — dispatch via a 2-arity `fn operation, args -> result end`
   * `HandlerMeta.Stateful` — dispatch via a 4/5-arity stateful function with
-    mutable state stored under a separate NimbleOwnership key
+    mutable state stored inline in the `:state` field
   """
 
   defmodule Module do
@@ -36,13 +36,19 @@ defmodule DoubleDown.Contract.Dispatch.HandlerMeta do
   end
 
   defmodule Stateful do
-    @moduledoc "Handler meta for a stateful (4/5-arity) function handler."
-    @enforce_keys [:fun, :state_key]
-    defstruct [:fun, :state_key]
+    @moduledoc """
+    Handler meta for a stateful (4/5-arity) function handler.
+
+    The `:state` field holds the mutable handler state directly —
+    for raw `set_stateful_handler` this is user-provided state,
+    for `Double`-managed handlers it is a `CanonicalHandlerState` struct.
+    """
+    @enforce_keys [:fun, :state]
+    defstruct [:fun, :state]
 
     @type t :: %__MODULE__{
             fun: (... -> {term(), term()}),
-            state_key: atom()
+            state: term()
           }
   end
 end

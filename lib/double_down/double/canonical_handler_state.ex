@@ -2,10 +2,10 @@ defmodule DoubleDown.Double.CanonicalHandlerState do
   @moduledoc """
   State for `DoubleDown.Double.canonical_handler/5`.
 
-  Stored in `NimbleOwnership` under `Keys.state_key(contract)` when
-  `Double` installs its canonical stateful handler. Tracks queued
-  expectations, per-operation stubs, and the fallback handler
-  (function, stateful fake, or module) with its associated state.
+  Stored inline in `HandlerMeta.Stateful.state` when `Double` installs
+  its canonical stateful handler. Tracks queued expectations,
+  per-operation stubs, and the fallback handler (function, stateful
+  fake, or module) with its associated state.
 
   ## Fields
 

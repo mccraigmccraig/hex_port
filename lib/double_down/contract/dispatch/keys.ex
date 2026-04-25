@@ -12,7 +12,7 @@ defmodule DoubleDown.Contract.Dispatch.Keys do
   | Key | Function | Purpose |
   |-----|----------|---------|
   | `ownership_server/0` | Server name | The `NimbleOwnership` GenServer registered name |
-  | `state_key/1` | Per-contract | Mutable state for stateful doubles |
+  | contract module atom | (no function) | Handler meta + inline state for stateful handlers |
   | `log_key/1` | Per-contract | Accumulated `{contract, op, args, result}` call log |
   | `contracts_key/0` | Global | Set of contracts with active `Double` expects |
   """
@@ -22,12 +22,6 @@ defmodule DoubleDown.Contract.Dispatch.Keys do
   """
   @spec ownership_server() :: atom()
   def ownership_server, do: DoubleDown.Contract.Dispatch.Ownership
-
-  @doc """
-  NimbleOwnership key for a contract's mutable handler state.
-  """
-  @spec state_key(module()) :: atom()
-  def state_key(contract), do: Module.concat(DoubleDown.State, contract)
 
   @doc """
   NimbleOwnership key for a contract's dispatch call log.

@@ -68,14 +68,7 @@ defmodule DoubleDown.Testing do
   @spec set_stateful_handler(module(), (... -> {term(), term()}), term()) :: :ok
   def set_stateful_handler(contract, fun, initial_state)
       when is_function(fun, 4) or is_function(fun, 5) do
-    state_key = Keys.state_key(contract)
-
-    # Store the initial state
-    NimbleOwnership.get_and_update(Keys.ownership_server(), self(), state_key, fn _ ->
-      {:ok, initial_state}
-    end)
-
-    set_meta(contract, %HandlerMeta.Stateful{fun: fun, state_key: state_key})
+    set_meta(contract, %HandlerMeta.Stateful{fun: fun, state: initial_state})
   end
 
   @doc """

@@ -87,18 +87,16 @@ defmodule DoubleDown.Contract.Dispatch do
   """
   @spec get_state(module()) :: term()
   def get_state(contract) do
-    state_key = Keys.state_key(contract)
-
     case resolve_owner_pid(contract) do
       nil ->
         nil
 
       owner_pid ->
         case NimbleOwnership.get_owned(Keys.ownership_server(), owner_pid) do
-          %{^state_key => %CanonicalHandlerState{fallback_state: fallback_state}} ->
-            fallback_state
+          %{^contract => %HandlerMeta.Stateful{state: %CanonicalHandlerState{fallback_state: fs}}} ->
+            fs
 
-          %{^state_key => state} ->
+          %{^contract => %HandlerMeta.Stateful{state: state}} ->
             state
 
           _ ->
@@ -121,22 +119,25 @@ defmodule DoubleDown.Contract.Dispatch do
   """
   @spec restore_state(module(), pid(), term()) :: :ok
   def restore_state(contract, owner_pid, snapshot) do
-    state_key = Keys.state_key(contract)
+    NimbleOwnership.get_and_update(
+      Keys.ownership_server(),
+      owner_pid,
+      contract,
+      fn %HandlerMeta.Stateful{state: state} = meta ->
+        new_state =
+          case state do
+            %CanonicalHandlerState{} ->
+              # Double-managed: restore only the fallback_state
+              %{state | fallback_state: snapshot}
 
-    NimbleOwnership.get_and_update(Keys.ownership_server(), owner_pid, state_key, fn state ->
-      new_state =
-        case state do
-          %CanonicalHandlerState{} ->
-            # Double-managed: restore only the fallback_state
-            %{state | fallback_state: snapshot}
+            _ ->
+              # Raw stateful handler: replace entire state
+              snapshot
+          end
 
-          _ ->
-            # Raw stateful handler: replace entire state
-            snapshot
-        end
-
-      {:ok, new_state}
-    end)
+        {:ok, %{meta | state: new_state}}
+      end
+    )
 
     :ok
   end
@@ -216,7 +217,7 @@ defmodule DoubleDown.Contract.Dispatch do
   end
 
   def invoke_handler(
-        %HandlerMeta.Stateful{fun: fun, state_key: state_key},
+        %HandlerMeta.Stateful{fun: fun},
         owner_pid,
         contract,
         operation,
@@ -224,6 +225,10 @@ defmodule DoubleDown.Contract.Dispatch do
       ) do
     # Atomically read state, call handler, update state.
     # Must use owner_pid so allowed child processes can update state.
+    #
+    # The state is stored inline in the HandlerMeta.Stateful struct
+    # under the contract key. get_and_update on that key gives us
+    # atomic read-modify-write of the entire meta (including state).
     #
     # If the handler returns %DoubleDown.Contract.Dispatch.Defer{fn: deferred_fn}, we skip
     # the state update and call deferred_fn outside the lock. This supports
@@ -249,38 +254,43 @@ defmodule DoubleDown.Contract.Dispatch do
       end
 
     {:ok, result} =
-      NimbleOwnership.get_and_update(Keys.ownership_server(), owner_pid, state_key, fn state ->
-        try do
-          handler_result =
-            if all_states do
-              fun.(contract, operation, args, state, all_states)
-            else
-              fun.(contract, operation, args, state)
+      NimbleOwnership.get_and_update(
+        Keys.ownership_server(),
+        owner_pid,
+        contract,
+        fn %HandlerMeta.Stateful{state: state} = meta ->
+          try do
+            handler_result =
+              if all_states do
+                fun.(contract, operation, args, state, all_states)
+              else
+                fun.(contract, operation, args, state)
+              end
+
+            case handler_result do
+              {%DoubleDown.Contract.Dispatch.Defer{} = defer, new_state} ->
+                validate_not_global_state!(new_state)
+                {defer, %{meta | state: new_state}}
+
+              {result, new_state} ->
+                validate_not_global_state!(new_state)
+                {result, %{meta | state: new_state}}
             end
+          rescue
+            exception ->
+              stacktrace = __STACKTRACE__
 
-          case handler_result do
-            {%DoubleDown.Contract.Dispatch.Defer{} = defer, new_state} ->
-              validate_not_global_state!(new_state)
-              {defer, new_state}
+              {%DoubleDown.Contract.Dispatch.Defer{fn: fn -> reraise exception, stacktrace end},
+               meta}
+          catch
+            :throw, value ->
+              {%DoubleDown.Contract.Dispatch.Defer{fn: fn -> throw(value) end}, meta}
 
-            {result, new_state} ->
-              validate_not_global_state!(new_state)
-              {result, new_state}
+            :exit, reason ->
+              {%DoubleDown.Contract.Dispatch.Defer{fn: fn -> exit(reason) end}, meta}
           end
-        rescue
-          exception ->
-            stacktrace = __STACKTRACE__
-
-            {%DoubleDown.Contract.Dispatch.Defer{fn: fn -> reraise exception, stacktrace end},
-             state}
-        catch
-          :throw, value ->
-            {%DoubleDown.Contract.Dispatch.Defer{fn: fn -> throw(value) end}, state}
-
-          :exit, reason ->
-            {%DoubleDown.Contract.Dispatch.Defer{fn: fn -> exit(reason) end}, state}
         end
-      end)
+      )
 
     case result do
       %DoubleDown.Contract.Dispatch.Defer{fn: deferred_fn} -> deferred_fn.()
@@ -301,24 +311,18 @@ defmodule DoubleDown.Contract.Dispatch do
     # Find all stateful handlers and map contract => state.
     # Seed with sentinel key so accidental return of global map is detectable.
     #
-    # When a contract is managed by DoubleDown.Double, the NimbleOwnership
-    # state is a %CanonicalHandlerState{}. For 4-arity handlers, we unwrap
+    # When a contract is managed by DoubleDown.Double, the handler state
+    # is a %CanonicalHandlerState{}. For 5-arity handlers, we unwrap
     # this and expose the fallback_state — the user's actual domain state.
     owned
     |> Enum.reduce(%{@global_state_sentinel => true}, fn
-      {contract, %HandlerMeta.Stateful{state_key: state_key}}, acc ->
-        case Map.get(owned, state_key) do
-          nil ->
-            acc
+      {contract, %HandlerMeta.Stateful{state: %CanonicalHandlerState{fallback_state: fs}}}, acc ->
+        # Double-managed: expose the user's fallback state
+        Map.put(acc, contract, fs)
 
-          %CanonicalHandlerState{fallback_state: fallback_state} ->
-            # Double-managed: expose the user's fallback state
-            Map.put(acc, contract, fallback_state)
-
-          state ->
-            # Direct set_stateful_handler: expose raw state
-            Map.put(acc, contract, state)
-        end
+      {contract, %HandlerMeta.Stateful{state: state}}, acc ->
+        # Direct set_stateful_handler: expose raw state
+        Map.put(acc, contract, state)
 
       _, acc ->
         acc

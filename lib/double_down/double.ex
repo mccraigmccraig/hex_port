@@ -170,7 +170,7 @@ defmodule DoubleDown.Double do
   code that might raise `FunctionClauseError`.
   """
 
-  alias DoubleDown.Contract.Dispatch.Keys
+  alias DoubleDown.Contract.Dispatch.{HandlerMeta, Keys}
   alias DoubleDown.Double.CanonicalHandlerState
 
   # -- Public API: passthrough sentinel --
@@ -269,10 +269,8 @@ defmodule DoubleDown.Double do
   end
 
   defp validate_stateful_fake_exists!(contract, operation, fun) do
-    state_key = Keys.state_key(contract)
-
     case NimbleOwnership.get_owned(Keys.ownership_server(), self()) do
-      %{^state_key => %CanonicalHandlerState{fallback: {:stateful, _}}} ->
+      %{^contract => %HandlerMeta.Stateful{state: %CanonicalHandlerState{fallback: {:stateful, _}}}} ->
         :ok
 
       _ ->
@@ -702,11 +700,9 @@ defmodule DoubleDown.Double do
   # -- Internal: handler installation --
 
   defp ensure_handler_installed(contract) do
-    state_key = Keys.state_key(contract)
-
     # Check if we've already installed the handler for this contract
     case NimbleOwnership.get_owned(Keys.ownership_server(), self()) do
-      %{^state_key => _} ->
+      %{^contract => %HandlerMeta.Stateful{}} ->
         :ok
 
       _ ->
@@ -731,11 +727,14 @@ defmodule DoubleDown.Double do
   end
 
   defp update_handler_state(contract, update_fn) do
-    state_key = Keys.state_key(contract)
-
-    NimbleOwnership.get_and_update(Keys.ownership_server(), self(), state_key, fn state ->
-      {:ok, update_fn.(state)}
-    end)
+    NimbleOwnership.get_and_update(
+      Keys.ownership_server(),
+      self(),
+      contract,
+      fn %HandlerMeta.Stateful{state: state} = meta ->
+        {:ok, %{meta | state: update_fn.(state)}}
+      end
+    )
   end
 
   # -- Internal: canonical handler fn --
@@ -982,10 +981,8 @@ defmodule DoubleDown.Double do
   defp verify_contracts!(owned, contracts) do
     unconsumed =
       Enum.flat_map(contracts, fn contract ->
-        state_key = Keys.state_key(contract)
-
         case owned do
-          %{^state_key => %CanonicalHandlerState{expects: expects}} ->
+          %{^contract => %HandlerMeta.Stateful{state: %CanonicalHandlerState{expects: expects}}} ->
             expects
             |> Enum.reject(fn {_op, queue} -> queue == [] end)
             |> Enum.map(fn {op, queue} -> {contract, op, length(queue)} end)
