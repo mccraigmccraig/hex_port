@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.50.1]
+
+### Fixed
+
+- **Credo warnings resolved.** Expanded grouped aliases to one per line
+  in `dispatch.ex`, `double.ex`, and `testing.ex`.
+
+### Improved
+
+- **`resolve_test_handler` validates handler meta struct type.** Now
+  pattern-matches on the three valid `HandlerMeta` structs instead of
+  accepting any value under the contract key. Raises a clear
+  `ArgumentError` if an unexpected value is found.
+
 ## [0.50.0]
 
 ### Added
@@ -1395,6 +1409,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `DoubleDown.Testing` with NimbleOwnership, `Repo.Test` stateless
   adapter, CI setup, Credo, Dialyzer.
 
+[0.50.1]: https://github.com/mccraigmccraig/double_down/compare/v0.50.0...v0.50.1
 [0.50.0]: https://github.com/mccraigmccraig/double_down/compare/v0.49.0...v0.50.0
 [0.49.0]: https://github.com/mccraigmccraig/double_down/compare/v0.48.1...v0.49.0
 [0.48.1]: https://github.com/mccraigmccraig/double_down/compare/v0.48.0...v0.48.1
