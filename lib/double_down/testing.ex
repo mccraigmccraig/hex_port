@@ -175,17 +175,14 @@ defmodule DoubleDown.Testing do
   # -- Internal --
 
   defp set_meta(contract, meta) do
-    {:ok, result} =
-      NimbleOwnership.get_and_update(Keys.ownership_server(), self(), contract, fn
-        nil ->
-          {:ok, meta}
+    case NimbleOwnership.get_and_update(Keys.ownership_server(), self(), contract, fn
+           nil ->
+             {:ok, meta}
 
-        existing ->
-          {{:error, existing}, existing}
-      end)
-
-    case result do
-      {:error, existing} ->
+           existing ->
+             {{:error, existing}, existing}
+         end) do
+      {:ok, {:error, existing}} ->
         raise ArgumentError, """
         A handler is already installed for #{inspect(contract)}.
 
@@ -195,8 +192,19 @@ defmodule DoubleDown.Testing do
         before installing a new one.
         """
 
-      _ ->
+      {:ok, _} ->
         :ok
+
+      {:error, %NimbleOwnership.Error{} = error} ->
+        raise ArgumentError, """
+        Failed to install handler for #{inspect(contract)}: \
+        #{Exception.message(error)}
+
+        In global mode, only the process that called \
+        set_mode_to_global() can install handlers. Ensure \
+        set_mode_to_global() and set_*_handler() are called \
+        from the same process (typically the test's setup block).
+        """
     end
   end
 end
