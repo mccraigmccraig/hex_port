@@ -153,10 +153,25 @@ defmodule DoubleDown.Contract.Dispatch do
 
       owner_pid ->
         case NimbleOwnership.get_owned(Keys.ownership_server(), owner_pid) do
-          %{^contract => handler_meta} -> {:ok, owner_pid, handler_meta}
+          %{^contract => %HandlerMeta.Module{} = meta} -> {:ok, owner_pid, meta}
+          %{^contract => %HandlerMeta.Fn{} = meta} -> {:ok, owner_pid, meta}
+          %{^contract => %HandlerMeta.Stateful{} = meta} -> {:ok, owner_pid, meta}
+          %{^contract => other} -> raise_invalid_handler_meta(contract, other)
           _ -> :none
         end
     end
+  end
+
+  defp raise_invalid_handler_meta(contract, value) do
+    raise ArgumentError, """
+    Invalid handler meta stored for #{inspect(contract)}.
+
+    Expected a %HandlerMeta.Module{}, %HandlerMeta.Fn{}, or \
+    %HandlerMeta.Stateful{} struct, got: #{inspect(value)}
+
+    This indicates a bug — handler meta should only be set via \
+    DoubleDown.Testing or DoubleDown.Double.
+    """
   end
 
   @doc """
