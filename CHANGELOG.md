@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.51.0]
+
+### Added
+
+- **`DoubleDown.Testing.set_mode_from_context/1`** — selects private or
+  global mode based on the test context's `:async` flag, mirroring
+  Mox's `set_mox_from_context`. Use as a setup callback:
+
+      setup :set_mode_from_context
+
+  Runs at the start of every test, so it always resets the mode — even
+  if a previous test crashed without cleaning up. No explicit `on_exit`
+  cleanup needed. NimbleOwnership's automatic `:DOWN` handler removes
+  owned keys when the test process exits.
+
+- **`DoubleDown.Testing.reset/1`** — accepts an explicit pid for use
+  in `on_exit` callbacks, where `self()` is the callback process, not
+  the test process.
+
+### Fixed
+
+- **`set_meta` raises on NimbleOwnership errors.** In global mode,
+  `get_and_update` returns `{:error, %NimbleOwnership.Error{}}` when
+  the caller isn't the shared owner. Previously this was silently
+  discarded (handler appeared to install but didn't). Now raises
+  `ArgumentError` with a clear message about the global mode
+  shared-owner constraint.
+
+- **`reset/1` reverts to private mode.** `cleanup_owner` removes keys
+  but left the server in shared mode if global mode was active. `reset`
+  now also calls `set_mode_to_private` to avoid leaving the server in a
+  broken shared-with-no-keys state.
+
+### Improved
+
+- **`set_mode_to_global/0` docs expanded** with correct pattern using
+  `set_mode_from_context`, `setup_all` anti-pattern warning, `on_exit`
+  pid caveat, and multi-describe example.
+
 ## [0.50.1]
 
 ### Fixed
@@ -1409,6 +1448,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `DoubleDown.Testing` with NimbleOwnership, `Repo.Test` stateless
   adapter, CI setup, Credo, Dialyzer.
 
+[0.51.0]: https://github.com/mccraigmccraig/double_down/compare/v0.50.1...v0.51.0
 [0.50.1]: https://github.com/mccraigmccraig/double_down/compare/v0.50.0...v0.50.1
 [0.50.0]: https://github.com/mccraigmccraig/double_down/compare/v0.49.0...v0.50.0
 [0.49.0]: https://github.com/mccraigmccraig/double_down/compare/v0.48.1...v0.49.0
