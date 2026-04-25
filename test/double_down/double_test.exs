@@ -496,6 +496,142 @@ defmodule DoubleDown.DoubleTest do
     end
   end
 
+  # ── per-operation fakes ─────────────────────────────────────
+
+  describe "per-operation fakes" do
+    test "2-arity per-op fake receives and updates fallback state" do
+      Counter
+      |> Double.fake(
+        fn
+          _contract, :increment, [n], count -> {count + n, count + n}
+          _contract, :get_count, [], count -> {count, count}
+        end,
+        0
+      )
+      |> Double.fake(:increment, fn [n], count ->
+        # Always double the increment
+        {count + n * 2, count + n * 2}
+      end)
+
+      assert 10 = Counter.Port.increment(5)
+      assert 16 = Counter.Port.increment(3)
+      assert 16 = Counter.Port.get_count()
+    end
+
+    test "3-arity per-op fake receives all_states" do
+      Greeter
+      |> Double.fake(
+        fn _contract, :greet, [name], state -> {"Hello #{name}", state} end,
+        %{greeted: []}
+      )
+
+      Counter
+      |> Double.fake(
+        fn _contract, :get_count, [], count -> {count, count} end,
+        0
+      )
+      |> Double.fake(:get_count, fn [], _state, all_states ->
+        greeter_state = Map.get(all_states, Greeter)
+        {greeter_state, 0}
+      end)
+
+      assert %{greeted: []} = Counter.Port.get_count()
+    end
+
+    test "per-op fake can return passthrough()" do
+      Counter
+      |> Double.fake(
+        fn
+          _contract, :increment, [n], count -> {count + n, count + n}
+          _contract, :get_count, [], count -> {count, count}
+        end,
+        0
+      )
+      |> Double.fake(:increment, fn [n], count ->
+        if count + n > 100 do
+          {{:error, :overflow}, count}
+        else
+          Double.passthrough()
+        end
+      end)
+
+      assert 50 = Counter.Port.increment(50)
+      assert 90 = Counter.Port.increment(40)
+      # This would exceed 100 — per-op fake handles it
+      assert {:error, :overflow} = Counter.Port.increment(20)
+      assert 90 = Counter.Port.get_count()
+    end
+
+    test "replacing per-op fake overwrites previous" do
+      Counter
+      |> Double.fake(
+        fn
+          _contract, :increment, [n], count -> {count + n, count + n}
+          _contract, :get_count, [], count -> {count, count}
+        end,
+        0
+      )
+      |> Double.fake(:increment, fn [_n], count -> {:first, count} end)
+      |> Double.fake(:increment, fn [_n], count -> {:second, count} end)
+
+      assert :second = Counter.Port.increment(1)
+    end
+
+    test "raises at fake time if no stateful fallback" do
+      Double.stub(Counter, :get_count, fn [] -> 0 end)
+
+      assert_raise ArgumentError, ~r/no stateful fake is configured/, fn ->
+        Double.fake(Counter, :increment, fn [_n], _state -> {0, 0} end)
+      end
+    end
+
+    test "raises at dispatch time if per-op fake returns bare value" do
+      Counter
+      |> Double.fake(
+        fn _contract, :increment, [n], count -> {count + n, count + n} end,
+        0
+      )
+      |> Double.fake(:increment, fn [_n], _state -> 42 end)
+
+      assert_raise ArgumentError, ~r/must return \{result, new_state\}/, fn ->
+        Counter.Port.increment(5)
+      end
+    end
+
+    test "expects take priority over per-op fakes" do
+      Counter
+      |> Double.fake(
+        fn
+          _contract, :increment, [n], count -> {count + n, count + n}
+          _contract, :get_count, [], count -> {count, count}
+        end,
+        0
+      )
+      |> Double.fake(:increment, fn [_n], count -> {:from_op_fake, count} end)
+      |> Double.expect(:increment, fn [_] -> :from_expect end)
+
+      # First call: expect wins
+      assert :from_expect = Counter.Port.increment(1)
+      # Second call: expect consumed, per-op fake handles
+      assert :from_op_fake = Counter.Port.increment(1)
+    end
+
+    test "per-op fakes take priority over per-op stubs" do
+      Counter
+      |> Double.fake(
+        fn
+          _contract, :increment, [n], count -> {count + n, count + n}
+          _contract, :get_count, [], count -> {count, count}
+        end,
+        0
+      )
+      |> Double.stub(:increment, fn [_] -> :from_stub end)
+      |> Double.fake(:increment, fn [_n], count -> {:from_op_fake, count} end)
+
+      assert :from_op_fake = Counter.Port.increment(1)
+    end
+  end
+
   # ── FakeHandler module-based fake ──────────────────────────
 
   describe "FakeHandler module-based fake" do

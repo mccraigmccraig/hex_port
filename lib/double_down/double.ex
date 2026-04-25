@@ -116,9 +116,9 @@ defmodule DoubleDown.Double do
   it calls its own `:foo` directly. For stubs to be visible, the
   module must call through the facade.
 
-  Dispatch priority: expects > per-operation stubs > fallback/fake > raise.
+  Dispatch priority: expects > per-op fakes > per-op stubs > fallback/fake > raise.
   Function stub, stateful fake, and module fake are mutually
-  exclusive — setting one replaces the other.
+  exclusive as fallbacks — setting one replaces the other.
 
   ## Passthrough expects
 
@@ -337,9 +337,9 @@ defmodule DoubleDown.Double do
 
   For stateful fakes and module delegation, see `fake/2` and `fake/3`.
 
-  Dispatch priority: expects > per-operation stubs > fallback/fake > raise.
+  Dispatch priority: expects > per-op fakes > per-op stubs > fallback/fake > raise.
   Function fallback, StubHandler, stateful fake, and module fake are
-  mutually exclusive — setting one replaces the other.
+  mutually exclusive as fallbacks — setting one replaces the other.
 
   Returns the contract module for piping.
   """
@@ -436,13 +436,40 @@ defmodule DoubleDown.Double do
   # -- Public API: fake --
 
   @doc """
-  Set a fake implementation as the fallback for a contract.
+  Set a fake implementation for a contract.
 
   Fakes have real logic — they maintain state or delegate to a real
-  implementation module. They handle any operation not covered by an
-  `expect` or per-operation `stub`.
+  implementation module. There are two levels:
 
-  ## FakeHandler module (recommended for stateful fakes)
+  ## Per-operation fake
+
+  Overrides a single operation with a stateful function that reads
+  and updates the fallback fake's state. Requires a stateful fallback
+  fake to be installed first via `fake/3`:
+
+      DoubleDown.Repo
+      |> DoubleDown.Double.fake(&Repo.OpenInMemory.dispatch/4, Repo.OpenInMemory.new())
+      |> DoubleDown.Double.fake(:insert, fn [changeset], state ->
+        {{:error, add_error(changeset, :email, "taken")}, state}
+      end)
+
+  The function may be:
+
+    * **2-arity** `fn [args], state -> {result, new_state} end`
+    * **3-arity** `fn [args], state, all_states -> {result, new_state} end`
+      (cross-contract state access)
+
+  Per-op fakes are permanent (not consumed like expects) and can
+  return `Double.passthrough()` to delegate to the fallback fake.
+  Setting a per-op fake twice for the same operation replaces the
+  previous one.
+
+  ## Fallback fake
+
+  Handles any operation not covered by an `expect`, per-op fake,
+  or per-op `stub`. Several forms:
+
+  ### FakeHandler module (recommended for stateful fakes)
 
   A module implementing `DoubleDown.Contract.Dispatch.FakeHandler`. The module's
   `new/2` builds initial state, and its `dispatch/4` or `dispatch/5`
@@ -459,7 +486,7 @@ defmodule DoubleDown.Double do
         fallback_fn: fn :all, [User], state -> Map.values(state[User]) end
       )
 
-  ## Module fake
+  ### Module fake
 
   A module implementing the contract's `@behaviour` (but not FakeHandler).
   All unhandled operations delegate via `apply(module, operation, args)`:
@@ -474,7 +501,7 @@ defmodule DoubleDown.Double do
   it calls its own `:foo` directly. For stubs to be visible, the
   module must call through the facade.
 
-  ## Stateful fake function
+  ### Stateful fake function
 
   A 4-arity `fn contract, operation, args, state -> {result, new_state} end`
   or 5-arity `fn contract, operation, args, state, all_states -> {result, new_state} end`
@@ -486,7 +513,7 @@ defmodule DoubleDown.Double do
   expect short-circuits (e.g. returning an error), the fake state is
   unchanged — correct for error simulation.
 
-  Dispatch priority: expects > per-operation stubs > fake > raise.
+  Dispatch priority: expects > per-op fakes > per-op stubs > fallback > raise.
   Function fallback (`stub/2`), module fake, and stateful fake are
   mutually exclusive — setting one replaces the other.
 
@@ -510,7 +537,25 @@ defmodule DoubleDown.Double do
     end
   end
 
-  # fake/3 — stateful fake function OR FakeHandler module with seed
+  # fake/3 — per-op fake, stateful fake function, OR FakeHandler module with seed
+  #
+  # Per-op fake: fake(contract, :operation, fn [args], state -> {result, new_state} end)
+  # Stateful fake fn: fake(contract, fn/4_or_5, initial_state)
+  # FakeHandler module: fake(contract, Module, seed)
+  @spec fake(module(), atom(), function()) :: module()
+  def fake(contract, operation, fun)
+      when is_atom(contract) and is_atom(operation) and
+             (is_function(fun, 2) or is_function(fun, 3)) do
+    ensure_handler_installed(contract)
+    validate_stateful_fake_exists!(contract, operation, fun)
+
+    update_handler_state(contract, fn state ->
+      %{state | op_fakes: Map.put(state.op_fakes, operation, fun)}
+    end)
+
+    contract
+  end
+
   @spec fake(module(), function() | module(), term()) :: module()
   def fake(contract, fun, init_state)
       when is_atom(contract) and (is_function(fun, 4) or is_function(fun, 5)) do
@@ -744,10 +789,12 @@ defmodule DoubleDown.Double do
 
   # -- Internal: canonical handler fn --
 
-  # This single function handles all dispatch. It reads expects, stubs,
-  # and fallback config from state at dispatch time. Installed once per
-  # contract via set_stateful_handler and never replaced — all changes
+  # This single function handles all dispatch. It reads expects, op_fakes,
+  # stubs, and fallback config from state at dispatch time. Installed once
+  # per contract via set_stateful_handler and never replaced — all changes
   # go through state mutations.
+  #
+  # Dispatch priority: expects > per-op fakes > per-op stubs > fallback > raise
   #
   # The contract parameter from Dispatch is unused — the contract is
   # already available as state.contract, set at installation time by
@@ -763,12 +810,18 @@ defmodule DoubleDown.Double do
         invoke_expect(fun, args, new_state, all_states, operation)
 
       :none ->
-        case Map.get(state.stubs, operation) do
+        case Map.get(state.op_fakes, operation) do
           nil ->
-            invoke_fallback_or_raise(state, operation, args, all_states)
+            case Map.get(state.stubs, operation) do
+              nil ->
+                invoke_fallback_or_raise(state, operation, args, all_states)
 
-          stub_fun ->
-            invoke_stub(stub_fun, args, state, all_states, operation)
+              stub_fun ->
+                invoke_stub(stub_fun, args, state, all_states, operation)
+            end
+
+          op_fake_fun ->
+            invoke_op_fake(op_fake_fun, args, state, all_states, operation)
         end
     end
   end
@@ -814,6 +867,37 @@ defmodule DoubleDown.Double do
 
       other ->
         raise_bad_stateful_responder_return(:expect, operation, 3, other)
+    end
+  end
+
+  # Invoke a per-operation fake. 2-arity receives (args, fallback_state),
+  # 3-arity receives (args, fallback_state, all_states). Both return
+  # {result, new_fallback_state}. May return passthrough() to delegate.
+  defp invoke_op_fake(fun, args, state, all_states, operation)
+       when is_function(fun, 2) do
+    case fun.(args, state.fallback_state) do
+      %DoubleDown.Contract.Dispatch.Passthrough{} ->
+        invoke_fallback_or_raise(state, operation, args, all_states)
+
+      {result, new_fallback_state} ->
+        {result, %{state | fallback_state: new_fallback_state}}
+
+      other ->
+        raise_bad_stateful_responder_return(:fake, operation, 2, other)
+    end
+  end
+
+  defp invoke_op_fake(fun, args, state, all_states, operation)
+       when is_function(fun, 3) do
+    case fun.(args, state.fallback_state, all_states) do
+      %DoubleDown.Contract.Dispatch.Passthrough{} ->
+        invoke_fallback_or_raise(state, operation, args, all_states)
+
+      {result, new_fallback_state} ->
+        {result, %{state | fallback_state: new_fallback_state}}
+
+      other ->
+        raise_bad_stateful_responder_return(:fake, operation, 3, other)
     end
   end
 
