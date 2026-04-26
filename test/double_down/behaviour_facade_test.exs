@@ -243,4 +243,22 @@ defmodule DoubleDown.BehaviourFacadeTest do
       assert {:ok, %{id: "config-test"}} = result
     end
   end
+
+  # -------------------------------------------------------------------
+  # Error handling
+  # -------------------------------------------------------------------
+
+  describe "compile-time guards" do
+    test "rejects DoubleDown contract modules with helpful message" do
+      assert_raise CompileError, ~r/is a DoubleDown contract module/, fn ->
+        Code.compile_string("""
+        defmodule TestRejectContract do
+          use DoubleDown.BehaviourFacade,
+            behaviour: DoubleDown.Test.Greeter,
+            otp_app: :double_down
+        end
+        """)
+      end
+    end
+  end
 end

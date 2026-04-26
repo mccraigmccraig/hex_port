@@ -107,6 +107,19 @@ defmodule DoubleDown.BehaviourFacade do
         line: __CALLER__.line
     end
 
+    # Reject DoubleDown contract modules — they should use ContractFacade
+    Code.ensure_compiled(behaviour)
+
+    if function_exported?(behaviour, :__callbacks__, 0) do
+      raise CompileError,
+        description:
+          "#{inspect(behaviour)} is a DoubleDown contract module (it defines defcallback operations). " <>
+            "Use DoubleDown.ContractFacade instead of BehaviourFacade:\n\n" <>
+            "    use DoubleDown.ContractFacade, contract: #{inspect(behaviour)}, otp_app: :my_app",
+        file: __CALLER__.file,
+        line: __CALLER__.line
+    end
+
     otp_app = Keyword.fetch!(opts, :otp_app)
 
     test_dispatch? =
