@@ -10,20 +10,20 @@ if Code.ensure_loaded?(Ecto) do
     bare schema operations without needing a fallback function.
 
     Implements `DoubleDown.Contract.Dispatch.StatefulHandler`, so it can
-    be used by module name with `Double.fake`:
+    be used by module name with `Double.fallback`:
 
-    ## Usage with Double.fake
+    ## Usage with Double.fallback
 
         # Basic — all bare-schema reads work without fallback:
-        DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory)
+        DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.InMemory)
 
         # With seed data:
-        DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory,
+        DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.InMemory,
           [%User{id: 1, name: "Alice"}, %Post{id: 1, title: "Hello"}])
 
         # Layer expects for failure simulation:
         DoubleDown.Repo
-        |> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
+        |> DoubleDown.Double.fallback(DoubleDown.Repo.InMemory)
         |> DoubleDown.Double.expect(:insert, fn [changeset] ->
           {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
         end)
@@ -31,7 +31,7 @@ if Code.ensure_loaded?(Ecto) do
     ## ExMachina integration
 
         setup do
-          DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory)
+          DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.InMemory)
           insert(:user, name: "Alice", email: "alice@example.com")
           insert(:user, name: "Bob", email: "bob@example.com")
           :ok
@@ -68,7 +68,7 @@ if Code.ensure_loaded?(Ecto) do
     `join`, `select` etc.) cannot be evaluated in-memory. These fall
     through to the fallback function, or raise with a clear error:
 
-        DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory, [],
+        DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.InMemory, [],
           fallback_fn: fn
             _contract, :all, [%Ecto.Query{}], _state -> []
           end

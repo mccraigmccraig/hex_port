@@ -3,16 +3,16 @@ defmodule DoubleDown.Contract.Dispatch.StatelessHandler do
   Behaviour for stateless stub handler modules.
 
   Implement this behaviour to make a stateless stub usable by module
-  name in `DoubleDown.Double.stub/2..4`:
+  name in `DoubleDown.Double.fallback/2..4`:
 
       # Instead of:
-      Double.stub(Repo, Repo.Stub.new())
+      Double.fallback(Repo, Repo.Stub.new())
 
       # Write:
-      Double.stub(Repo, Repo.Stub)
+      Double.fallback(Repo, Repo.Stub)
 
       # With a fallback function:
-      Double.stub(Repo, Repo.Stub, fn _contract, :all, [User] -> [] end)
+      Double.fallback(Repo, Repo.Stub, fn _contract, :all, [User] -> [] end)
 
   ## Callbacks
 
@@ -46,7 +46,7 @@ defmodule DoubleDown.Contract.Dispatch.StatelessHandler do
     * `opts` — additional options for configuring the stub.
 
   Returns a 3-arity function `fn contract, operation, args -> result end` suitable
-  for use as a `Double.stub` function fallback.
+  for use as a `Double.fallback` function fallback.
   """
   @callback new(
               fallback_fn :: (module(), atom(), [term()] -> term()) | nil,

@@ -25,9 +25,9 @@ defmodule DoubleDown.DynamicFacadeTest do
     end
   end
 
-  describe "dispatch with Double.stub" do
-    test "fn stub overrides all operations" do
-      Double.stub(DynamicTarget, fn _contract, operation, args ->
+  describe "dispatch with Double.fallback" do
+    test "fn fallback overrides all operations" do
+      Double.fallback(DynamicTarget, fn _contract, operation, args ->
         case {operation, args} do
           {:greet, [name]} -> "Stubbed: #{name}"
           {:add, [a, b]} -> a * b
@@ -43,7 +43,7 @@ defmodule DoubleDown.DynamicFacadeTest do
 
   describe "dispatch with Double.expect" do
     test "expects are consumed in order" do
-      Double.stub(DynamicTarget, fn _contract, :greet, [name] -> "Stub: #{name}" end)
+      Double.fallback(DynamicTarget, fn _contract, :greet, [name] -> "Stub: #{name}" end)
 
       Double.expect(DynamicTarget, :greet, fn [_] -> "First" end)
       Double.expect(DynamicTarget, :greet, fn [_] -> "Second" end)
@@ -56,9 +56,9 @@ defmodule DoubleDown.DynamicFacadeTest do
     end
   end
 
-  describe "dispatch with Double.fake (stateful)" do
-    test "stateful fake handles operations" do
-      Double.fake(
+  describe "dispatch with Double.fallback (stateful)" do
+    test "stateful fallback handles operations" do
+      Double.fallback(
         DynamicTarget,
         fn
           _contract, :greet, [name], state ->
@@ -80,8 +80,8 @@ defmodule DoubleDown.DynamicFacadeTest do
       assert :fake = DynamicTarget.zero_arity()
     end
 
-    test "expects layer over stateful fake" do
-      Double.fake(
+    test "expects layer over stateful fallback" do
+      Double.fallback(
         DynamicTarget,
         fn
           _contract, :greet, [name], state -> {"Fake: #{name}", state}
@@ -94,7 +94,7 @@ defmodule DoubleDown.DynamicFacadeTest do
 
       # Expect fires first
       assert "Expected" = DynamicTarget.greet("Alice")
-      # Falls through to fake
+      # Falls through to fallback
       assert "Fake: Bob" = DynamicTarget.greet("Bob")
 
       Double.verify!()
@@ -125,7 +125,7 @@ defmodule DoubleDown.DynamicFacadeTest do
 
   describe "dispatch logging" do
     test "logs dispatched calls" do
-      Double.stub(DynamicTarget, fn _contract, :greet, [name] ->
+      Double.fallback(DynamicTarget, fn _contract, :greet, [name] ->
         "Logged: #{name}"
       end)
 
@@ -140,7 +140,7 @@ defmodule DoubleDown.DynamicFacadeTest do
 
   describe "passthrough expects" do
     test ":passthrough expect delegates to original" do
-      Double.fake(
+      Double.fallback(
         DynamicTarget,
         fn _contract, :greet, [name], state -> {"Fake: #{name}", state} end,
         %{}
@@ -155,8 +155,8 @@ defmodule DoubleDown.DynamicFacadeTest do
       Double.verify!()
     end
 
-    test "Double.passthrough() from stateful responder delegates to fake" do
-      Double.fake(
+    test "Double.passthrough() from stateful responder delegates to fallback" do
+      Double.fallback(
         DynamicTarget,
         fn _contract, :greet, [name], state -> {"Fake: #{name}", state} end,
         %{}
@@ -177,8 +177,8 @@ defmodule DoubleDown.DynamicFacadeTest do
   end
 
   describe "stateful expect responders with dynamic facade" do
-    test "2-arity expect reads and updates fake state" do
-      Double.fake(
+    test "2-arity expect reads and updates fallback state" do
+      Double.fallback(
         DynamicTarget,
         fn
           _contract, :greet, [name], state -> {"Fake: #{name}", state}
@@ -198,19 +198,19 @@ defmodule DoubleDown.DynamicFacadeTest do
   end
 
   describe "cross-contract state access with dynamic facade" do
-    test "4-arity fake on dynamic module reads contract-based Repo state" do
+    test "4-arity fallback on dynamic module reads contract-based Repo state" do
       alias DoubleDown.Repo
       alias DoubleDown.Test.Repo, as: TestRepo
       alias DoubleDown.Test.SimpleUser
 
       # Set up Repo with InMemory
-      Double.fake(Repo, Repo.OpenInMemory)
+      Double.fallback(Repo, Repo.OpenInMemory)
 
       # Insert a record via Repo
       {:ok, _user} = TestRepo.insert(SimpleUser.changeset(%{name: "Alice"}))
 
-      # Set up dynamic module with 4-arity fake that reads Repo state
-      Double.fake(
+      # Set up dynamic module with 4-arity fallback that reads Repo state
+      Double.fallback(
         DynamicTarget,
         fn _contract, :greet, [_name], state, all_states ->
           repo_state = Map.get(all_states, Repo, %{})
@@ -227,7 +227,7 @@ defmodule DoubleDown.DynamicFacadeTest do
 
   describe "per-operation stubs with dynamic facade" do
     test "per-op stub overrides specific operation" do
-      Double.stub(DynamicTarget, fn _contract, operation, args ->
+      Double.fallback(DynamicTarget, fn _contract, operation, args ->
         case {operation, args} do
           {:greet, [name]} -> "Fallback: #{name}"
           {:add, [a, b]} -> a + b

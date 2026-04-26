@@ -19,7 +19,7 @@ defmodule DoubleDown.DynamicFacade do
   ## Usage in tests
 
       setup do
-        DoubleDown.Double.fake(MyApp.EctoRepo, DoubleDown.Repo.OpenInMemory)
+        DoubleDown.Double.fallback(MyApp.EctoRepo, DoubleDown.Repo.OpenInMemory)
         :ok
       end
 
@@ -66,7 +66,7 @@ defmodule DoubleDown.DynamicFacade do
 
   After setup, use the full `DoubleDown.Double` API:
 
-      DoubleDown.Double.fake(MyModule, handler)
+      DoubleDown.Double.fallback(MyModule, handler)
       DoubleDown.Double.expect(MyModule, :op, fn [args] -> result end)
 
   Tests that don't install a handler get the original module's

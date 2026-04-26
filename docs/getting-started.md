@@ -121,7 +121,7 @@ config and test doubles both reference `MyApp.Todos`:
 config :my_app, MyApp.Todos, impl: MyApp.Todos.Ecto
 
 # test setup
-DoubleDown.Double.stub(MyApp.Todos, fn _contract, :get_todo, [id] -> {:ok, %Todo{id: id}} end)
+DoubleDown.Double.fallback(MyApp.Todos, fn _contract, :get_todo, [id] -> {:ok, %Todo{id: id}} end)
 ```
 
 ### Separate contract and facade
@@ -156,7 +156,7 @@ is `MyApp.Todos`. Config and test doubles reference the contract:
 config :my_app, MyApp.Todos.Contract, impl: MyApp.Todos.Ecto
 
 # test setup
-DoubleDown.Double.stub(MyApp.Todos.Contract, fn _contract, :get_todo, [id] -> {:ok, %Todo{id: id}} end)
+DoubleDown.Double.fallback(MyApp.Todos.Contract, fn _contract, :get_todo, [id] -> {:ok, %Todo{id: id}} end)
 ```
 
 Callers use the facade: `MyApp.Todos.get_todo("42")`.
@@ -190,7 +190,7 @@ Config and test doubles reference the behaviour module:
 config :my_app, MyApp.Todos.Behaviour, impl: MyApp.Todos.Ecto
 
 # test setup
-DoubleDown.Double.stub(MyApp.Todos.Behaviour, fn _contract, :get_todo, [id] -> {:ok, %Todo{id: id}} end)
+DoubleDown.Double.fallback(MyApp.Todos.Behaviour, fn _contract, :get_todo, [id] -> {:ok, %Todo{id: id}} end)
 ```
 
 Callers use the facade: `MyApp.Todos.get_todo("42")`.

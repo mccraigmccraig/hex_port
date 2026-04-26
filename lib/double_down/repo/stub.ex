@@ -16,15 +16,15 @@ if Code.ensure_loaded?(Ecto) do
     clear error.
 
     Implements `DoubleDown.Contract.Dispatch.StatelessHandler`, so it can
-    be used by module name with `Double.stub`:
+    be used by module name with `Double.fallback`:
 
-    ## Usage with Double.stub
+    ## Usage with Double.fallback
 
         # Writes only — reads will raise with a helpful message:
-        DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Stub)
+        DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.Stub)
 
         # With fallback for specific reads:
-        DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Stub,
+        DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.Stub,
           fn _contract, operation, args ->
             case {operation, args} do
               {:get, [User, 1]} -> %User{id: 1, name: "Alice"}
@@ -36,7 +36,7 @@ if Code.ensure_loaded?(Ecto) do
 
         # Layer expects on top for failure simulation:
         DoubleDown.Repo
-        |> DoubleDown.Double.stub(DoubleDown.Repo.Stub)
+        |> DoubleDown.Double.fallback(DoubleDown.Repo.Stub)
         |> DoubleDown.Double.expect(:insert, fn [changeset] ->
           {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
         end)
@@ -74,10 +74,10 @@ if Code.ensure_loaded?(Ecto) do
     ## Examples
 
         # Writes only — via module name (StatelessHandler)
-        DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Stub)
+        DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.Stub)
 
         # With fallback for specific reads
-        DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Stub,
+        DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.Stub,
           fn _contract, operation, args ->
             case {operation, args} do
               {:get, [User, 1]} -> %User{id: 1, name: "Alice"}

@@ -19,6 +19,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `FakeHandler` → `StatefulHandler` (dispatch-layer naming)
   - `set_handler` → `set_module_handler` (symmetric with `set_stateless_handler`/`set_stateful_handler`)
 
+- **Breaking: `Double.stub` and `Double.fake` are now per-operation only.**
+  Whole-contract fallback handlers moved to the new `Double.fallback/2..4`
+  function. `stub` is purely per-operation stateless stubs, `fake` is
+  purely per-operation stateful fakes.
+
+  Migration:
+  - `Double.stub(contract, fn ...)` → `Double.fallback(contract, fn ...)`
+  - `Double.stub(contract, Repo.Stub)` → `Double.fallback(contract, Repo.Stub)`
+  - `Double.fake(contract, Module)` → `Double.fallback(contract, Module)`
+  - `Double.fake(contract, &fun/4, state)` → `Double.fallback(contract, &fun/4, state)`
+  - `Double.fake(contract, Module, seed)` → `Double.fallback(contract, Module, seed)`
+  - Per-op `Double.stub(contract, :op, fn)` — unchanged
+  - Per-op `Double.fake(contract, :op, fn)` — unchanged
+
+### Added
+
+- **`Double.fallback/2..4`** — new function for installing whole-contract
+  fallback handlers. Supports StatefulHandler modules, StatelessHandler
+  modules, module implementations, stateful functions, and stateless
+  functions. Fallback types are mutually exclusive.
+
 ## [0.51.0]
 
 ### Added

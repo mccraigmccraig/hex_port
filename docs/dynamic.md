@@ -44,8 +44,8 @@ as the first argument to all `Double` API calls:
 
 ```elixir
 # MyApp.EctoRepo is the contract — same module callers use
-DoubleDown.Double.fake(MyApp.EctoRepo, DoubleDown.Repo.InMemory)
-DoubleDown.Double.stub(SomeThirdPartyClient, fn :fetch, [id] -> {:ok, id} end)
+DoubleDown.Double.fallback(MyApp.EctoRepo, DoubleDown.Repo.InMemory)
+DoubleDown.Double.fallback(SomeThirdPartyClient, fn :fetch, [id] -> {:ok, id} end)
 ```
 
 The shim checks NimbleOwnership for test handlers, falling back to
@@ -63,7 +63,7 @@ responders, cross-contract state access, dispatch logging:
 ```elixir
 setup do
   # Stateful fake
-  DoubleDown.Double.fake(MyApp.EctoRepo, DoubleDown.Repo.InMemory)
+  DoubleDown.Double.fallback(MyApp.EctoRepo, DoubleDown.Repo.InMemory)
   :ok
 end
 
@@ -77,7 +77,7 @@ end
 
 ```elixir
 # Function stub
-DoubleDown.Double.stub(SomeClient, fn _contract, operation, args ->
+DoubleDown.Double.fallback(SomeClient, fn _contract, operation, args ->
   case {operation, args} do
     {:fetch, [id]} -> {:ok, %{id: id}}
     {:list, []} -> []
@@ -140,10 +140,10 @@ contract-based facades, and vice versa:
 
 ```elixir
 # Contract-based Repo with InMemory
-DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory)
+DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.InMemory)
 
 # Dynamic module reads Repo state
-DoubleDown.Double.fake(MyApp.Legacy,
+DoubleDown.Double.fallback(MyApp.Legacy,
   fn :check_user, [id], state, all_states ->
     repo_state = Map.get(all_states, DoubleDown.Repo, %{})
     users = repo_state |> Map.get(User, %{}) |> Map.values()

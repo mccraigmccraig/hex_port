@@ -10,7 +10,7 @@ defmodule DoubleDown.Repo.ExMachinaTest do
   alias DoubleDown.Test.Repo
 
   setup do
-    DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory)
+    DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.InMemory)
     :ok
   end
 

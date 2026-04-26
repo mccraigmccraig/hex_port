@@ -70,7 +70,7 @@ defmodule DoubleDown.Repo.PreloadTest do
 
   describe "preload has_many" do
     setup do
-      DoubleDown.Double.fake(Repo, InMemory, [
+      DoubleDown.Double.fallback(Repo, InMemory, [
         %Author{id: 1, name: "Alice"},
         %Post{id: 1, title: "First", author_id: 1},
         %Post{id: 2, title: "Second", author_id: 1},
@@ -100,7 +100,7 @@ defmodule DoubleDown.Repo.PreloadTest do
 
   describe "preload has_one" do
     setup do
-      DoubleDown.Double.fake(Repo, InMemory, [
+      DoubleDown.Double.fallback(Repo, InMemory, [
         %Author{id: 1, name: "Alice"},
         %Profile{id: 1, bio: "Hello", author_id: 1}
       ])
@@ -127,7 +127,7 @@ defmodule DoubleDown.Repo.PreloadTest do
 
   describe "preload belongs_to" do
     setup do
-      DoubleDown.Double.fake(Repo, InMemory, [
+      DoubleDown.Double.fallback(Repo, InMemory, [
         %Author{id: 1, name: "Alice"},
         %Post{id: 1, title: "First", author_id: 1}
       ])
@@ -154,7 +154,7 @@ defmodule DoubleDown.Repo.PreloadTest do
 
   describe "nested preloads" do
     setup do
-      DoubleDown.Double.fake(Repo, InMemory, [
+      DoubleDown.Double.fallback(Repo, InMemory, [
         %Author{id: 1, name: "Alice"},
         %Post{id: 1, title: "First", author_id: 1},
         %Comment{id: 1, body: "Great!", post_id: 1, author_id: 1},
@@ -188,7 +188,7 @@ defmodule DoubleDown.Repo.PreloadTest do
 
   describe "preload list of structs" do
     setup do
-      DoubleDown.Double.fake(Repo, InMemory, [
+      DoubleDown.Double.fallback(Repo, InMemory, [
         %Author{id: 1, name: "Alice"},
         %Author{id: 2, name: "Bob"},
         %Post{id: 1, title: "Alice's Post", author_id: 1},
@@ -212,7 +212,7 @@ defmodule DoubleDown.Repo.PreloadTest do
 
   describe "preload nil and empty" do
     setup do
-      DoubleDown.Double.fake(Repo, InMemory)
+      DoubleDown.Double.fallback(Repo, InMemory)
       :ok
     end
 
@@ -231,7 +231,7 @@ defmodule DoubleDown.Repo.PreloadTest do
 
   describe "multiple preloads" do
     setup do
-      DoubleDown.Double.fake(Repo, InMemory, [
+      DoubleDown.Double.fallback(Repo, InMemory, [
         %Author{id: 1, name: "Alice"},
         %Post{id: 1, title: "Post", author_id: 1},
         %Profile{id: 1, bio: "Bio", author_id: 1}
@@ -255,7 +255,7 @@ defmodule DoubleDown.Repo.PreloadTest do
 
   describe "preload with opts" do
     setup do
-      DoubleDown.Double.fake(Repo, InMemory, [
+      DoubleDown.Double.fallback(Repo, InMemory, [
         %Author{id: 1, name: "Alice"},
         %Post{id: 1, title: "Post", author_id: 1}
       ])

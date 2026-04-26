@@ -391,7 +391,7 @@ defmodule DoubleDown.Repo.OpenInMemoryTest do
 
   describe "insert_or_update" do
     setup do
-      DoubleDown.Double.fake(DoubleDown.Repo, Repo.OpenInMemory)
+      DoubleDown.Double.fallback(DoubleDown.Repo, Repo.OpenInMemory)
       :ok
     end
 
@@ -431,7 +431,7 @@ defmodule DoubleDown.Repo.OpenInMemoryTest do
 
   describe "insert_or_update!" do
     setup do
-      DoubleDown.Double.fake(DoubleDown.Repo, Repo.OpenInMemory)
+      DoubleDown.Double.fallback(DoubleDown.Repo, Repo.OpenInMemory)
       :ok
     end
 
@@ -849,7 +849,7 @@ defmodule DoubleDown.Repo.OpenInMemoryTest do
 
   describe "load (open-world)" do
     setup do
-      DoubleDown.Double.fake(DoubleDown.Repo, Repo.OpenInMemory)
+      DoubleDown.Double.fallback(DoubleDown.Repo, Repo.OpenInMemory)
       :ok
     end
 
@@ -870,7 +870,7 @@ defmodule DoubleDown.Repo.OpenInMemoryTest do
 
   describe "reload (open-world)" do
     setup do
-      DoubleDown.Double.fake(DoubleDown.Repo, Repo.OpenInMemory)
+      DoubleDown.Double.fallback(DoubleDown.Repo, Repo.OpenInMemory)
       :ok
     end
 
@@ -895,7 +895,7 @@ defmodule DoubleDown.Repo.OpenInMemoryTest do
 
   describe "reload! (open-world)" do
     setup do
-      DoubleDown.Double.fake(DoubleDown.Repo, Repo.OpenInMemory)
+      DoubleDown.Double.fallback(DoubleDown.Repo, Repo.OpenInMemory)
       :ok
     end
 
@@ -1644,9 +1644,9 @@ defmodule DoubleDown.Repo.OpenInMemoryTest do
     end
   end
 
-  describe "nested transact via Double.fake" do
-    test "nested transact works via Double.fake (no deadlock)" do
-      DoubleDown.Double.fake(
+  describe "nested transact via Double.fallback" do
+    test "nested transact works via Double.fallback (no deadlock)" do
+      DoubleDown.Double.fallback(
         Repo,
         &Repo.OpenInMemory.dispatch/4,
         Repo.OpenInMemory.new()
@@ -1736,9 +1736,9 @@ defmodule DoubleDown.Repo.OpenInMemoryTest do
     end
   end
 
-  describe "rollback via Double.fake" do
-    test "rollback works via Double.fake" do
-      DoubleDown.Double.fake(
+  describe "rollback via Double.fallback" do
+    test "rollback works via Double.fallback" do
+      DoubleDown.Double.fallback(
         Repo,
         &Repo.OpenInMemory.dispatch/4,
         Repo.OpenInMemory.new()
@@ -1762,7 +1762,7 @@ defmodule DoubleDown.Repo.OpenInMemoryTest do
 
   describe "in_transaction?" do
     setup do
-      DoubleDown.Double.fake(DoubleDown.Repo, Repo.OpenInMemory)
+      DoubleDown.Double.fallback(DoubleDown.Repo, Repo.OpenInMemory)
       :ok
     end
 
@@ -1787,7 +1787,7 @@ defmodule DoubleDown.Repo.OpenInMemoryTest do
 
   describe "transaction (alias for transact)" do
     setup do
-      DoubleDown.Double.fake(DoubleDown.Repo, Repo.OpenInMemory)
+      DoubleDown.Double.fallback(DoubleDown.Repo, Repo.OpenInMemory)
       :ok
     end
 
@@ -1838,7 +1838,7 @@ defmodule DoubleDown.Repo.OpenInMemoryTest do
 
   describe "query" do
     test "delegates to fallback" do
-      DoubleDown.Double.fake(DoubleDown.Repo, Repo.OpenInMemory, [],
+      DoubleDown.Double.fallback(DoubleDown.Repo, Repo.OpenInMemory, [],
         fallback_fn: fn _contract, :query, ["SELECT 1"], _state -> {:ok, %{rows: [[1]]}} end
       )
 
@@ -1846,7 +1846,7 @@ defmodule DoubleDown.Repo.OpenInMemoryTest do
     end
 
     test "raises helpful error when no fallback" do
-      DoubleDown.Double.fake(DoubleDown.Repo, Repo.OpenInMemory)
+      DoubleDown.Double.fallback(DoubleDown.Repo, Repo.OpenInMemory)
 
       assert_raise ArgumentError, ~r/cannot service :query/, fn ->
         TestRepo.query("SELECT 1")
@@ -1856,7 +1856,7 @@ defmodule DoubleDown.Repo.OpenInMemoryTest do
 
   describe "query!" do
     test "delegates to fallback" do
-      DoubleDown.Double.fake(DoubleDown.Repo, Repo.OpenInMemory, [],
+      DoubleDown.Double.fallback(DoubleDown.Repo, Repo.OpenInMemory, [],
         fallback_fn: fn _contract, :query!, ["SELECT 1"], _state -> %{rows: [[1]]} end
       )
 
@@ -1864,7 +1864,7 @@ defmodule DoubleDown.Repo.OpenInMemoryTest do
     end
 
     test "raises helpful error when no fallback" do
-      DoubleDown.Double.fake(DoubleDown.Repo, Repo.OpenInMemory)
+      DoubleDown.Double.fallback(DoubleDown.Repo, Repo.OpenInMemory)
 
       assert_raise ArgumentError, ~r/cannot service :query!/, fn ->
         TestRepo.query!("SELECT 1")
@@ -1878,7 +1878,7 @@ defmodule DoubleDown.Repo.OpenInMemoryTest do
 
   describe "stream" do
     test "delegates to fallback" do
-      DoubleDown.Double.fake(DoubleDown.Repo, Repo.OpenInMemory, [],
+      DoubleDown.Double.fallback(DoubleDown.Repo, Repo.OpenInMemory, [],
         fallback_fn: fn _contract, :stream, [_query], _state ->
           Stream.map([%User{id: 1, name: "Alice"}], & &1)
         end
@@ -1889,7 +1889,7 @@ defmodule DoubleDown.Repo.OpenInMemoryTest do
     end
 
     test "raises helpful error when no fallback" do
-      DoubleDown.Double.fake(DoubleDown.Repo, Repo.OpenInMemory)
+      DoubleDown.Double.fallback(DoubleDown.Repo, Repo.OpenInMemory)
 
       assert_raise ArgumentError, ~r/cannot service :stream/, fn ->
         TestRepo.stream(User)

@@ -141,7 +141,7 @@ defmodule MyApp.BillingTest do
     end)
 
     # Repo — stateless writes via Repo.Stub stub
-    DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Stub)
+    DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.Stub)
 
     :ok
   end
@@ -196,7 +196,7 @@ For integration tests that intentionally use the real DB, use `fake`
 with the production module:
 
 ```elixir
-DoubleDown.Double.fake(DoubleDown.Repo, MyApp.EctoRepo)
+DoubleDown.Double.fallback(DoubleDown.Repo, MyApp.EctoRepo)
 ```
 
 ## Choosing a Repo fake

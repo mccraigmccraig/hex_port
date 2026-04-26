@@ -178,7 +178,7 @@ defmodule DoubleDown.Contract.Dispatch do
   Check whether the calling process has a test handler installed for
   the given contract.
 
-  Returns `true` when a handler is active (via `DoubleDown.Double.fake/2`,
+  Returns `true` when a handler is active (via `DoubleDown.Double.fallback/2`,
   `expect/3`, etc.), `false` otherwise. Useful for test infrastructure that
   needs to skip real-DB side-effects (e.g. setting Postgres session variables)
   when an in-memory handler is intercepting Repo calls.
@@ -411,10 +411,10 @@ defmodule DoubleDown.Contract.Dispatch do
       In your test setup, use DoubleDown.Double (recommended):
 
           #{inspect(contract)}
-          |> DoubleDown.Double.fake(MyFakeImpl)
+          |> DoubleDown.Double.fallback(MyFakeImpl)
 
           #{inspect(contract)}
-          |> DoubleDown.Double.stub(fn _contract, operation, args -> ... end)
+          |> DoubleDown.Double.fallback(fn _contract, operation, args -> ... end)
 
           #{inspect(contract)}
           |> DoubleDown.Double.expect(:operation, fn [args] -> result end)

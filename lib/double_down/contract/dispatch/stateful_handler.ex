@@ -3,13 +3,13 @@ defmodule DoubleDown.Contract.Dispatch.StatefulHandler do
   Behaviour for stateful fake handler modules.
 
   Implement this behaviour to make a stateful fake usable by module
-  name in `DoubleDown.Double.fake/2..4`:
+  name in `DoubleDown.Double.fallback/2..4`:
 
       # Instead of:
-      Double.fake(Repo, &Repo.OpenInMemory.dispatch/4, Repo.OpenInMemory.new())
+      Double.fallback(Repo, &Repo.OpenInMemory.dispatch/4, Repo.OpenInMemory.new())
 
       # Write:
-      Double.fake(Repo, Repo.OpenInMemory)
+      Double.fallback(Repo, Repo.OpenInMemory)
 
   ## Callbacks
 
@@ -37,7 +37,7 @@ defmodule DoubleDown.Contract.Dispatch.StatefulHandler do
   @doc """
   Build initial state from seed data and options.
 
-  Called by `Double.fake/2..4` to construct the initial state for the
+  Called by `Double.fallback/2..4` to construct the initial state for the
   stateful handler.
 
     * `seed` — seed data (e.g. `%{User => %{1 => %User{}}}` for Repo.OpenInMemory)

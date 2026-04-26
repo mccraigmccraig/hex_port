@@ -24,10 +24,10 @@ if Code.ensure_loaded?(Ecto) do
     ## Usage with Double.fake
 
         # PK reads only — no fallback needed for records in state:
-        DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.OpenInMemory)
+        DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.OpenInMemory)
 
         # With seed data and fallback for non-PK reads:
-        DoubleDown.Double.fake(
+        DoubleDown.Double.fallback(
           DoubleDown.Repo,
           DoubleDown.Repo.OpenInMemory,
           [%User{id: 1, name: "Alice"}],
@@ -41,7 +41,7 @@ if Code.ensure_loaded?(Ecto) do
 
         # Layer expects for failure simulation:
         DoubleDown.Repo
-        |> DoubleDown.Double.fake(DoubleDown.Repo.OpenInMemory)
+        |> DoubleDown.Double.fallback(DoubleDown.Repo.OpenInMemory)
         |> DoubleDown.Double.expect(:insert, fn [changeset] ->
           {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
         end)

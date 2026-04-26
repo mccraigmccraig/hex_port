@@ -14,7 +14,7 @@ should fail:
 ```elixir
 setup do
   DoubleDown.Repo
-  |> DoubleDown.Double.stub(DoubleDown.Repo.Stub)
+  |> DoubleDown.Double.fallback(DoubleDown.Repo.Stub)
   |> DoubleDown.Double.expect(:insert, fn [changeset] ->
     {:error, Ecto.Changeset.add_error(changeset, :email, "has already been taken")}
   end)
@@ -43,7 +43,7 @@ need read-after-write consistency alongside failure simulation:
 ```elixir
 setup do
   DoubleDown.Repo
-  |> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
+  |> DoubleDown.Double.fallback(DoubleDown.Repo.InMemory)
   |> DoubleDown.Double.expect(:insert, fn [changeset] ->
     {:error, Ecto.Changeset.add_error(changeset, :email, "has already been taken")}
   end)
@@ -75,7 +75,7 @@ expect is consumed for `verify!` counting:
 ```elixir
 setup do
   DoubleDown.Repo
-  |> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
+  |> DoubleDown.Double.fallback(DoubleDown.Repo.InMemory)
   |> DoubleDown.Double.expect(:insert, :passthrough, times: 2)
   :ok
 end
@@ -91,7 +91,7 @@ You can mix `:passthrough` and function expects — for example,
 
 ```elixir
 DoubleDown.Repo
-|> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
+|> DoubleDown.Double.fallback(DoubleDown.Repo.InMemory)
 |> DoubleDown.Double.expect(:insert, :passthrough)
 |> DoubleDown.Double.expect(:insert, fn [changeset] ->
   {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
@@ -107,7 +107,7 @@ responder is the InMemory store (`%{Schema => %{pk => record}}`):
 ```elixir
 # 2-arity expect: reject duplicate emails, otherwise passthrough
 DoubleDown.Repo
-|> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
+|> DoubleDown.Double.fallback(DoubleDown.Repo.InMemory)
 |> DoubleDown.Double.fake(:insert, fn [changeset], state ->
   existing_emails =
     state
@@ -269,7 +269,7 @@ including computed results:
 ```elixir
 setup do
   DoubleDown.Repo
-  |> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
+  |> DoubleDown.Double.fallback(DoubleDown.Repo.InMemory)
   |> DoubleDown.Double.expect(:insert, fn [changeset] ->
     {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
   end)
@@ -325,11 +325,11 @@ end
 setup do
   # Repo uses InMemory — writes land here
   DoubleDown.Repo
-  |> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
+  |> DoubleDown.Double.fallback(DoubleDown.Repo.InMemory)
 
-  # Queries uses a 4-arity fake that reads Repo's InMemory state
+  # Queries uses a 4-arity fallback that reads Repo's InMemory state
   MyApp.UserQueries
-  |> DoubleDown.Double.fake(
+  |> DoubleDown.Double.fallback(
     fn operation, args, state, all_states ->
       # Extract Repo's InMemory store from the global snapshot
       repo_state = Map.get(all_states, DoubleDown.Repo, %{})
@@ -362,12 +362,12 @@ test "queries see records written through Repo" do
 end
 ```
 
-Because the Queries handler is set up via `Double.fake`, you can
+Because the Queries handler is set up via `Double.fallback`, you can
 layer expects on top for error simulation:
 
 ```elixir
 MyApp.UserQueries
-|> DoubleDown.Double.fake(queries_handler_fn, %{})
+|> DoubleDown.Double.fallback(queries_handler_fn, %{})
 |> DoubleDown.Double.expect(:user_by_email, fn [_] -> nil end)
 ```
 

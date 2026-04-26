@@ -95,14 +95,14 @@ handler module or a function.
 #### Stateless stubs
 
 Stubs provide canned responses without maintaining state. Use
-`Double.stub` with a `StatelessHandler` module or a 3-arity function:
+`Double.fallback` with a `StatelessHandler` module or a 3-arity function:
 
 ```elixir
 # StatelessHandler module (e.g. Repo.Stub)
-DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Stub)
+DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.Stub)
 
 # StatelessHandler with a fallback function for reads
-DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Stub,
+DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.Stub,
   fn
     _contract, :get, [User, 1] -> %User{id: 1, name: "Alice"}
     _contract, :all, [User] -> [%User{id: 1, name: "Alice"}]
@@ -111,7 +111,7 @@ DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Stub,
 
 # 3-arity function fallback
 MyApp.Todos
-|> DoubleDown.Double.stub(fn _contract, operation, args ->
+|> DoubleDown.Double.fallback(fn _contract, operation, args ->
   case {operation, args} do
     {:list_todos, [_]} -> []
     {:get_todo, [id]} -> {:ok, %Todo{id: id}}
@@ -122,24 +122,24 @@ end)
 #### Stateful fakes
 
 Fakes maintain in-memory state with atomic updates, enabling
-read-after-write consistency. Use `Double.fake` with a `StatefulHandler`
+read-after-write consistency. Use `Double.fallback` with a `StatefulHandler`
 module or a 3/4-arity function:
 
 ```elixir
 # StatefulHandler module (e.g. Repo.InMemory)
 DoubleDown.Repo
-|> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
+|> DoubleDown.Double.fallback(DoubleDown.Repo.InMemory)
 |> DoubleDown.Double.expect(:insert, fn [changeset] ->
   {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
 end)
 
 # With seed data and options
-DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory,
+DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.InMemory,
   [%User{id: 1, name: "Alice"}],
   fallback_fn: fn _contract, :all, [User], state -> Map.values(state[User]) end)
 
 # 4-arity function fake (equivalent to StatefulHandler)
-DoubleDown.Double.fake(DoubleDown.Repo,
+DoubleDown.Double.fallback(DoubleDown.Repo,
   &DoubleDown.Repo.InMemory.dispatch/4,
   DoubleDown.Repo.InMemory.new())
 ```
@@ -151,7 +151,7 @@ When a 1-arity expect short-circuits (returns an error), the fake
 state is unchanged — correct for error simulation. Expects can also
 be stateful — see [Stateful expect responders](#stateful-expect-responders).
 
-#### Module fakes (Mimic-style)
+#### Module fallbacks (Mimic-style)
 
 A module implementing the contract's `@behaviour`. Override specific
 operations with expects while the rest delegate to the module — the
@@ -160,11 +160,11 @@ plain modules:
 
 ```elixir
 MyApp.Todos
-|> DoubleDown.Double.fake(MyApp.Todos.Ecto)
+|> DoubleDown.Double.fallback(MyApp.Todos.Ecto)
 |> DoubleDown.Double.expect(:create_todo, fn [_] -> {:error, :conflict} end)
 ```
 
-The module is validated at `fake` time. Module fakes run in the
+The module is validated at `fallback` time. Module fakes run in the
 calling process (via `%Defer{}`), so they work correctly with Ecto
 sandbox and other process-scoped resources.
 
@@ -185,7 +185,7 @@ end
 
 # This expect will NOT fire when create_todo calls insert internally:
 MyApp.Todos
-|> Double.fake(MyApp.Todos.Ecto)
+|> Double.fallback(MyApp.Todos.Ecto)
 |> Double.expect(:insert, fn [_] -> {:error, :conflict} end)
 #                ^^^^^^^ never called — create_todo bypasses the facade
 
@@ -202,8 +202,8 @@ end
 
 #### Dispatch priority
 
-Expects > per-op fakes > per-operation stubs > fallback (stub/fake) > raise.
-Stubs, stateful fakes, and module fakes are mutually exclusive —
+Expects > per-op fakes > per-operation stubs > fallback > raise.
+Stubs, stateful fakes, and module fallbacks are mutually exclusive —
 setting one replaces any previous fallback.
 
 ### Passthrough expects
@@ -214,7 +214,7 @@ counting:
 
 ```elixir
 MyApp.Todos
-|> DoubleDown.Double.fake(MyApp.Todos.Impl)
+|> DoubleDown.Double.fallback(MyApp.Todos.Impl)
 |> DoubleDown.Double.expect(:get_todo, :passthrough, times: 2)
 
 # Both calls delegate to MyApp.Todos.Impl
@@ -228,7 +228,7 @@ through the fake, second call returns an error":
 
 ```elixir
 DoubleDown.Repo
-|> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
+|> DoubleDown.Double.fallback(DoubleDown.Repo.InMemory)
 |> DoubleDown.Double.expect(:insert, :passthrough)
 |> DoubleDown.Double.expect(:insert, fn [changeset] ->
   {:error, Ecto.Changeset.add_error(changeset, :email, "taken")}
@@ -242,7 +242,7 @@ end)
 
 By default, expect responders are 1-arity (`fn [args] -> result end`)
 and stateless — they can't see or modify the fake's state. When a
-stateful fake is configured via `fake/3`, expects can also be
+stateful fake is configured via `fallback/3`, expects can also be
 2-arity or 3-arity to access and update the fake's state:
 
 ```elixir
@@ -263,7 +263,7 @@ end)
 2-arity and 3-arity responders **must** return `{result, new_state}`.
 Returning a bare value raises `ArgumentError` at dispatch time.
 
-Stateful responders require `fake/3` to be called **before**
+Stateful responders require `fallback/3` to be called **before**
 `expect` — the fake provides the state. Calling `expect` with a
 2-arity or 3-arity function without a stateful fake raises
 `ArgumentError` immediately.
@@ -273,7 +273,7 @@ the fake**
 
 ```elixir
 DoubleDown.Repo
-|> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
+|> DoubleDown.Double.fallback(DoubleDown.Repo.InMemory)
 |> DoubleDown.Double.expect(:insert, :passthrough)
 |> DoubleDown.Double.expect(:insert, fn [changeset], state ->
   # state is the InMemory store: %{Schema => %{pk => record}}
@@ -312,14 +312,14 @@ fallback fake. They support 2-arity (own state) and 3-arity
 (own state + cross-contract snapshot), and can return
 `Double.passthrough()` to delegate to the fallback.
 
-A stateful fallback fake (`fake/3`) must be configured **before**
+A stateful fallback fake (`fallback/3`) must be configured **before**
 calling `Double.fake/4` — the per-operation fake shares the
 fallback's state.
 
 ```elixir
 # 2-arity — receives [args] and own state
 DoubleDown.Repo
-|> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
+|> DoubleDown.Double.fallback(DoubleDown.Repo.InMemory)
 |> DoubleDown.Double.fake(:insert, fn [changeset], state ->
   existing_emails =
     state
@@ -336,7 +336,7 @@ end)
 
 # 3-arity — receives [args], own state, and all_states snapshot
 DoubleDown.Repo
-|> DoubleDown.Double.fake(DoubleDown.Repo.InMemory)
+|> DoubleDown.Double.fallback(DoubleDown.Repo.InMemory)
 |> DoubleDown.Double.fake(:insert, fn [changeset], state, all_states ->
   {result, state}
 end)
@@ -405,13 +405,13 @@ the sentinel is detected and a clear error is raised.
 - The handler return must be `{result, new_own_state}` — returning
   the global map raises `ArgumentError`
 
-5-arity handlers work with both `DoubleDown.Double.fake/3` and
+5-arity handlers work with both `DoubleDown.Double.fallback/3` and
 `DoubleDown.Testing.set_stateful_handler/3`:
 
 ```elixir
-# With Double.fake — supports expects and stubs alongside the 5-arity fake
+# With Double.fallback — supports expects and stubs alongside the 5-arity fake
 MyApp.Queries
-|> DoubleDown.Double.fake(
+|> DoubleDown.Double.fallback(
   fn _contract, operation, args, state, all_states ->
     repo_state = Map.get(all_states, DoubleDown.Repo, %{})
     # ... query the repo state ...
@@ -493,7 +493,7 @@ Now any test that forgets to set up a double gets an immediate error:
     In your test setup, call one of:
 
         DoubleDown.Double.stub(MyApp.Todos, :op, fn [args] -> result end)
-        DoubleDown.Double.fake(MyApp.Todos, MyApp.Todos.Impl)
+        DoubleDown.Double.fallback(MyApp.Todos, MyApp.Todos.Impl)
 
 Every test must explicitly declare its dependencies. For integration
 tests that need the real implementation, use `fake` with the
@@ -501,7 +501,7 @@ production module:
 
 ```elixir
 setup do
-  DoubleDown.Double.fake(MyApp.Todos, MyApp.Todos.Ecto)
+  DoubleDown.Double.fallback(MyApp.Todos, MyApp.Todos.Ecto)
   :ok
 end
 ```
@@ -523,8 +523,8 @@ there's probably never a need to use them directly:
 - `set_stateful_handler(contract, fn contract, op, args, state, all_states -> {result, state} end, init)` —
   register a 5-arity stateful handler with cross-contract state access
 
-These are the primitives that power `Double.stub`, `Double.fake`,
-and `Double.expect`.
+These are the primitives that power `Double.fallback`, `Double.stub`,
+`Double.fake`, and `Double.expect`.
 
 ## Mox compatibility
 

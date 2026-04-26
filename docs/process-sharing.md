@@ -37,7 +37,7 @@ mode:
 setup do
   DoubleDown.Testing.set_mode_to_global()
 
-  DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory)
+  DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.InMemory)
 
   on_exit(fn -> DoubleDown.Testing.set_mode_to_private() end)
   :ok
@@ -97,7 +97,7 @@ defmodule MyApp.PipelineIntegrationTest do
   setup do
     DoubleDown.Testing.set_mode_to_global()
 
-    DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory)
+    DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.InMemory)
 
     on_exit(fn -> DoubleDown.Testing.set_mode_to_private() end)
 

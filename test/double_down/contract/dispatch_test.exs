@@ -233,8 +233,8 @@ defmodule DoubleDown.Contract.DispatchTest do
       assert DoubleDown.Contract.Dispatch.handler_active?(Greeter)
     end
 
-    test "returns true after Double.fake/2 is called" do
-      DoubleDown.Double.fake(Greeter, Greeter.Impl)
+    test "returns true after Double.fallback/2 is called" do
+      DoubleDown.Double.fallback(Greeter, Greeter.Impl)
 
       assert DoubleDown.Contract.Dispatch.handler_active?(Greeter)
     end
@@ -274,13 +274,13 @@ defmodule DoubleDown.Contract.DispatchTest do
     end
 
     test "returns state from current process" do
-      DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory)
+      DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.InMemory)
       state = DoubleDown.Contract.Dispatch.get_state(DoubleDown.Repo)
       assert is_map(state)
     end
 
     test "returns state from child process via $callers chain" do
-      DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory)
+      DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.InMemory)
 
       parent_state = DoubleDown.Contract.Dispatch.get_state(DoubleDown.Repo)
 

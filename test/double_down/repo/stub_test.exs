@@ -583,15 +583,15 @@ defmodule DoubleDown.Repo.StubTest do
   # Repo.Stub via Double.stub (transact deadlock regression)
   # -------------------------------------------------------------------
 
-  describe "Repo.Stub via Double.stub" do
-    test "transact with 0-arity fun works via Double.stub (no deadlock)" do
-      DoubleDown.Double.stub(Repo, Repo.Stub.new())
+  describe "Repo.Stub via Double.fallback" do
+    test "transact with 0-arity fun works via Double.fallback (no deadlock)" do
+      DoubleDown.Double.fallback(Repo, Repo.Stub.new())
 
       assert {:ok, :done} = TestRepo.transact(fn -> {:ok, :done} end, [])
     end
 
-    test "transact with nested Repo calls works via Double.stub" do
-      DoubleDown.Double.stub(Repo, Repo.Stub.new())
+    test "transact with nested Repo calls works via Double.fallback" do
+      DoubleDown.Double.fallback(Repo, Repo.Stub.new())
 
       result =
         TestRepo.transact(
@@ -605,8 +605,8 @@ defmodule DoubleDown.Repo.StubTest do
       assert {:ok, %User{name: "Alice"}} = result
     end
 
-    test "transact with Ecto.Multi works via Double.stub" do
-      DoubleDown.Double.stub(Repo, Repo.Stub.new())
+    test "transact with Ecto.Multi works via Double.fallback" do
+      DoubleDown.Double.fallback(Repo, Repo.Stub.new())
 
       multi =
         Ecto.Multi.new()
@@ -678,9 +678,9 @@ defmodule DoubleDown.Repo.StubTest do
     end
   end
 
-  describe "nested transact via Double.stub" do
-    test "nested transact works via Double.stub (no deadlock)" do
-      DoubleDown.Double.stub(Repo, Repo.Stub.new())
+  describe "nested transact via Double.fallback" do
+    test "nested transact works via Double.fallback (no deadlock)" do
+      DoubleDown.Double.fallback(Repo, Repo.Stub.new())
 
       result =
         TestRepo.transact(
@@ -750,9 +750,9 @@ defmodule DoubleDown.Repo.StubTest do
     end
   end
 
-  describe "rollback via Double.stub" do
-    test "rollback works via Double.stub" do
-      DoubleDown.Double.stub(Repo, Repo.Stub.new())
+  describe "rollback via Double.fallback" do
+    test "rollback works via Double.fallback" do
+      DoubleDown.Double.fallback(Repo, Repo.Stub.new())
 
       result =
         TestRepo.transact(
@@ -768,7 +768,7 @@ defmodule DoubleDown.Repo.StubTest do
 
   describe "rollback outside transaction" do
     test "raises RuntimeError" do
-      DoubleDown.Double.stub(Repo, Repo.Stub.new())
+      DoubleDown.Double.fallback(Repo, Repo.Stub.new())
 
       assert_raise RuntimeError, ~r/cannot call rollback outside of transaction/, fn ->
         TestRepo.rollback(:oops)
@@ -782,27 +782,27 @@ defmodule DoubleDown.Repo.StubTest do
 
   describe "insert_or_update" do
     test "inserts when meta state is :built" do
-      DoubleDown.Double.stub(Repo, Repo.Stub.new())
+      DoubleDown.Double.fallback(Repo, Repo.Stub.new())
       cs = User.changeset(%{name: "Alice"})
       assert {:ok, %User{name: "Alice"}} = TestRepo.insert_or_update(cs)
     end
 
     test "updates when meta state is :loaded" do
-      DoubleDown.Double.stub(Repo, Repo.Stub.new())
+      DoubleDown.Double.fallback(Repo, Repo.Stub.new())
       user = %User{id: 1, name: "Alice"} |> Ecto.put_meta(state: :loaded)
       cs = User.changeset(user, %{name: "Alicia"})
       assert {:ok, %User{name: "Alicia"}} = TestRepo.insert_or_update(cs)
     end
 
     test "returns error on invalid changeset" do
-      DoubleDown.Double.stub(Repo, Repo.Stub.new())
+      DoubleDown.Double.fallback(Repo, Repo.Stub.new())
       cs = User.changeset(%{}) |> Ecto.Changeset.add_error(:name, "required")
       cs = %{cs | valid?: false}
       assert {:error, %Ecto.Changeset{}} = TestRepo.insert_or_update(cs)
     end
 
     test "opts-stripping variant works" do
-      DoubleDown.Double.stub(Repo, Repo.Stub.new())
+      DoubleDown.Double.fallback(Repo, Repo.Stub.new())
       cs = User.changeset(%{name: "Alice"})
       assert {:ok, %User{name: "Alice"}} = TestRepo.insert_or_update(cs, [])
     end
@@ -810,13 +810,13 @@ defmodule DoubleDown.Repo.StubTest do
 
   describe "insert_or_update!" do
     test "returns struct on success" do
-      DoubleDown.Double.stub(Repo, Repo.Stub.new())
+      DoubleDown.Double.fallback(Repo, Repo.Stub.new())
       cs = User.changeset(%{name: "Alice"})
       assert %User{name: "Alice"} = TestRepo.insert_or_update!(cs)
     end
 
     test "raises on invalid changeset" do
-      DoubleDown.Double.stub(Repo, Repo.Stub.new())
+      DoubleDown.Double.fallback(Repo, Repo.Stub.new())
       cs = User.changeset(%{}) |> Ecto.Changeset.add_error(:name, "required")
       cs = %{cs | valid?: false}
 
@@ -826,7 +826,7 @@ defmodule DoubleDown.Repo.StubTest do
     end
 
     test "opts-stripping variant works" do
-      DoubleDown.Double.stub(Repo, Repo.Stub.new())
+      DoubleDown.Double.fallback(Repo, Repo.Stub.new())
       cs = User.changeset(%{name: "Alice"})
       assert %User{name: "Alice"} = TestRepo.insert_or_update!(cs, [])
     end
@@ -838,12 +838,12 @@ defmodule DoubleDown.Repo.StubTest do
 
   describe "in_transaction?" do
     test "returns false outside transaction" do
-      DoubleDown.Double.stub(Repo, Repo.Stub.new())
+      DoubleDown.Double.fallback(Repo, Repo.Stub.new())
       refute TestRepo.in_transaction?()
     end
 
     test "returns true inside transaction" do
-      DoubleDown.Double.stub(Repo, Repo.Stub.new())
+      DoubleDown.Double.fallback(Repo, Repo.Stub.new())
 
       TestRepo.transact(
         fn _repo ->
@@ -923,19 +923,19 @@ defmodule DoubleDown.Repo.StubTest do
 
   describe "load" do
     test "loads a schema struct from keyword data" do
-      DoubleDown.Double.stub(Repo, Repo.Stub.new())
+      DoubleDown.Double.fallback(Repo, Repo.Stub.new())
       result = TestRepo.load(User, id: 1, name: "Alice")
       assert %User{id: 1, name: "Alice"} = result
     end
 
     test "loads a schema struct from map data" do
-      DoubleDown.Double.stub(Repo, Repo.Stub.new())
+      DoubleDown.Double.fallback(Repo, Repo.Stub.new())
       result = TestRepo.load(User, %{id: 1, name: "Alice"})
       assert %User{id: 1, name: "Alice"} = result
     end
 
     test "loads a schema struct from {fields, values} tuple" do
-      DoubleDown.Double.stub(Repo, Repo.Stub.new())
+      DoubleDown.Double.fallback(Repo, Repo.Stub.new())
       result = TestRepo.load(User, {[:id, :name], [1, "Alice"]})
       assert %User{id: 1, name: "Alice"} = result
     end
@@ -947,7 +947,7 @@ defmodule DoubleDown.Repo.StubTest do
 
   describe "preload" do
     test "delegates to fallback" do
-      DoubleDown.Double.stub(
+      DoubleDown.Double.fallback(
         Repo,
         Repo.Stub.new(fn _contract, :preload, [struct, [:posts]] ->
           %{struct | name: "preloaded"}
@@ -959,7 +959,7 @@ defmodule DoubleDown.Repo.StubTest do
     end
 
     test "raises without fallback" do
-      DoubleDown.Double.stub(Repo, Repo.Stub.new())
+      DoubleDown.Double.fallback(Repo, Repo.Stub.new())
 
       assert_raise ArgumentError, ~r/cannot service :preload/, fn ->
         TestRepo.preload(%User{id: 1}, [:posts])
@@ -967,7 +967,7 @@ defmodule DoubleDown.Repo.StubTest do
     end
 
     test "opts-stripping variant works" do
-      DoubleDown.Double.stub(
+      DoubleDown.Double.fallback(
         Repo,
         Repo.Stub.new(fn _contract, :preload, [struct, [:posts]] ->
           %{struct | name: "preloaded"}
@@ -981,7 +981,7 @@ defmodule DoubleDown.Repo.StubTest do
 
   describe "reload" do
     test "delegates to fallback" do
-      DoubleDown.Double.stub(
+      DoubleDown.Double.fallback(
         Repo,
         Repo.Stub.new(fn _contract, :reload, [%User{id: 1}] ->
           %User{id: 1, name: "Reloaded"}
@@ -992,7 +992,7 @@ defmodule DoubleDown.Repo.StubTest do
     end
 
     test "raises without fallback" do
-      DoubleDown.Double.stub(Repo, Repo.Stub.new())
+      DoubleDown.Double.fallback(Repo, Repo.Stub.new())
 
       assert_raise ArgumentError, ~r/cannot service :reload/, fn ->
         TestRepo.reload(%User{id: 1})
@@ -1000,7 +1000,7 @@ defmodule DoubleDown.Repo.StubTest do
     end
 
     test "opts-stripping variant works" do
-      DoubleDown.Double.stub(
+      DoubleDown.Double.fallback(
         Repo,
         Repo.Stub.new(fn _contract, :reload, [%User{id: 1}] ->
           %User{id: 1, name: "Reloaded"}
@@ -1013,7 +1013,7 @@ defmodule DoubleDown.Repo.StubTest do
 
   describe "reload!" do
     test "delegates to fallback" do
-      DoubleDown.Double.stub(
+      DoubleDown.Double.fallback(
         Repo,
         Repo.Stub.new(fn _contract, :reload!, [%User{id: 1}] ->
           %User{id: 1, name: "Reloaded"}
@@ -1024,7 +1024,7 @@ defmodule DoubleDown.Repo.StubTest do
     end
 
     test "raises without fallback" do
-      DoubleDown.Double.stub(Repo, Repo.Stub.new())
+      DoubleDown.Double.fallback(Repo, Repo.Stub.new())
 
       assert_raise ArgumentError, ~r/cannot service :reload!/, fn ->
         TestRepo.reload!(%User{id: 1})
@@ -1032,7 +1032,7 @@ defmodule DoubleDown.Repo.StubTest do
     end
 
     test "opts-stripping variant works" do
-      DoubleDown.Double.stub(
+      DoubleDown.Double.fallback(
         Repo,
         Repo.Stub.new(fn _contract, :reload!, [%User{id: 1}] ->
           %User{id: 1, name: "Reloaded"}
@@ -1045,7 +1045,7 @@ defmodule DoubleDown.Repo.StubTest do
 
   describe "all_by" do
     test "delegates to fallback" do
-      DoubleDown.Double.stub(
+      DoubleDown.Double.fallback(
         Repo,
         Repo.Stub.new(fn _contract, :all_by, [User, [name: "Alice"]] ->
           [%User{id: 1, name: "Alice"}]
@@ -1056,7 +1056,7 @@ defmodule DoubleDown.Repo.StubTest do
     end
 
     test "raises without fallback" do
-      DoubleDown.Double.stub(Repo, Repo.Stub.new())
+      DoubleDown.Double.fallback(Repo, Repo.Stub.new())
 
       assert_raise ArgumentError, ~r/cannot service :all_by/, fn ->
         TestRepo.all_by(User, name: "Alice")
@@ -1064,7 +1064,7 @@ defmodule DoubleDown.Repo.StubTest do
     end
 
     test "opts-stripping variant works" do
-      DoubleDown.Double.stub(
+      DoubleDown.Double.fallback(
         Repo,
         Repo.Stub.new(fn _contract, :all_by, [User, [name: "Alice"]] ->
           [%User{id: 1, name: "Alice"}]
@@ -1081,7 +1081,7 @@ defmodule DoubleDown.Repo.StubTest do
 
   describe "stream" do
     test "delegates to fallback" do
-      DoubleDown.Double.stub(
+      DoubleDown.Double.fallback(
         Repo,
         Repo.Stub.new(fn _contract, :stream, [User] ->
           Stream.map([%User{id: 1, name: "Alice"}], & &1)
@@ -1093,7 +1093,7 @@ defmodule DoubleDown.Repo.StubTest do
     end
 
     test "raises without fallback" do
-      DoubleDown.Double.stub(Repo, Repo.Stub.new())
+      DoubleDown.Double.fallback(Repo, Repo.Stub.new())
 
       assert_raise ArgumentError, ~r/cannot service :stream/, fn ->
         TestRepo.stream(User)
@@ -1101,7 +1101,7 @@ defmodule DoubleDown.Repo.StubTest do
     end
 
     test "opts-stripping variant works" do
-      DoubleDown.Double.stub(
+      DoubleDown.Double.fallback(
         Repo,
         Repo.Stub.new(fn _contract, :stream, [User] ->
           Stream.map([%User{id: 1, name: "Alice"}], & &1)

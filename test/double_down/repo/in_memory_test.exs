@@ -360,7 +360,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
 
   describe "insert_or_update" do
     setup do
-      DoubleDown.Double.fake(DoubleDown.Repo, InMemory)
+      DoubleDown.Double.fallback(DoubleDown.Repo, InMemory)
       :ok
     end
 
@@ -401,7 +401,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
 
   describe "insert_or_update!" do
     setup do
-      DoubleDown.Double.fake(DoubleDown.Repo, InMemory)
+      DoubleDown.Double.fallback(DoubleDown.Repo, InMemory)
       :ok
     end
 
@@ -562,7 +562,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
 
   describe "load" do
     setup do
-      DoubleDown.Double.fake(DoubleDown.Repo, InMemory)
+      DoubleDown.Double.fallback(DoubleDown.Repo, InMemory)
       :ok
     end
 
@@ -588,7 +588,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
 
   describe "reload (closed-world)" do
     setup do
-      DoubleDown.Double.fake(DoubleDown.Repo, InMemory)
+      DoubleDown.Double.fallback(DoubleDown.Repo, InMemory)
       :ok
     end
 
@@ -632,7 +632,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
 
   describe "reload! (closed-world)" do
     setup do
-      DoubleDown.Double.fake(DoubleDown.Repo, InMemory)
+      DoubleDown.Double.fallback(DoubleDown.Repo, InMemory)
       :ok
     end
 
@@ -1024,9 +1024,9 @@ defmodule DoubleDown.Repo.InMemoryTest do
   # Integration with Double API
   # -------------------------------------------------------------------
 
-  describe "Double.fake integration" do
-    test "works with Double.fake/2" do
-      DoubleDown.Double.fake(DoubleDown.Repo, InMemory)
+  describe "Double.fallback integration" do
+    test "works with Double.fallback/2" do
+      DoubleDown.Double.fallback(DoubleDown.Repo, InMemory)
 
       cs = User.changeset(%{name: "Alice", email: "alice@example.com"})
       assert {:ok, user} = DoubleDown.Test.Repo.insert(cs)
@@ -1036,8 +1036,8 @@ defmodule DoubleDown.Repo.InMemoryTest do
       assert [^user] = DoubleDown.Test.Repo.all(User)
     end
 
-    test "works with Double.fake/3 and seed data" do
-      DoubleDown.Double.fake(DoubleDown.Repo, InMemory, [
+    test "works with Double.fallback/3 and seed data" do
+      DoubleDown.Double.fallback(DoubleDown.Repo, InMemory, [
         %User{id: 1, name: "Alice"},
         %User{id: 2, name: "Bob"}
       ])
@@ -1048,7 +1048,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
     end
 
     test "insert! bare struct through facade backfills FK" do
-      DoubleDown.Double.fake(DoubleDown.Repo, InMemory)
+      DoubleDown.Double.fallback(DoubleDown.Repo, InMemory)
 
       org = DoubleDown.Test.Repo.insert!(%Organisation{name: "Acme"})
 
@@ -1064,7 +1064,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
     end
 
     test "layering expects over InMemory" do
-      DoubleDown.Double.fake(DoubleDown.Repo, InMemory)
+      DoubleDown.Double.fallback(DoubleDown.Repo, InMemory)
 
       # First insert succeeds
       DoubleDown.Double.expect(DoubleDown.Repo, :insert, :passthrough)
@@ -1104,7 +1104,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
 
   describe "transaction rollback restores state" do
     setup do
-      DoubleDown.Double.fake(DoubleDown.Repo, InMemory)
+      DoubleDown.Double.fallback(DoubleDown.Repo, InMemory)
       :ok
     end
 
@@ -1229,7 +1229,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
 
     test "cross-contract isolation — rollback only affects Repo state" do
       # Set up a second contract with its own state
-      DoubleDown.Double.fake(
+      DoubleDown.Double.fallback(
         DoubleDown.Test.Greeter,
         fn
           _contract, _op, _args, state -> {"hello", state}
@@ -1327,7 +1327,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
 
   describe "in_transaction?" do
     setup do
-      DoubleDown.Double.fake(DoubleDown.Repo, InMemory)
+      DoubleDown.Double.fallback(DoubleDown.Repo, InMemory)
       :ok
     end
 
@@ -1352,7 +1352,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
 
   describe "transaction (alias for transact)" do
     setup do
-      DoubleDown.Double.fake(DoubleDown.Repo, InMemory)
+      DoubleDown.Double.fallback(DoubleDown.Repo, InMemory)
       :ok
     end
 
@@ -1403,7 +1403,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
 
   describe "Ecto.Multi bulk operations" do
     setup do
-      DoubleDown.Double.fake(DoubleDown.Repo, InMemory)
+      DoubleDown.Double.fallback(DoubleDown.Repo, InMemory)
       :ok
     end
 
@@ -1462,7 +1462,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
 
   describe "@primary_key false schemas" do
     setup do
-      DoubleDown.Double.fake(DoubleDown.Repo, InMemory)
+      DoubleDown.Double.fallback(DoubleDown.Repo, InMemory)
       :ok
     end
 

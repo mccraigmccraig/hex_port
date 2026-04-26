@@ -107,7 +107,7 @@ defmodule DoubleDown.DoubleTest do
 
     test "stub can return passthrough() to delegate to fallback" do
       Counter
-      |> Double.fake(
+      |> Double.fallback(
         fn
           _contract, :increment, [n], count -> {count + n, count + n}
           _contract, :get_count, [], count -> {count, count}
@@ -131,39 +131,39 @@ defmodule DoubleDown.DoubleTest do
     end
   end
 
-  # ── StatelessHandler module-based stub ──────────────────────────
+  # ── StatelessHandler module-based fallback ──────────────────────────
 
-  describe "StatelessHandler module-based stub" do
+  describe "StatelessHandler module-based fallback" do
     alias DoubleDown.Repo
     alias DoubleDown.Test.Repo, as: TestRepo
     alias DoubleDown.Test.SimpleUser
 
-    test "stub/2 with StatelessHandler module — writes only" do
-      Double.stub(Repo, Repo.Stub)
+    test "fallback/2 with StatelessHandler module — writes only" do
+      Double.fallback(Repo, Repo.Stub)
 
       {:ok, user} = TestRepo.insert(SimpleUser.changeset(%{name: "Alice"}))
       assert %SimpleUser{name: "Alice"} = user
     end
 
-    test "stub/2 with StatelessHandler — reads raise without fallback" do
-      Double.stub(Repo, Repo.Stub)
+    test "fallback/2 with StatelessHandler — reads raise without fallback" do
+      Double.fallback(Repo, Repo.Stub)
 
       assert_raise ArgumentError, ~r/cannot service :all/, fn ->
         TestRepo.all(SimpleUser)
       end
     end
 
-    test "stub/3 with StatelessHandler module and fallback_fn" do
-      Double.stub(Repo, Repo.Stub, fn _contract, :all, [SimpleUser] ->
+    test "fallback/3 with StatelessHandler module and fallback_fn" do
+      Double.fallback(Repo, Repo.Stub, fn _contract, :all, [SimpleUser] ->
         [%SimpleUser{id: 1, name: "Alice"}]
       end)
 
       assert [%SimpleUser{name: "Alice"}] = TestRepo.all(SimpleUser)
     end
 
-    test "stub/3 with StatelessHandler supports expects" do
+    test "fallback/3 with StatelessHandler supports expects" do
       Repo
-      |> Double.stub(Repo.Stub)
+      |> Double.fallback(Repo.Stub)
       |> Double.expect(:insert, fn [_changeset] -> {:error, :conflict} end)
 
       assert {:error, :conflict} = TestRepo.insert(SimpleUser.changeset(%{name: "Bob"}))
@@ -172,14 +172,15 @@ defmodule DoubleDown.DoubleTest do
                TestRepo.insert(SimpleUser.changeset(%{name: "Bob"}))
     end
 
-    test "stub/2 with non-StatelessHandler module raises" do
-      assert_raise ArgumentError, ~r/does not implement.*StatelessHandler/, fn ->
-        Double.stub(Greeter, Greeter.Impl)
-      end
+    test "fallback/2 with non-StatelessHandler behaviour module uses module fallback" do
+      # Greeter.Impl implements the Greeter behaviour but NOT StatelessHandler
+      # — fallback/2 treats it as a module fallback
+      Double.fallback(Greeter, Greeter.Impl)
+      assert "Hello, Alice!" = Greeter.Port.greet("Alice")
     end
 
     test "returns contract module for piping" do
-      result = Double.stub(Repo, Repo.Stub)
+      result = Double.fallback(Repo, Repo.Stub)
       assert result == Repo
     end
 
@@ -189,14 +190,14 @@ defmodule DoubleDown.DoubleTest do
     end
   end
 
-  describe "stub/2 function fallback" do
+  describe "fallback/2 function fallback" do
     test "returns contract module for piping" do
-      result = Double.stub(Greeter, fn _contract, _op, _args -> :fallback end)
+      result = Double.fallback(Greeter, fn _contract, _op, _args -> :fallback end)
       assert result == Greeter
     end
 
     test "handles operations without specific stubs" do
-      Double.stub(Greeter, fn _contract, operation, args ->
+      Double.fallback(Greeter, fn _contract, operation, args ->
         case {operation, args} do
           {:greet, [name]} -> "fallback: #{name}"
           {:fetch_greeting, [name]} -> {:ok, "fallback: #{name}"}
@@ -210,14 +211,14 @@ defmodule DoubleDown.DoubleTest do
     test "per-op stub takes priority over fallback" do
       Greeter
       |> Double.stub(:greet, fn [name] -> "per-op: #{name}" end)
-      |> Double.stub(fn _contract, _op, [name] -> "fallback: #{name}" end)
+      |> Double.fallback(fn _contract, _op, [name] -> "fallback: #{name}" end)
 
       assert "per-op: Alice" = Greeter.Port.greet("Alice")
     end
 
     test "expects take priority over fallback" do
       Greeter
-      |> Double.stub(fn _contract, _op, [name] -> "fallback: #{name}" end)
+      |> Double.fallback(fn _contract, _op, [name] -> "fallback: #{name}" end)
       |> Double.expect(:greet, fn [_] -> "expected" end)
 
       assert "expected" = Greeter.Port.greet("Alice")
@@ -225,7 +226,7 @@ defmodule DoubleDown.DoubleTest do
     end
 
     test "FunctionClauseError in fallback raises descriptive error" do
-      Double.stub(Greeter, fn
+      Double.fallback(Greeter, fn
         _contract, :greet, [name] -> "only greet: #{name}"
       end)
 
@@ -244,21 +245,21 @@ defmodule DoubleDown.DoubleTest do
         end
       end
 
-      Double.stub(Greeter, handler_fn)
+      Double.fallback(Greeter, handler_fn)
 
       assert "handler: Alice" = Greeter.Port.greet("Alice")
       assert {:ok, "handler: Bob"} = Greeter.Port.fetch_greeting("Bob")
     end
   end
 
-  describe "fake/2 module fake" do
+  describe "fallback/2 module fallback" do
     test "returns contract module for piping" do
-      result = Double.fake(Greeter, Greeter.Impl)
+      result = Double.fallback(Greeter, Greeter.Impl)
       assert result == Greeter
     end
 
     test "delegates to module" do
-      Double.fake(Greeter, Greeter.Impl)
+      Double.fallback(Greeter, Greeter.Impl)
 
       assert "Hello, Alice!" = Greeter.Port.greet("Alice")
       assert {:ok, "Hello, Bob!"} = Greeter.Port.fetch_greeting("Bob")
@@ -266,7 +267,7 @@ defmodule DoubleDown.DoubleTest do
 
     test "expects take priority" do
       Greeter
-      |> Double.fake(Greeter.Impl)
+      |> Double.fallback(Greeter.Impl)
       |> Double.expect(:greet, fn [_] -> "expected" end)
 
       assert "expected" = Greeter.Port.greet("Alice")
@@ -275,14 +276,14 @@ defmodule DoubleDown.DoubleTest do
 
     test "per-op stubs take priority" do
       Greeter
-      |> Double.fake(Greeter.Impl)
+      |> Double.fallback(Greeter.Impl)
       |> Double.stub(:greet, fn [name] -> "stubbed: #{name}" end)
 
       assert "stubbed: Alice" = Greeter.Port.greet("Alice")
       assert {:ok, "Hello, Bob!"} = Greeter.Port.fetch_greeting("Bob")
     end
 
-    test "module fake runs in the calling process, not the NimbleOwnership GenServer" do
+    test "module fallback runs in the calling process, not the NimbleOwnership GenServer" do
       # This is critical for Ecto sandbox compatibility — the module's
       # functions must run in the test process (which has a sandbox checkout),
       # not in the NimbleOwnership GenServer process.
@@ -298,36 +299,36 @@ defmodule DoubleDown.DoubleTest do
         def fetch_greeting(_name), do: {:ok, self()}
       end
 
-      Double.fake(Greeter, PidCapturingImpl)
+      Double.fallback(Greeter, PidCapturingImpl)
 
       caller_pid = Greeter.Port.greet("Alice")
       assert caller_pid == test_pid
       refute caller_pid == GenServer.whereis(DoubleDown.Contract.Dispatch.Ownership)
     end
 
-    test "validates module at stub time — not loaded" do
+    test "validates module at fallback time — not loaded" do
       assert_raise ArgumentError, ~r/not loaded/, fn ->
-        Double.fake(Greeter, DoesNotExist.Module)
+        Double.fallback(Greeter, DoesNotExist.Module)
       end
     end
 
-    test "validates module at stub time — missing functions" do
+    test "validates module at fallback time — missing functions" do
       assert_raise ArgumentError, ~r/missing functions/, fn ->
-        Double.fake(Greeter, String)
+        Double.fallback(Greeter, String)
       end
     end
   end
 
-  describe "fake/3 stateful fake" do
+  describe "fallback/3 stateful fallback" do
     test "returns contract module for piping" do
       result =
-        Double.fake(Counter, fn _contract, _op, _args, state -> {:ok, state} end, 0)
+        Double.fallback(Counter, fn _contract, _op, _args, state -> {:ok, state} end, 0)
 
       assert result == Counter
     end
 
     test "handles operations with state threading" do
-      Double.fake(
+      Double.fallback(
         Counter,
         fn
           _contract, :increment, [n], count -> {count + n, count + n}
@@ -343,7 +344,7 @@ defmodule DoubleDown.DoubleTest do
 
     test "expects take priority, fallback state unchanged on expect" do
       Counter
-      |> Double.fake(
+      |> Double.fallback(
         fn
           _contract, :increment, [n], count -> {count + n, count + n}
           _contract, :get_count, [], count -> {count, count}
@@ -361,7 +362,7 @@ defmodule DoubleDown.DoubleTest do
 
     test "error simulation — expect short-circuits before fallback" do
       Counter
-      |> Double.fake(
+      |> Double.fallback(
         fn
           _contract, :increment, [n], count -> {count + n, count + n}
           _contract, :get_count, [], count -> {count, count}
@@ -377,7 +378,7 @@ defmodule DoubleDown.DoubleTest do
 
     test "full priority chain: expects > per-op stubs > stateful fallback" do
       Counter
-      |> Double.fake(
+      |> Double.fallback(
         fn
           _contract, :increment, [n], count -> {count + n, count + n}
           _contract, :get_count, [], count -> {count, count}
@@ -393,7 +394,7 @@ defmodule DoubleDown.DoubleTest do
     end
 
     test "FunctionClauseError in stateful fallback raises" do
-      Double.fake(
+      Double.fallback(
         Counter,
         fn _contract, :increment, [n], count -> {count + n, count + n} end,
         0
@@ -407,7 +408,7 @@ defmodule DoubleDown.DoubleTest do
     end
 
     test "stateful fallback returning bare value raises descriptive error" do
-      Double.fake(
+      Double.fallback(
         Counter,
         fn _contract, :increment, [_n], _count -> 42 end,
         0
@@ -419,19 +420,19 @@ defmodule DoubleDown.DoubleTest do
     end
   end
 
-  # ── fake/3 with 4-arity stateful fake ──────────────────────
+  # ── fallback/3 with 4-arity stateful fallback ──────────────────────
 
-  describe "fake/3 with 4-arity stateful fake (cross-contract state)" do
-    test "5-arity stateful fake receives global state" do
+  describe "fallback/3 with 4-arity stateful fallback (cross-contract state)" do
+    test "5-arity stateful fallback receives global state" do
       # Set up Greeter with a 4-arity stateful handler (another contract's state)
-      Double.fake(
+      Double.fallback(
         Greeter,
         fn _contract, :greet, [name], state -> {"Hello #{name}", state} end,
         %{greeting_count: 0}
       )
 
-      # Set up Counter with a 5-arity fake that reads Greeter's state
-      Double.fake(
+      # Set up Counter with a 5-arity fallback that reads Greeter's state
+      Double.fallback(
         Counter,
         fn _contract, :get_count, [], state, all_states ->
           greeter_state = Map.get(all_states, Greeter)
@@ -440,13 +441,13 @@ defmodule DoubleDown.DoubleTest do
         %{}
       )
 
-      # The 4-arity fake can see Greeter's state
+      # The 4-arity fallback can see Greeter's state
       result = Counter.Port.get_count()
       assert result == %{greeting_count: 0}
     end
 
-    test "5-arity stateful fake with expects takes priority" do
-      Double.fake(
+    test "5-arity stateful fallback with expects takes priority" do
+      Double.fallback(
         Counter,
         fn
           _contract, :increment, [n], count, _all_states -> {count + n, count + n}
@@ -463,10 +464,10 @@ defmodule DoubleDown.DoubleTest do
       assert 3 = Counter.Port.get_count()
     end
 
-    test "4-arity fake still works when canonical handler is 5-arity" do
+    test "4-arity fallback still works when canonical handler is 5-arity" do
       # This verifies backward compatibility — the canonical handler is
-      # always registered as 5-arity, but 4-arity fakes still work
-      Double.fake(
+      # always registered as 5-arity, but 4-arity fallbacks still work
+      Double.fallback(
         Counter,
         fn
           _contract, :increment, [n], count -> {count + n, count + n}
@@ -479,8 +480,8 @@ defmodule DoubleDown.DoubleTest do
       assert 5 = Counter.Port.get_count()
     end
 
-    test "passthrough with 5-arity fake threads state correctly" do
-      Double.fake(
+    test "passthrough with 5-arity fallback threads state correctly" do
+      Double.fallback(
         Counter,
         fn
           _contract, :increment, [n], count, _all_states -> {count + n, count + n}
@@ -490,7 +491,7 @@ defmodule DoubleDown.DoubleTest do
       )
       |> Double.expect(:increment, :passthrough)
 
-      # Passthrough delegates to 4-arity fake
+      # Passthrough delegates to 4-arity fallback
       assert 5 = Counter.Port.increment(5)
       assert 5 = Counter.Port.get_count()
     end
@@ -501,7 +502,7 @@ defmodule DoubleDown.DoubleTest do
   describe "per-operation fakes" do
     test "2-arity per-op fake receives and updates fallback state" do
       Counter
-      |> Double.fake(
+      |> Double.fallback(
         fn
           _contract, :increment, [n], count -> {count + n, count + n}
           _contract, :get_count, [], count -> {count, count}
@@ -520,13 +521,13 @@ defmodule DoubleDown.DoubleTest do
 
     test "3-arity per-op fake receives all_states" do
       Greeter
-      |> Double.fake(
+      |> Double.fallback(
         fn _contract, :greet, [name], state -> {"Hello #{name}", state} end,
         %{greeted: []}
       )
 
       Counter
-      |> Double.fake(
+      |> Double.fallback(
         fn _contract, :get_count, [], count -> {count, count} end,
         0
       )
@@ -540,7 +541,7 @@ defmodule DoubleDown.DoubleTest do
 
     test "per-op fake can return passthrough()" do
       Counter
-      |> Double.fake(
+      |> Double.fallback(
         fn
           _contract, :increment, [n], count -> {count + n, count + n}
           _contract, :get_count, [], count -> {count, count}
@@ -564,7 +565,7 @@ defmodule DoubleDown.DoubleTest do
 
     test "replacing per-op fake overwrites previous" do
       Counter
-      |> Double.fake(
+      |> Double.fallback(
         fn
           _contract, :increment, [n], count -> {count + n, count + n}
           _contract, :get_count, [], count -> {count, count}
@@ -587,7 +588,7 @@ defmodule DoubleDown.DoubleTest do
 
     test "raises at dispatch time if per-op fake returns bare value" do
       Counter
-      |> Double.fake(
+      |> Double.fallback(
         fn _contract, :increment, [n], count -> {count + n, count + n} end,
         0
       )
@@ -600,7 +601,7 @@ defmodule DoubleDown.DoubleTest do
 
     test "expects take priority over per-op fakes" do
       Counter
-      |> Double.fake(
+      |> Double.fallback(
         fn
           _contract, :increment, [n], count -> {count + n, count + n}
           _contract, :get_count, [], count -> {count, count}
@@ -618,7 +619,7 @@ defmodule DoubleDown.DoubleTest do
 
     test "per-op fakes take priority over per-op stubs" do
       Counter
-      |> Double.fake(
+      |> Double.fallback(
         fn
           _contract, :increment, [n], count -> {count + n, count + n}
           _contract, :get_count, [], count -> {count, count}
@@ -632,38 +633,38 @@ defmodule DoubleDown.DoubleTest do
     end
   end
 
-  # ── StatefulHandler module-based fake ──────────────────────────
+  # ── StatefulHandler module-based fallback ──────────────────────────
 
-  describe "StatefulHandler module-based fake" do
+  describe "StatefulHandler module-based fallback" do
     alias DoubleDown.Repo
     alias DoubleDown.Test.Repo, as: TestRepo
     alias DoubleDown.Test.SimpleUser
 
-    test "fake/2 with StatefulHandler module uses default state" do
-      Double.fake(Repo, Repo.OpenInMemory)
+    test "fallback/2 with StatefulHandler module uses default state" do
+      Double.fallback(Repo, Repo.OpenInMemory)
 
       {:ok, user} = TestRepo.insert(SimpleUser.changeset(%{name: "Alice"}))
       assert %SimpleUser{name: "Alice"} = TestRepo.get(SimpleUser, user.id)
     end
 
-    test "fake/3 with StatefulHandler module passes seed as list" do
+    test "fallback/3 with StatefulHandler module passes seed as list" do
       alice = %SimpleUser{id: 1, name: "Alice"}
-      Double.fake(Repo, Repo.OpenInMemory, [alice])
+      Double.fallback(Repo, Repo.OpenInMemory, [alice])
 
       assert %SimpleUser{name: "Alice"} = TestRepo.get(SimpleUser, 1)
     end
 
-    test "fake/3 with StatefulHandler module passes seed as map" do
+    test "fallback/3 with StatefulHandler module passes seed as map" do
       alice = %SimpleUser{id: 1, name: "Alice"}
-      Double.fake(Repo, Repo.OpenInMemory, %{SimpleUser => %{1 => alice}})
+      Double.fallback(Repo, Repo.OpenInMemory, %{SimpleUser => %{1 => alice}})
 
       assert %SimpleUser{name: "Alice"} = TestRepo.get(SimpleUser, 1)
     end
 
-    test "fake/4 passes seed and opts to new/2" do
+    test "fallback/4 passes seed and opts to new/2" do
       alice = %SimpleUser{id: 1, name: "Alice"}
 
-      Double.fake(Repo, Repo.OpenInMemory, [alice],
+      Double.fallback(Repo, Repo.OpenInMemory, [alice],
         fallback_fn: fn _contract, :all, [SimpleUser], state ->
           state |> Map.get(SimpleUser, %{}) |> Map.values()
         end
@@ -673,8 +674,8 @@ defmodule DoubleDown.DoubleTest do
       assert [%SimpleUser{name: "Alice"}] = TestRepo.all(SimpleUser)
     end
 
-    test "StatefulHandler fake supports expects" do
-      Double.fake(Repo, Repo.OpenInMemory)
+    test "StatefulHandler fallback supports expects" do
+      Double.fallback(Repo, Repo.OpenInMemory)
       |> Double.expect(:insert, fn [_changeset] ->
         {:error, :conflict}
       end)
@@ -686,21 +687,21 @@ defmodule DoubleDown.DoubleTest do
                TestRepo.insert(SimpleUser.changeset(%{name: "Bob"}))
     end
 
-    test "fake/2 with non-StatefulHandler module uses module fake" do
-      # Greeter.Impl doesn't implement StatefulHandler — should be module fake
-      Double.fake(Greeter, Greeter.Impl)
+    test "fallback/2 with non-StatefulHandler module uses module fallback" do
+      # Greeter.Impl doesn't implement StatefulHandler — should be module fallback
+      Double.fallback(Greeter, Greeter.Impl)
 
       assert "Hello, Alice!" = Greeter.Port.greet("Alice")
     end
 
-    test "raises for fake/3 with non-StatefulHandler module" do
-      assert_raise ArgumentError, ~r/does not implement.*StatefulHandler/, fn ->
-        Double.fake(Greeter, Greeter.Impl, %{})
+    test "raises for fallback/3 with non-StatefulHandler module" do
+      assert_raise ArgumentError, ~r/not a StatefulHandler or StatelessHandler/, fn ->
+        Double.fallback(Greeter, Greeter.Impl, %{})
       end
     end
 
     test "returns contract module for piping" do
-      result = Double.fake(Repo, Repo.OpenInMemory)
+      result = Double.fallback(Repo, Repo.OpenInMemory)
       assert result == Repo
     end
   end
@@ -710,16 +711,16 @@ defmodule DoubleDown.DoubleTest do
   describe "fallback mutual exclusivity" do
     test "module replaces fn fallback" do
       Greeter
-      |> Double.stub(fn _contract, _op, _args -> :fn_fallback end)
-      |> Double.fake(Greeter.Impl)
+      |> Double.fallback(fn _contract, _op, _args -> :fn_fallback end)
+      |> Double.fallback(Greeter.Impl)
 
       assert "Hello, Alice!" = Greeter.Port.greet("Alice")
     end
 
     test "fn replaces module fallback" do
       Greeter
-      |> Double.fake(Greeter.Impl)
-      |> Double.stub(fn _contract, :greet, [name] -> "fn: #{name}" end)
+      |> Double.fallback(Greeter.Impl)
+      |> Double.fallback(fn _contract, :greet, [name] -> "fn: #{name}" end)
 
       assert "fn: Alice" = Greeter.Port.greet("Alice")
     end
@@ -730,7 +731,7 @@ defmodule DoubleDown.DoubleTest do
   describe "stateful expect responders" do
     test "2-arity expect receives and updates fallback state" do
       Counter
-      |> Double.fake(
+      |> Double.fallback(
         fn
           _contract, :increment, [n], count -> {count + n, count + n}
           _contract, :get_count, [], count -> {count, count}
@@ -751,13 +752,13 @@ defmodule DoubleDown.DoubleTest do
 
     test "3-arity expect receives fallback state and all_states" do
       Greeter
-      |> Double.fake(
+      |> Double.fallback(
         fn _contract, :greet, [name], state -> {"Hello #{name}", state} end,
         %{greeted: []}
       )
 
       Counter
-      |> Double.fake(
+      |> Double.fallback(
         fn
           _contract, :increment, [_n], count -> {count, count}
           _contract, :get_count, [], count -> {count, count}
@@ -775,7 +776,7 @@ defmodule DoubleDown.DoubleTest do
 
     test "stateful expects thread state through sequenced calls" do
       Counter
-      |> Double.fake(
+      |> Double.fallback(
         fn
           _contract, :increment, [n], count -> {count + n, count + n}
           _contract, :get_count, [], count -> {count, count}
@@ -796,7 +797,7 @@ defmodule DoubleDown.DoubleTest do
       assert 35 = Counter.Port.get_count()
     end
 
-    test "raises at expect time if no stateful fake configured — 2-arity" do
+    test "raises at expect time if no stateful fallback configured — 2-arity" do
       Double.stub(Counter, :get_count, fn [] -> 0 end)
 
       assert_raise ArgumentError, ~r/no stateful fake is configured/, fn ->
@@ -806,7 +807,7 @@ defmodule DoubleDown.DoubleTest do
       end
     end
 
-    test "raises at expect time if no stateful fake configured — 3-arity" do
+    test "raises at expect time if no stateful fallback configured — 3-arity" do
       Double.stub(Counter, :get_count, fn [] -> 0 end)
 
       assert_raise ArgumentError, ~r/no stateful fake is configured/, fn ->
@@ -818,7 +819,7 @@ defmodule DoubleDown.DoubleTest do
 
     test "raises at dispatch time if 2-arity responder returns bare value" do
       Counter
-      |> Double.fake(
+      |> Double.fallback(
         fn _contract, :increment, [n], count -> {count + n, count + n} end,
         0
       )
@@ -834,7 +835,7 @@ defmodule DoubleDown.DoubleTest do
 
     test "raises at dispatch time if 3-arity responder returns bare value" do
       Counter
-      |> Double.fake(
+      |> Double.fallback(
         fn _contract, :increment, [n], count -> {count + n, count + n} end,
         0
       )
@@ -847,9 +848,9 @@ defmodule DoubleDown.DoubleTest do
       end
     end
 
-    test "1-arity expects still work unchanged with stateful fake" do
+    test "1-arity expects still work unchanged with stateful fallback" do
       Counter
-      |> Double.fake(
+      |> Double.fallback(
         fn
           _contract, :increment, [n], count -> {count + n, count + n}
           _contract, :get_count, [], count -> {count, count}
@@ -868,9 +869,9 @@ defmodule DoubleDown.DoubleTest do
   # ── Double.passthrough() from expect responders ────────────
 
   describe "Double.passthrough() from expect responders" do
-    test "1-arity responder returning passthrough() delegates to stateful fake" do
+    test "1-arity responder returning passthrough() delegates to stateful fallback" do
       Counter
-      |> Double.fake(
+      |> Double.fallback(
         fn
           _contract, :increment, [n], count -> {count + n, count + n}
           _contract, :get_count, [], count -> {count, count}
@@ -881,14 +882,14 @@ defmodule DoubleDown.DoubleTest do
         Double.passthrough()
       end)
 
-      # Passthrough to fake — increments normally
+      # Passthrough to fallback — increments normally
       assert 5 = Counter.Port.increment(5)
       assert 5 = Counter.Port.get_count()
     end
 
     test "2-arity responder returning passthrough() delegates, state unchanged" do
       Counter
-      |> Double.fake(
+      |> Double.fallback(
         fn
           _contract, :increment, [n], count -> {count + n, count + n}
           _contract, :get_count, [], count -> {count, count}
@@ -899,14 +900,14 @@ defmodule DoubleDown.DoubleTest do
         Double.passthrough()
       end)
 
-      # Passthrough to fake — state managed by fake, not the expect
+      # Passthrough to fallback — state managed by fallback, not the expect
       assert 5 = Counter.Port.increment(5)
       assert 5 = Counter.Port.get_count()
     end
 
     test "3-arity responder returning passthrough() delegates, state unchanged" do
       Counter
-      |> Double.fake(
+      |> Double.fallback(
         fn
           _contract, :increment, [n], count -> {count + n, count + n}
           _contract, :get_count, [], count -> {count, count}
@@ -923,7 +924,7 @@ defmodule DoubleDown.DoubleTest do
 
     test "conditional passthrough — handle or delegate based on state" do
       Counter
-      |> Double.fake(
+      |> Double.fallback(
         fn
           _contract, :increment, [n], count -> {count + n, count + n}
           _contract, :get_count, [], count -> {count, count}
@@ -935,19 +936,19 @@ defmodule DoubleDown.DoubleTest do
           # Over threshold — return error
           {{:error, :overflow}, count}
         else
-          # Under threshold — let fake handle it
+          # Under threshold — let fallback handle it
           Double.passthrough()
         end
       end)
 
-      # First call: count is 0, passthrough to fake, count becomes 5
+      # First call: count is 0, passthrough to fallback, count becomes 5
       assert 5 = Counter.Port.increment(5)
       assert 5 = Counter.Port.get_count()
     end
 
     test "passthrough() expect is consumed for verify! counting" do
       Counter
-      |> Double.fake(
+      |> Double.fallback(
         fn
           _contract, :increment, [n], count -> {count + n, count + n}
           _contract, :get_count, [], count -> {count, count}
@@ -964,9 +965,9 @@ defmodule DoubleDown.DoubleTest do
       Double.verify!()
     end
 
-    test "passthrough() works with module fake" do
+    test "passthrough() works with module fallback" do
       Greeter
-      |> Double.fake(Greeter.Impl)
+      |> Double.fallback(Greeter.Impl)
       |> Double.expect(:greet, fn [_name] ->
         Double.passthrough()
       end)
@@ -977,7 +978,7 @@ defmodule DoubleDown.DoubleTest do
 
     test "passthrough() works with fn fallback" do
       Greeter
-      |> Double.stub(fn _contract, :greet, [name] -> "stub: #{name}" end)
+      |> Double.fallback(fn _contract, :greet, [name] -> "stub: #{name}" end)
       |> Double.expect(:greet, fn [_name] ->
         Double.passthrough()
       end)
@@ -1029,7 +1030,7 @@ defmodule DoubleDown.DoubleTest do
       end
     end
 
-    test "raises if Double.fake is called on a contract with a raw Testing handler" do
+    test "raises if Double.fallback is called on a contract with a raw Testing handler" do
       DoubleDown.Testing.set_stateful_handler(
         Greeter,
         fn _contract, :greet, [name], state -> {name, state} end,
@@ -1037,7 +1038,7 @@ defmodule DoubleDown.DoubleTest do
       )
 
       assert_raise ArgumentError, ~r/Cannot use Double API/, fn ->
-        Double.fake(Greeter, fn _contract, :greet, [name], state -> {name, state} end, %{})
+        Double.fallback(Greeter, fn _contract, :greet, [name], state -> {name, state} end, %{})
       end
     end
 
@@ -1075,7 +1076,7 @@ defmodule DoubleDown.DoubleTest do
   describe ":passthrough expects" do
     test "delegates to fn fallback" do
       Greeter
-      |> Double.stub(fn _contract, :greet, [name] -> "fallback: #{name}" end)
+      |> Double.fallback(fn _contract, :greet, [name] -> "fallback: #{name}" end)
       |> Double.expect(:greet, :passthrough)
 
       assert "fallback: Alice" = Greeter.Port.greet("Alice")
@@ -1084,7 +1085,7 @@ defmodule DoubleDown.DoubleTest do
 
     test "delegates to module fallback" do
       Greeter
-      |> Double.fake(Greeter.Impl)
+      |> Double.fallback(Greeter.Impl)
       |> Double.expect(:greet, :passthrough)
 
       assert "Hello, Alice!" = Greeter.Port.greet("Alice")
@@ -1093,7 +1094,7 @@ defmodule DoubleDown.DoubleTest do
 
     test "delegates to stateful fallback with state threading" do
       Counter
-      |> Double.fake(
+      |> Double.fallback(
         fn
           _contract, :increment, [n], count -> {count + n, count + n}
           _contract, :get_count, [], count -> {count, count}
@@ -1111,7 +1112,7 @@ defmodule DoubleDown.DoubleTest do
 
     test "with times: n" do
       Greeter
-      |> Double.fake(Greeter.Impl)
+      |> Double.fallback(Greeter.Impl)
       |> Double.expect(:greet, :passthrough, times: 3)
 
       assert "Hello, A!" = Greeter.Port.greet("A")
@@ -1122,7 +1123,7 @@ defmodule DoubleDown.DoubleTest do
 
     test "consumed for verify! counting" do
       Counter
-      |> Double.fake(
+      |> Double.fallback(
         fn
           _contract, :increment, [n], count -> {count + n, count + n}
           _contract, :get_count, [], count -> {count, count}
@@ -1148,7 +1149,7 @@ defmodule DoubleDown.DoubleTest do
 
     test "mixed passthrough and function expects" do
       Greeter
-      |> Double.fake(Greeter.Impl)
+      |> Double.fallback(Greeter.Impl)
       |> Double.expect(:greet, :passthrough)
       |> Double.expect(:greet, fn [_] -> "custom" end)
       |> Double.expect(:greet, :passthrough)
@@ -1328,7 +1329,7 @@ defmodule DoubleDown.DoubleTest do
 
     test "full priority chain with all layers" do
       Greeter
-      |> Double.fake(Greeter.Impl)
+      |> Double.fallback(Greeter.Impl)
       |> Double.stub(:fetch_greeting, fn [name] -> {:ok, "per-op: #{name}"} end)
       |> Double.expect(:greet, fn [_] -> "expected" end)
 

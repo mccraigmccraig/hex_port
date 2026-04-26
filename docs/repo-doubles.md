@@ -31,9 +31,9 @@ All three test doubles share these behaviours for write operations:
 
 The stateful fakes (`InMemory` and `OpenInMemory`) also support
 **seed data** — pre-populate the store by passing a list of structs
-as the third argument to `Double.fake`:
+as the third argument to `Double.fallback`:
 
-    DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory,
+    DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.InMemory,
       [%User{id: 1, name: "Alice"}, %Item{id: 1, sku: "widget"}])
 
 ## Repo.Stub
@@ -51,10 +51,10 @@ used by module name with `Double.stub`:
 
 ```elixir
 # Writes only — reads will raise with a suggestion:
-DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Stub)
+DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.Stub)
 
 # With fallback for reads:
-DoubleDown.Double.stub(DoubleDown.Repo, DoubleDown.Repo.Stub,
+DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.Stub,
   fn
     _contract, :get, [User, 1] -> %User{id: 1, name: "Alice"}
     _contract, :all, [User] -> [%User{id: 1, name: "Alice"}]
@@ -94,7 +94,7 @@ escape hatch for `Ecto.Query` queryables, not the default path.
 
 ```elixir
 setup do
-  DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory)
+  DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.InMemory)
   :ok
 end
 
@@ -112,7 +112,7 @@ The fallback function is available as an escape hatch for
 `Ecto.Query` queryables that cannot be evaluated in-memory:
 
 ```elixir
-DoubleDown.Double.fake(
+DoubleDown.Double.fallback(
   DoubleDown.Repo,
   DoubleDown.Repo.InMemory,
   [],
@@ -159,7 +159,7 @@ defmodule MyApp.SomeTest do
   import MyApp.Factory
 
   setup do
-    DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory)
+    DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.InMemory)
     :ok
   end
 
@@ -244,7 +244,7 @@ needed:
 
 ```elixir
 setup do
-  DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.OpenInMemory)
+  DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.OpenInMemory)
   :ok
 end
 
@@ -261,7 +261,7 @@ The fallback receives `(operation, args, state)` where `state` is
 the clean store map (internal keys stripped):
 
 ```elixir
-DoubleDown.Double.fake(
+DoubleDown.Double.fallback(
   DoubleDown.Repo,
   DoubleDown.Repo.OpenInMemory,
   [%User{id: 1, name: "Alice", email: "alice@example.com"}],

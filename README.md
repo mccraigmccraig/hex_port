@@ -171,11 +171,11 @@ defmodule MyApp.TodosTest do
 
   setup do
     # InMemory Repo — factory inserts land here
-    DoubleDown.Double.fake(DoubleDown.Repo, DoubleDown.Repo.InMemory)
+    DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.InMemory)
 
     # Domain model queries reading from the Repo's InMemory store
-    # via cross-contract state access (4-arity fake)
-    DoubleDown.Double.fake(MyApp.Todos.Model,
+    # via cross-contract state access (4-arity fallback)
+    DoubleDown.Double.fallback(MyApp.Todos.Model,
       fn operation, args, state, all_states ->
         repo = Map.get(all_states, DoubleDown.Repo, %{})
         todos = repo |> Map.get(Todo, %{}) |> Map.values()
