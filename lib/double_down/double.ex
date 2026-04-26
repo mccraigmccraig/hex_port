@@ -187,7 +187,8 @@ defmodule DoubleDown.Double do
     * `:times` — enqueue the same function `n` times (default 1).
       Equivalent to calling `expect` `n` times with the same function.
   """
-  @spec expect(module(), atom(), DoubleDown.Double.Types.expect_fun() | :passthrough, keyword()) :: module()
+  @spec expect(module(), atom(), DoubleDown.Double.Types.expect_fun() | :passthrough, keyword()) ::
+          module()
   def expect(contract, operation, fun_or_passthrough, opts \\ [])
 
   def expect(contract, operation, fun, opts)

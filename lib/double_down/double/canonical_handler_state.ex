@@ -113,7 +113,8 @@ defmodule DoubleDown.Double.CanonicalHandlerState do
   end
 
   @doc "Pop the next expect entry for an operation."
-  @spec pop_expect(t(), atom()) :: {:ok, DoubleDown.Double.Types.expect_fun() | :passthrough, t()} | :none
+  @spec pop_expect(t(), atom()) ::
+          {:ok, DoubleDown.Double.Types.expect_fun() | :passthrough, t()} | :none
   def pop_expect(%__MODULE__{expects: expects} = state, operation) do
     case Map.get(expects, operation, []) do
       [entry | rest] ->
