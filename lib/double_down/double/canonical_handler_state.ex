@@ -11,7 +11,7 @@ defmodule DoubleDown.Double.CanonicalHandlerState do
 
   * `contract` — the contract module this state belongs to (never nil)
   * `expects` — `%{operation => [fun | :passthrough]}` queued expectations
-  * `op_fakes` — `%{operation => fun}` per-operation stateful fake overrides
+  * `fakes` — `%{operation => fun}` per-operation stateful fake overrides
   * `stubs` — `%{operation => fun}` per-operation stateless stub functions
   * `fallback` — the fallback handler, one of:
     - `nil` — no fallback configured
@@ -26,7 +26,7 @@ defmodule DoubleDown.Double.CanonicalHandlerState do
   defstruct [
     :contract,
     expects: %{},
-    op_fakes: %{},
+    fakes: %{},
     stubs: %{},
     fallback: nil,
     fallback_state: nil
@@ -41,7 +41,7 @@ defmodule DoubleDown.Double.CanonicalHandlerState do
   @type t :: %__MODULE__{
           contract: module(),
           expects: %{atom() => [function() | :passthrough]},
-          op_fakes: %{atom() => function()},
+          fakes: %{atom() => function()},
           stubs: %{atom() => function()},
           fallback: fallback(),
           fallback_state: term()

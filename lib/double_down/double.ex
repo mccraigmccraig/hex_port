@@ -551,7 +551,7 @@ defmodule DoubleDown.Double do
     validate_stateful_fake_exists!(contract, operation, fun)
 
     update_handler_state(contract, fn state ->
-      %{state | op_fakes: Map.put(state.op_fakes, operation, fun)}
+      %{state | fakes: Map.put(state.fakes, operation, fun)}
     end)
 
     contract
@@ -790,7 +790,7 @@ defmodule DoubleDown.Double do
 
   # -- Internal: canonical handler fn --
 
-  # This single function handles all dispatch. It reads expects, op_fakes,
+  # This single function handles all dispatch. It reads expects, fakes,
   # stubs, and fallback config from state at dispatch time. Installed once
   # per contract via set_stateful_handler and never replaced — all changes
   # go through state mutations.
@@ -811,7 +811,7 @@ defmodule DoubleDown.Double do
         invoke_expect(fun, args, new_state, all_states, operation)
 
       :none ->
-        case Map.get(state.op_fakes, operation) do
+        case Map.get(state.fakes, operation) do
           nil ->
             case Map.get(state.stubs, operation) do
               nil ->

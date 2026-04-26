@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   consistent — struct fields, module names, tagged union tags, and
   function names all use `:fun`.
 
+- **`CanonicalHandlerState.op_fakes` renamed to `.fakes`** for
+  consistency with `.expects` and `.stubs` — all three are
+  per-operation maps with the same shape. The `:op_` prefix was
+  unnecessary since the fallback fake lives in `.fallback`.
+
 ## [0.51.0]
 
 ### Added
