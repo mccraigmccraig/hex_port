@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `CanonicalHandlerState.op_fakes` → `.fakes` (consistent with `.expects`/`.stubs`)
   - `StubHandler` → `StatelessHandler` (dispatch-layer naming)
   - `FakeHandler` → `StatefulHandler` (dispatch-layer naming)
+  - `set_handler` → `set_module_handler` (symmetric with `set_stateless_handler`/`set_stateful_handler`)
 
 ## [0.51.0]
 

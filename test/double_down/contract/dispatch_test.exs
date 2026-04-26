@@ -8,13 +8,13 @@ defmodule DoubleDown.Contract.DispatchTest do
 
   describe "module handler" do
     test "dispatches to a module implementing the behaviour" do
-      DoubleDown.Testing.set_handler(Greeter, Greeter.Impl)
+      DoubleDown.Testing.set_module_handler(Greeter, Greeter.Impl)
 
       assert "Hello, Alice!" = Greeter.Port.greet("Alice")
     end
 
     test "dispatches fetch_greeting with ok tuple" do
-      DoubleDown.Testing.set_handler(Greeter, Greeter.Impl)
+      DoubleDown.Testing.set_module_handler(Greeter, Greeter.Impl)
 
       assert {:ok, "Hello, Bob!"} = Greeter.Port.fetch_greeting("Bob")
     end

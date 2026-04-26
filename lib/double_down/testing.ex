@@ -9,7 +9,7 @@ defmodule DoubleDown.Testing do
   Then in your tests, register handlers per-contract:
 
       setup do
-        DoubleDown.Testing.set_handler(MyApp.Todos, MyApp.Todos.InMemory)
+        DoubleDown.Testing.set_module_handler(MyApp.Todos, MyApp.Todos.InMemory)
         :ok
       end
 
@@ -35,8 +35,8 @@ defmodule DoubleDown.Testing do
 
   The module must implement the contract's `@behaviour`.
   """
-  @spec set_handler(module(), module()) :: :ok
-  def set_handler(contract, impl) do
+  @spec set_module_handler(module(), module()) :: :ok
+  def set_module_handler(contract, impl) do
     set_meta(contract, %HandlerMeta.Module{impl: impl})
   end
 
@@ -134,7 +134,7 @@ defmodule DoubleDown.Testing do
       setup :set_mode_from_context
 
       setup do
-        DoubleDown.Testing.set_handler(MyApp.Repo, MyApp.Repo.InMemory)
+        DoubleDown.Testing.set_module_handler(MyApp.Repo, MyApp.Repo.InMemory)
         :ok
       end
 
@@ -178,7 +178,7 @@ defmodule DoubleDown.Testing do
       setup :set_mode_from_context
 
       setup do
-        DoubleDown.Testing.set_handler(MyApp.Repo, MyApp.Repo.InMemory)
+        DoubleDown.Testing.set_module_handler(MyApp.Repo, MyApp.Repo.InMemory)
         :ok
       end
 
@@ -203,7 +203,7 @@ defmodule DoubleDown.Testing do
 
       setup do
         # This RAISES — self() is not the shared owner
-        DoubleDown.Testing.set_handler(MyContract, MyImpl)
+        DoubleDown.Testing.set_module_handler(MyContract, MyImpl)
       end
   """
   @spec set_mode_to_global() :: :ok

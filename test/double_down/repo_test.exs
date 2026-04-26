@@ -191,7 +191,7 @@ defmodule DoubleDown.RepoTest do
 
   describe "Ecto Repo delegation" do
     setup do
-      DoubleDown.Testing.set_handler(Repo, MockRepo)
+      DoubleDown.Testing.set_module_handler(Repo, MockRepo)
       :ok
     end
 

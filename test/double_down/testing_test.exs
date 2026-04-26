@@ -6,13 +6,13 @@ defmodule DoubleDown.TestingTest do
 
   # ── handler registration API ──────────────────────────────
 
-  describe "set_handler/2" do
+  describe "set_module_handler/2" do
     test "returns :ok" do
-      assert :ok = DoubleDown.Testing.set_handler(Greeter, Greeter.Impl)
+      assert :ok = DoubleDown.Testing.set_module_handler(Greeter, Greeter.Impl)
     end
 
     test "registered module handler is used by dispatch" do
-      DoubleDown.Testing.set_handler(Greeter, Greeter.Impl)
+      DoubleDown.Testing.set_module_handler(Greeter, Greeter.Impl)
       assert "Hello, Alice!" = Greeter.Port.greet("Alice")
     end
   end
@@ -105,12 +105,12 @@ defmodule DoubleDown.TestingTest do
       end)
 
       assert_raise ArgumentError, ~r/A handler is already installed/, fn ->
-        DoubleDown.Testing.set_handler(Greeter, Greeter.Impl)
+        DoubleDown.Testing.set_module_handler(Greeter, Greeter.Impl)
       end
     end
 
     test "raises when setting stateful handler over existing module handler" do
-      DoubleDown.Testing.set_handler(Counter, Greeter.Impl)
+      DoubleDown.Testing.set_module_handler(Counter, Greeter.Impl)
 
       assert_raise ArgumentError, ~r/A handler is already installed/, fn ->
         DoubleDown.Testing.set_stateful_handler(

@@ -95,7 +95,7 @@ defmodule DoubleDown.BehaviourFacadeTest do
 
   describe "module handler dispatch" do
     test "dispatches to a module implementing the behaviour" do
-      DoubleDown.Testing.set_handler(VanillaBehaviour, VanillaBehaviour.Impl)
+      DoubleDown.Testing.set_module_handler(VanillaBehaviour, VanillaBehaviour.Impl)
 
       assert {:ok, %{id: "99"}} = VanillaBehaviour.Port.get_item("99")
       assert [%{id: "1"}, %{id: "2"}] = VanillaBehaviour.Port.list_items()

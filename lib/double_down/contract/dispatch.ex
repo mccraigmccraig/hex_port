@@ -421,7 +421,7 @@ defmodule DoubleDown.Contract.Dispatch do
 
       Or the lower-level DoubleDown.Testing API:
 
-          DoubleDown.Testing.set_handler(#{inspect(contract)}, MyImpl)
+          DoubleDown.Testing.set_module_handler(#{inspect(contract)}, MyImpl)
           DoubleDown.Testing.set_stateless_handler(#{inspect(contract)}, fn _contract, operation, args -> ... end)
           DoubleDown.Testing.set_stateful_handler(#{inspect(contract)}, handler_fn, initial_state)
       """

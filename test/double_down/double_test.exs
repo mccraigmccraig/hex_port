@@ -1049,11 +1049,11 @@ defmodule DoubleDown.DoubleTest do
       end
     end
 
-    test "raises if Testing.set_handler is called on a contract with a Double handler" do
+    test "raises if Testing.set_module_handler is called on a contract with a Double handler" do
       Double.stub(Greeter, :greet, fn [name] -> name end)
 
       assert_raise ArgumentError, ~r/A handler is already installed/, fn ->
-        DoubleDown.Testing.set_handler(Greeter, Greeter.Impl)
+        DoubleDown.Testing.set_module_handler(Greeter, Greeter.Impl)
       end
     end
 
