@@ -144,10 +144,74 @@ setup do
 end
 ```
 
-### Option 3: Contract boundary above Repo
+### Option 3: DynamicFacade on application context modules
 
-If your domain logic is behind a contract (e.g. `MyApp.Orders`),
-stub at that level instead of at the Repo level:
+Most Phoenix apps already have context modules (`MyApp.Orders`,
+`MyApp.Accounts`) that encapsulate Ecto queries. Use
+`DynamicFacade.setup/1` on these modules and stub at the context
+level — the Ecto queries are completely hidden behind the context
+API:
+
+```elixir
+# test/test_helper.exs
+DoubleDown.DynamicFacade.setup(MyApp.Orders)
+DoubleDown.DynamicFacade.setup(MyApp.Accounts)
+{:ok, _} = DoubleDown.Testing.start()
+ExUnit.start()
+```
+
+Then in tests, stub the context functions directly:
+
+```elixir
+test "GET /orders lists active orders", %{conn: conn} do
+  DoubleDown.Double.fallback(MyApp.Orders, fn
+    _contract, :list_active_orders, [user_id] ->
+      [%Order{id: 1, user_id: user_id, status: :active}]
+
+    _contract, :get_order!, [id] ->
+      %Order{id: id, status: :active}
+  end)
+
+  conn = get(conn, "/orders?user_id=42")
+
+  assert json_response(conn, 200)["data"] |> length() == 1
+end
+```
+
+This is often the cleanest approach for ConnTests because:
+
+- **No Ecto.Query concerns at all** — the queries live inside the
+  context module, and DynamicFacade intercepts at the function level
+- **Tests match the controller's actual call pattern** — if the
+  controller calls `Orders.list_active_orders(user_id)`, the test
+  stubs exactly that
+- **No new modules needed** — DynamicFacade works on your existing
+  context modules
+- **Tests that don't install a handler** get the real context
+  implementation automatically
+
+You can mix this with Repo-level InMemory for write operations:
+
+```elixir
+setup do
+  # InMemory Repo for writes (insert, update, delete)
+  DoubleDown.Double.fallback(MyApp.Repo, DoubleDown.Repo.InMemory)
+  # Context-level stubs for query-heavy reads
+  DoubleDown.Double.fallback(MyApp.Orders, fn _contract, op, args ->
+    case {op, args} do
+      {:list_active_orders, [_]} -> []
+      {:count_orders, [_]} -> 0
+    end
+  end)
+  :ok
+end
+```
+
+### Option 4: Contract boundary above Repo
+
+If your domain logic is behind a DoubleDown contract (e.g.
+`MyApp.Orders` with `defcallback`), stub at that level instead of
+at the Repo level:
 
 ```elixir
 setup do
@@ -168,7 +232,7 @@ This is the cleanest approach — the test doesn't need to know about
 Ecto queries at all. It stubs the domain contract and the controller
 calls flow through naturally.
 
-### Option 4: Expect specific calls
+### Option 5: Expect specific calls
 
 For tests that need to verify specific operations were called:
 
