@@ -19,9 +19,9 @@ if Code.ensure_loaded?(Ecto) do
     fallback to provide others.
 
     Implements `DoubleDown.Contract.Dispatch.StatefulHandler`, so it can
-    be used by module name with `Double.fake`:
+    be used by module name with `Double.fallback`:
 
-    ## Usage with Double.fake
+    ## Usage with Double.fallback
 
         # PK reads only — no fallback needed for records in state:
         DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.OpenInMemory)
@@ -151,7 +151,7 @@ if Code.ensure_loaded?(Ecto) do
 
     @doc """
     Stateful handler function for use with `DoubleDown.Testing.set_stateful_handler/3`
-    or `DoubleDown.Double.fake/2..4`.
+    or `DoubleDown.Double.fallback/2..4`.
 
     Handles all `DoubleDown.Repo` operations. The function signature is
     `(contract, operation, args, store) -> {result, new_store}`.

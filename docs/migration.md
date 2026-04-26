@@ -192,7 +192,7 @@ config :my_app, MyApp.Billing.Queries, impl: nil
 
 This ensures any test that forgets to set up a double gets an
 immediate error instead of silently hitting the real implementation.
-For integration tests that intentionally use the real DB, use `fake`
+For integration tests that intentionally use the real DB, use `fallback`
 with the production module:
 
 ```elixir

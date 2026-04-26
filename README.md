@@ -174,9 +174,9 @@ defmodule MyApp.TodosTest do
     DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.InMemory)
 
     # Domain model queries reading from the Repo's InMemory store
-    # via cross-contract state access (4-arity fallback)
+    # via cross-contract state access (5-arity fallback)
     DoubleDown.Double.fallback(MyApp.Todos.Model,
-      fn operation, args, state, all_states ->
+      fn _contract, operation, args, state, all_states ->
         repo = Map.get(all_states, DoubleDown.Repo, %{})
         todos = repo |> Map.get(Todo, %{}) |> Map.values()
 

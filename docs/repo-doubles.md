@@ -47,7 +47,7 @@ Read operations and association operations (`preload`, `reload`,
 raise with an actionable error message.
 
 `Repo.Stub` implements `DoubleDown.Contract.Dispatch.StatelessHandler` and can be
-used by module name with `Double.stub`:
+used by module name with `Double.fallback`:
 
 ```elixir
 # Writes only — reads will raise with a suggestion:
@@ -257,7 +257,7 @@ end
 ### Fallback function for non-PK reads
 
 For operations the state cannot answer, supply a `fallback_fn`.
-The fallback receives `(operation, args, state)` where `state` is
+The fallback receives `(contract, operation, args, state)` where `state` is
 the clean store map (internal keys stripped):
 
 ```elixir

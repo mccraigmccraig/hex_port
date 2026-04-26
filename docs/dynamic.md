@@ -45,7 +45,7 @@ as the first argument to all `Double` API calls:
 ```elixir
 # MyApp.EctoRepo is the contract — same module callers use
 DoubleDown.Double.fallback(MyApp.EctoRepo, DoubleDown.Repo.InMemory)
-DoubleDown.Double.fallback(SomeThirdPartyClient, fn :fetch, [id] -> {:ok, id} end)
+DoubleDown.Double.fallback(SomeThirdPartyClient, fn _contract, :fetch, [id] -> {:ok, id} end)
 ```
 
 The shim checks NimbleOwnership for test handlers, falling back to
@@ -135,7 +135,7 @@ SomeClient
 ## Cross-contract state access
 
 Dynamic facades participate in cross-contract state access. A
-4-arity handler on a dynamic module can read state from
+5-arity handler on a dynamic module can read state from
 contract-based facades, and vice versa:
 
 ```elixir
@@ -144,7 +144,7 @@ DoubleDown.Double.fallback(DoubleDown.Repo, DoubleDown.Repo.InMemory)
 
 # Dynamic module reads Repo state
 DoubleDown.Double.fallback(MyApp.Legacy,
-  fn :check_user, [id], state, all_states ->
+  fn _contract, :check_user, [id], state, all_states ->
     repo_state = Map.get(all_states, DoubleDown.Repo, %{})
     users = repo_state |> Map.get(User, %{}) |> Map.values()
     {Enum.any?(users, &(&1.id == id)), state}

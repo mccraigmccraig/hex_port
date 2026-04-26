@@ -167,10 +167,10 @@ defmodule DoubleDown.Double do
 
     * **1-arity** `fn [args] -> result end` — stateless, returns a bare result
     * **2-arity** `fn [args], state -> {result, new_state} end` — reads and
-      updates the stateful fake's state. Requires `fake/3` first.
+      updates the stateful fake's state. Requires a stateful fallback (`fallback/2..4`) first.
     * **3-arity** `fn [args], state, all_states -> {result, new_state} end` —
       same as 2-arity plus a read-only snapshot of all contract states for
-      cross-contract access. Requires `fake/3` first.
+      cross-contract access. Requires a stateful fallback (`fallback/2..4`) first.
 
   Expectations are consumed in order — the first `expect` for an
   operation handles the first call, the second handles the second,

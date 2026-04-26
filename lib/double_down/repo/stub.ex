@@ -63,7 +63,7 @@ if Code.ensure_loaded?(Ecto) do
     Create a new Test handler function.
 
     Returns a 3-arity function `(contract, operation, args) -> result` suitable for
-    use with `DoubleDown.Double.stub/2` or `DoubleDown.Testing.set_stateless_handler/2`.
+    use with `DoubleDown.Double.fallback/2` or `DoubleDown.Testing.set_stateless_handler/2`.
 
     ## Arguments
 

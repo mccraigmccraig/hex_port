@@ -313,7 +313,7 @@ fallback fake. They support 2-arity (own state) and 3-arity
 `Double.passthrough()` to delegate to the fallback.
 
 A stateful fallback fake (`fallback/3`) must be configured **before**
-calling `Double.fake/4` — the per-operation fake shares the
+calling `Double.fake/3` — the per-operation fake shares the
 fallback's state.
 
 ```elixir
@@ -370,9 +370,9 @@ writes and a domain-specific `Queries` contract for reads) has two
 contracts backed by a single logical store. A Queries handler may
 need to see what the Repo handler has written.
 
-4-arity stateful handlers solve this. Instead of receiving just the
+5-arity stateful handlers solve this. Instead of receiving just the
 contract's own state, they receive a read-only snapshot of all
-contract states as a 4th argument:
+contract states as a 5th argument:
 
 ```elixir
 # 4-arity (default) — own state only

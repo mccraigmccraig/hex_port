@@ -304,7 +304,7 @@ The "two-contract" pattern separates write operations (through the
 database. In tests, the Repo uses `Repo.InMemory`, and the query
 contract needs to see what Repo has written.
 
-4-arity stateful handlers enable this by providing a read-only
+5-arity stateful handlers enable this by providing a read-only
 snapshot of all contract states. The Queries handler can look up the
 Repo's InMemory store and answer queries against it.
 
@@ -327,10 +327,10 @@ setup do
   DoubleDown.Repo
   |> DoubleDown.Double.fallback(DoubleDown.Repo.InMemory)
 
-  # Queries uses a 4-arity fallback that reads Repo's InMemory state
+  # Queries uses a 5-arity fallback that reads Repo's InMemory state
   MyApp.UserQueries
   |> DoubleDown.Double.fallback(
-    fn operation, args, state, all_states ->
+    fn _contract, operation, args, state, all_states ->
       # Extract Repo's InMemory store from the global snapshot
       repo_state = Map.get(all_states, DoubleDown.Repo, %{})
       users = repo_state |> Map.get(User, %{}) |> Map.values()
