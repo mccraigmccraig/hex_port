@@ -49,7 +49,7 @@ defmodule DoubleDown.Contract.Dispatch.StatelessHandler do
   for use as a `Double.fallback` function fallback.
   """
   @callback new(
-              fallback_fn :: (module(), atom(), [term()] -> term()) | nil,
+              fallback_fn :: DoubleDown.Contract.Dispatch.Types.stateless_fun() | nil,
               opts :: keyword()
-            ) :: (module(), atom(), [term()] -> term())
+            ) :: DoubleDown.Contract.Dispatch.Types.stateless_fun()
 end
