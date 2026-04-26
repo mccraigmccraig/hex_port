@@ -9,21 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Breaking: harmonised `:fn`/`:fun` naming.** The shorthand for
-  "function" is now consistently `:fun` everywhere:
-  - `Defer.fn` → `Defer.fun` (struct field)
-  - `HandlerMeta.Fn` → `HandlerMeta.Fun` (module name)
-  - `set_fn_handler` → `set_fun_handler` (public API)
-  - `{:fn, fun}` → `{:fun, fun}` (CanonicalHandlerState fallback tag)
-
-  Avoids visual collision with the `fn` keyword and makes the codebase
-  consistent — struct fields, module names, tagged union tags, and
-  function names all use `:fun`.
-
-- **`CanonicalHandlerState.op_fakes` renamed to `.fakes`** for
-  consistency with `.expects` and `.stubs` — all three are
-  per-operation maps with the same shape. The `:op_` prefix was
-  unnecessary since the fallback fake lives in `.fallback`.
+- **Breaking: harmonised naming across dispatch layer.**
+  - `Defer.fn` → `Defer.fun` (struct field — avoids `fn` keyword collision)
+  - `HandlerMeta.Fn` → `HandlerMeta.Stateless` (describes what, not how)
+  - `set_fn_handler` → `set_stateless_handler` (symmetric with `set_stateful_handler`)
+  - `{:fn, fun}` → `{:stateless, fun}` (CanonicalHandlerState fallback tag)
+  - `CanonicalHandlerState.op_fakes` → `.fakes` (consistent with `.expects`/`.stubs`)
 
 ## [0.51.0]
 

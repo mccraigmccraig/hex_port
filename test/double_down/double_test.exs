@@ -236,7 +236,7 @@ defmodule DoubleDown.DoubleTest do
       end
     end
 
-    test "reuses set_fun_handler-style functions" do
+    test "reuses set_stateless_handler-style functions" do
       handler_fn = fn _contract, operation, args ->
         case {operation, args} do
           {:greet, [name]} -> "handler: #{name}"
@@ -1014,7 +1014,7 @@ defmodule DoubleDown.DoubleTest do
 
   describe "mixing Double and Testing APIs" do
     test "raises if Double.expect is called on a contract with a raw Testing handler" do
-      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [name] -> name end)
+      DoubleDown.Testing.set_stateless_handler(Greeter, fn _contract, :greet, [name] -> name end)
 
       assert_raise ArgumentError, ~r/Cannot use Double API/, fn ->
         Double.expect(Greeter, :greet, fn [_] -> "hi" end)
@@ -1022,7 +1022,7 @@ defmodule DoubleDown.DoubleTest do
     end
 
     test "raises if Double.stub is called on a contract with a raw Testing handler" do
-      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [name] -> name end)
+      DoubleDown.Testing.set_stateless_handler(Greeter, fn _contract, :greet, [name] -> name end)
 
       assert_raise ArgumentError, ~r/Cannot use Double API/, fn ->
         Double.stub(Greeter, :greet, fn [_] -> "hi" end)
@@ -1041,11 +1041,11 @@ defmodule DoubleDown.DoubleTest do
       end
     end
 
-    test "raises if Testing.set_fun_handler is called on a contract with a Double handler" do
+    test "raises if Testing.set_stateless_handler is called on a contract with a Double handler" do
       Double.stub(Greeter, :greet, fn [name] -> name end)
 
       assert_raise ArgumentError, ~r/A handler is already installed/, fn ->
-        DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [name] -> name end)
+        DoubleDown.Testing.set_stateless_handler(Greeter, fn _contract, :greet, [name] -> name end)
       end
     end
 

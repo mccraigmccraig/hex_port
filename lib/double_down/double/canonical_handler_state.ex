@@ -15,7 +15,7 @@ defmodule DoubleDown.Double.CanonicalHandlerState do
   * `stubs` — `%{operation => fun}` per-operation stateless stub functions
   * `fallback` — the fallback handler, one of:
     - `nil` — no fallback configured
-    - `{:fun, fun}` — stateless 3-arity function fallback
+    - `{:stateless, fun}` — stateless 3-arity function fallback
     - `{:stateful, fun}` — 4/5-arity stateful fake function
     - `{:module, module}` — module implementing the contract behaviour
   * `fallback_state` — domain state for stateful fakes (only meaningful
@@ -34,7 +34,7 @@ defmodule DoubleDown.Double.CanonicalHandlerState do
 
   @type fallback ::
           nil
-          | {:fun, (module(), atom(), [term()] -> term())}
+          | {:stateless, (module(), atom(), [term()] -> term())}
           | {:stateful, (... -> {term(), term()})}
           | {:module, module()}
 

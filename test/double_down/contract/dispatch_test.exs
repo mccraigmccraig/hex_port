@@ -24,7 +24,7 @@ defmodule DoubleDown.Contract.DispatchTest do
 
   describe "fn handler" do
     test "dispatches to a function handler" do
-      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, operation, args ->
+      DoubleDown.Testing.set_stateless_handler(Greeter, fn _contract, operation, args ->
         case {operation, args} do
           {:greet, [name]} -> "Howdy, #{name}!"
           {:fetch_greeting, [name]} -> {:ok, "Howdy, #{name}!"}
@@ -79,10 +79,10 @@ defmodule DoubleDown.Contract.DispatchTest do
       end
     end
 
-    test "raises with test-oriented message mentioning set_fun_handler" do
+    test "raises with test-oriented message mentioning set_stateless_handler" do
       Application.delete_env(:double_down, Greeter)
 
-      assert_raise RuntimeError, ~r/set_fun_handler/, fn ->
+      assert_raise RuntimeError, ~r/set_stateless_handler/, fn ->
         Greeter.Port.greet("Nobody")
       end
     end
@@ -101,7 +101,7 @@ defmodule DoubleDown.Contract.DispatchTest do
 
   describe "dispatch logging" do
     test "logs dispatches when logging is enabled" do
-      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, operation, args ->
+      DoubleDown.Testing.set_stateless_handler(Greeter, fn _contract, operation, args ->
         case {operation, args} do
           {:greet, [name]} -> "Hi, #{name}!"
           {:fetch_greeting, [name]} -> {:ok, "Hi, #{name}!"}
@@ -122,7 +122,7 @@ defmodule DoubleDown.Contract.DispatchTest do
     end
 
     test "returns empty log when logging not enabled" do
-      DoubleDown.Testing.set_fun_handler(Greeter, fn
+      DoubleDown.Testing.set_stateless_handler(Greeter, fn
         _contract, :greet, [name] -> "Hi, #{name}!"
       end)
 
@@ -180,7 +180,7 @@ defmodule DoubleDown.Contract.DispatchTest do
 
   describe "allow/3" do
     test "allows a child Task to use the parent's handler" do
-      DoubleDown.Testing.set_fun_handler(Greeter, fn
+      DoubleDown.Testing.set_stateless_handler(Greeter, fn
         _contract, :greet, [name] -> "Hello from parent, #{name}!"
       end)
 
@@ -226,7 +226,7 @@ defmodule DoubleDown.Contract.DispatchTest do
     end
 
     test "returns true after a fn handler is installed" do
-      DoubleDown.Testing.set_fun_handler(Greeter, fn
+      DoubleDown.Testing.set_stateless_handler(Greeter, fn
         _contract, :greet, [name] -> "Hi, #{name}!"
       end)
 
@@ -240,7 +240,7 @@ defmodule DoubleDown.Contract.DispatchTest do
     end
 
     test "respects $callers chain — handler visible in spawned child" do
-      DoubleDown.Testing.set_fun_handler(Greeter, fn
+      DoubleDown.Testing.set_stateless_handler(Greeter, fn
         _contract, :greet, [name] -> "Hi, #{name}!"
       end)
 
@@ -256,7 +256,7 @@ defmodule DoubleDown.Contract.DispatchTest do
     end
 
     test "returns false for a different contract with no handler" do
-      DoubleDown.Testing.set_fun_handler(Greeter, fn
+      DoubleDown.Testing.set_stateless_handler(Greeter, fn
         _contract, :greet, [name] -> "Hi, #{name}!"
       end)
 

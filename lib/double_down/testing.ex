@@ -45,9 +45,9 @@ defmodule DoubleDown.Testing do
 
   The function receives `(contract, operation, args)` and returns the result.
   """
-  @spec set_fun_handler(module(), (module(), atom(), [term()] -> term())) :: :ok
-  def set_fun_handler(contract, fun) when is_function(fun, 3) do
-    set_meta(contract, %HandlerMeta.Fun{fun: fun})
+  @spec set_stateless_handler(module(), (module(), atom(), [term()] -> term())) :: :ok
+  def set_stateless_handler(contract, fun) when is_function(fun, 3) do
+    set_meta(contract, %HandlerMeta.Stateless{fun: fun})
   end
 
   @doc """

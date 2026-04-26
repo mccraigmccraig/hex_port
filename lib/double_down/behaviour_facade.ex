@@ -54,7 +54,7 @@ defmodule DoubleDown.BehaviourFacade do
   ## Testing
 
       setup do
-        DoubleDown.Testing.set_fun_handler(MyApp.Todos.Behaviour, fn _contract, operation, args ->
+        DoubleDown.Testing.set_stateless_handler(MyApp.Todos.Behaviour, fn _contract, operation, args ->
           case {operation, args} do
             {:get_item, [id]} -> {:ok, %{id: id}}
             {:list_items, []} -> []
