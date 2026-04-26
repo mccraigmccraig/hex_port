@@ -75,7 +75,13 @@ defmodule DoubleDown.Double.Dispatch do
     end
   end
 
-  defp invoke_expect(fun, args, %CanonicalHandlerState{fallback_state: fallback_state} = state, all_states, operation)
+  defp invoke_expect(
+         fun,
+         args,
+         %CanonicalHandlerState{fallback_state: fallback_state} = state,
+         all_states,
+         operation
+       )
        when is_function(fun, 2) do
     case fun.(args, fallback_state) do
       %DoubleDown.Contract.Dispatch.Passthrough{} ->
@@ -89,7 +95,13 @@ defmodule DoubleDown.Double.Dispatch do
     end
   end
 
-  defp invoke_expect(fun, args, %CanonicalHandlerState{fallback_state: fallback_state} = state, all_states, operation)
+  defp invoke_expect(
+         fun,
+         args,
+         %CanonicalHandlerState{fallback_state: fallback_state} = state,
+         all_states,
+         operation
+       )
        when is_function(fun, 3) do
     case fun.(args, fallback_state, all_states) do
       %DoubleDown.Contract.Dispatch.Passthrough{} ->
@@ -108,7 +120,13 @@ defmodule DoubleDown.Double.Dispatch do
   # 2-arity receives (args, fallback_state),
   # 3-arity receives (args, fallback_state, all_states). Both return
   # {result, new_fallback_state}. May return passthrough() to delegate.
-  defp invoke_op_fake(fun, args, %CanonicalHandlerState{fallback_state: fallback_state} = state, all_states, operation)
+  defp invoke_op_fake(
+         fun,
+         args,
+         %CanonicalHandlerState{fallback_state: fallback_state} = state,
+         all_states,
+         operation
+       )
        when is_function(fun, 2) do
     case fun.(args, fallback_state) do
       %DoubleDown.Contract.Dispatch.Passthrough{} ->
@@ -122,7 +140,13 @@ defmodule DoubleDown.Double.Dispatch do
     end
   end
 
-  defp invoke_op_fake(fun, args, %CanonicalHandlerState{fallback_state: fallback_state} = state, all_states, operation)
+  defp invoke_op_fake(
+         fun,
+         args,
+         %CanonicalHandlerState{fallback_state: fallback_state} = state,
+         all_states,
+         operation
+       )
        when is_function(fun, 3) do
     case fun.(args, fallback_state, all_states) do
       %DoubleDown.Contract.Dispatch.Passthrough{} ->
@@ -152,7 +176,12 @@ defmodule DoubleDown.Double.Dispatch do
 
   # -- Fallback invocation --
 
-  defp invoke_fallback_or_raise(%CanonicalHandlerState{fallback: fallback, contract: contract} = state, operation, args, all_states) do
+  defp invoke_fallback_or_raise(
+         %CanonicalHandlerState{fallback: fallback, contract: contract} = state,
+         operation,
+         args,
+         all_states
+       ) do
     case fallback do
       nil ->
         msg = unexpected_call_message(contract, state, operation, args)
@@ -169,7 +198,12 @@ defmodule DoubleDown.Double.Dispatch do
     end
   end
 
-  defp invoke_fn_fallback(fallback_fn, %CanonicalHandlerState{contract: contract} = state, operation, args) do
+  defp invoke_fn_fallback(
+         fallback_fn,
+         %CanonicalHandlerState{contract: contract} = state,
+         operation,
+         args
+       ) do
     result = fallback_fn.(contract, operation, args)
     {result, state}
   rescue
