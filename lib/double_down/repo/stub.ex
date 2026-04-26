@@ -402,7 +402,14 @@ if Code.ensure_loaded?(Ecto) do
       Process.put(@transaction_key, true)
 
       try do
-        fun.()
+        result = fun.()
+
+        case result do
+          {:ok, _} -> result
+          {:error, _} -> result
+          {:error, _, _, _} -> result
+          _other -> {:ok, result}
+        end
       catch
         {:rollback, value} -> {:error, value}
       after

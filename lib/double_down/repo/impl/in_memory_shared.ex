@@ -432,8 +432,8 @@ if Code.ensure_loaded?(Ecto) do
           _other ->
             # Non-standard return (e.g. bare value) — treat as success,
             # matching Ecto.Repo.transaction/2 which returns {:ok, result}
-            # for non-tagged returns. The wrapping happens at the facade level.
-            result
+            # for non-tagged returns.
+            {:ok, result}
         end
       rescue
         exception ->

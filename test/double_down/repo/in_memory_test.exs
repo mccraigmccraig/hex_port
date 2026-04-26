@@ -1417,6 +1417,51 @@ defmodule DoubleDown.Repo.InMemoryTest do
 
       assert {:ok, :transact_zero} = result
     end
+
+    test "bare return value wrapped in {:ok, result}" do
+      result =
+        DoubleDown.Contract.Dispatch.call(
+          :double_down,
+          DoubleDown.Repo,
+          :transaction,
+          [fn -> :hello end]
+        )
+
+      assert {:ok, :hello} = result
+    end
+
+    test "{:ok, value} returned as-is (not double-wrapped)" do
+      result =
+        DoubleDown.Contract.Dispatch.call(
+          :double_down,
+          DoubleDown.Repo,
+          :transaction,
+          [fn -> {:ok, :already_tagged} end]
+        )
+
+      assert {:ok, :already_tagged} = result
+    end
+
+    test "{:error, value} returned as-is and state rolled back" do
+      alias DoubleDown.Test.Repo, as: TestRepo
+
+      {:ok, _} = TestRepo.insert(User.changeset(%{name: "Before"}))
+
+      result =
+        DoubleDown.Contract.Dispatch.call(
+          :double_down,
+          DoubleDown.Repo,
+          :transaction,
+          [fn ->
+            {:ok, _} = TestRepo.insert(User.changeset(%{name: "Inside"}))
+            {:error, :aborted}
+          end, []]
+        )
+
+      assert {:error, :aborted} = result
+      # Only the pre-transaction record should remain
+      assert [%User{name: "Before"}] = TestRepo.all(User)
+    end
   end
 
   # -------------------------------------------------------------------

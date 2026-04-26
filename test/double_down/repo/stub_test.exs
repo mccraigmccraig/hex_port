@@ -1170,5 +1170,29 @@ defmodule DoubleDown.Repo.StubTest do
 
       assert {:ok, :transact} = result
     end
+
+    test "bare return value wrapped in {:ok, result}" do
+      result =
+        DoubleDown.Contract.Dispatch.call(
+          :double_down,
+          Repo,
+          :transaction,
+          [fn -> :hello end]
+        )
+
+      assert {:ok, :hello} = result
+    end
+
+    test "{:ok, value} returned as-is (not double-wrapped)" do
+      result =
+        DoubleDown.Contract.Dispatch.call(
+          :double_down,
+          Repo,
+          :transaction,
+          [fn -> {:ok, :already_tagged} end]
+        )
+
+      assert {:ok, :already_tagged} = result
+    end
   end
 end
