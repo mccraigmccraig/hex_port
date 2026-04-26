@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.52.1]
+
+### Fixed
+
+- **19 stale documentation references** from v0.52.0 API changes:
+  `fake/3` → `fallback/2..4` for whole-contract references,
+  `Double.stub` → `Double.fallback` for handler modules,
+  4-arity → 5-arity for cross-contract handlers, missing `_contract`
+  params in code examples.
+
+### Added
+
+- **Tests for re-entrant cross-contract dispatch via Defer.** 4 tests
+  demonstrating stateful fakes returning `Defer.new(fn -> ... end)` to
+  make cross-contract calls without deadlock.
+
+### Improved
+
+- **Documented re-entrant dispatch pattern** in `docs/testing.md` with
+  example, key properties, and relationship to `transact`.
+
+- **Documented `DynamicFacade` alternative for Repo** in `docs/repo.md`.
+  Simpler path for existing projects — no facade module, no config.
+  Particularly useful when Repo has custom functions beyond the standard
+  `Ecto.Repo` API.
+
 ## [0.52.0]
 
 ### Changed
@@ -1544,6 +1570,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `DoubleDown.Testing` with NimbleOwnership, `Repo.Test` stateless
   adapter, CI setup, Credo, Dialyzer.
 
+[0.52.1]: https://github.com/mccraigmccraig/double_down/compare/v0.52.0...v0.52.1
 [0.52.0]: https://github.com/mccraigmccraig/double_down/compare/v0.51.0...v0.52.0
 [0.51.0]: https://github.com/mccraigmccraig/double_down/compare/v0.50.1...v0.51.0
 [0.50.1]: https://github.com/mccraigmccraig/double_down/compare/v0.50.0...v0.50.1
