@@ -1,4 +1,4 @@
-defmodule DoubleDown.Repo.ExMachinaTest do
+defmodule DoubleDown.Repo.InMemory.ExMachinaIntegrationTest do
   use ExUnit.Case, async: true
 
   import DoubleDown.Test.Factory
