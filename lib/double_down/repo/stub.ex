@@ -5,6 +5,8 @@
 #
 if Code.ensure_loaded?(Ecto) do
   defmodule DoubleDown.Repo.Stub do
+    alias DoubleDown.Contract.Dispatch.Defer
+
     @behaviour DoubleDown.Contract.Dispatch.StatelessHandler
 
     @moduledoc """
@@ -335,52 +337,44 @@ if Code.ensure_loaded?(Ecto) do
     # -----------------------------------------------------------------
 
     defp dispatch(_contract, :transact, [fun, _opts], _fallback_fn) when is_function(fun, 0) do
-      %DoubleDown.Contract.Dispatch.Defer{fun: fn -> run_in_transaction(fun) end}
+      Defer.new(fn -> run_in_transaction(fun) end)
     end
 
     defp dispatch(_contract, :transact, [%Ecto.Multi{} = multi, opts], _fallback_fn) do
       repo_facade = Keyword.get(opts, DoubleDown.Repo.Facade)
 
-      %DoubleDown.Contract.Dispatch.Defer{
-        fun: fn ->
-          run_in_transaction(fn -> DoubleDown.Repo.Impl.MultiStepper.run(multi, repo_facade) end)
-        end
-      }
+      Defer.new(fn ->
+        run_in_transaction(fn -> DoubleDown.Repo.Impl.MultiStepper.run(multi, repo_facade) end)
+      end)
     end
 
     defp dispatch(_contract, :transaction, [fun, _opts], _fallback_fn) when is_function(fun, 0) do
-      %DoubleDown.Contract.Dispatch.Defer{fun: fn -> run_in_transaction(fun) end}
+      Defer.new(fn -> run_in_transaction(fun) end)
     end
 
     defp dispatch(_contract, :transaction, [%Ecto.Multi{} = multi, opts], _fallback_fn) do
       repo_facade = Keyword.get(opts, DoubleDown.Repo.Facade)
 
-      %DoubleDown.Contract.Dispatch.Defer{
-        fun: fn ->
-          run_in_transaction(fn -> DoubleDown.Repo.Impl.MultiStepper.run(multi, repo_facade) end)
-        end
-      }
+      Defer.new(fn ->
+        run_in_transaction(fn -> DoubleDown.Repo.Impl.MultiStepper.run(multi, repo_facade) end)
+      end)
     end
 
     @transaction_key DoubleDown.Repo.InTransaction
 
     defp dispatch(_contract, :rollback, [value], _fallback_fn) do
-      %DoubleDown.Contract.Dispatch.Defer{
-        fun: fn ->
-          if Process.get(@transaction_key, false) do
-            throw({:rollback, value})
-          else
-            raise RuntimeError,
-                  "cannot call rollback outside of transaction"
-          end
+      Defer.new(fn ->
+        if Process.get(@transaction_key, false) do
+          throw({:rollback, value})
+        else
+          raise RuntimeError,
+                "cannot call rollback outside of transaction"
         end
-      }
+      end)
     end
 
     defp dispatch(_contract, :in_transaction?, [], _fallback_fn) do
-      %DoubleDown.Contract.Dispatch.Defer{
-        fun: fn -> Process.get(@transaction_key, false) end
-      }
+      Defer.new(fn -> Process.get(@transaction_key, false) end)
     end
 
     defp run_in_transaction(fun) do

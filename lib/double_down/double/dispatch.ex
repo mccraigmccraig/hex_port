@@ -16,6 +16,7 @@ defmodule DoubleDown.Double.Dispatch do
   expects > per-op fakes > per-op stubs > fallback > raise
   """
 
+  alias DoubleDown.Contract.Dispatch.Defer
   alias DoubleDown.Double.CanonicalHandlerState
 
   # -- Canonical handler --
@@ -149,7 +150,7 @@ defmodule DoubleDown.Double.Dispatch do
     case state.fallback do
       nil ->
         msg = unexpected_call_message(state.contract, state, operation, args)
-        {%DoubleDown.Contract.Dispatch.Defer{fun: fn -> raise msg end}, state}
+        {Defer.new(fn -> raise msg end), state}
 
       {:stateless, fallback_fn} ->
         invoke_fn_fallback(fallback_fn, state, operation, args)
@@ -172,7 +173,7 @@ defmodule DoubleDown.Double.Dispatch do
     # the DoubleDown.Double moduledoc.
     FunctionClauseError ->
       msg = unexpected_call_message(state.contract, state, operation, args)
-      {%DoubleDown.Contract.Dispatch.Defer{fun: fn -> reraise msg, __STACKTRACE__ end}, state}
+      {Defer.new(fn -> reraise msg, __STACKTRACE__ end), state}
   end
 
   defp invoke_stateful_fallback(fallback_fn, state, operation, args, all_states) do
@@ -200,7 +201,7 @@ defmodule DoubleDown.Double.Dispatch do
     # in the DoubleDown.Double moduledoc.
     FunctionClauseError ->
       msg = unexpected_call_message(state.contract, state, operation, args)
-      {%DoubleDown.Contract.Dispatch.Defer{fun: fn -> reraise msg, __STACKTRACE__ end}, state}
+      {Defer.new(fn -> reraise msg, __STACKTRACE__ end), state}
   end
 
   # Module fallback: defer the apply to the calling process via %Defer{}.
@@ -210,7 +211,7 @@ defmodule DoubleDown.Double.Dispatch do
   # checkout, process dictionary, etc.). %Defer{} moves the apply outside
   # the lock, same mechanism transact uses.
   defp invoke_module_fallback(module, state, operation, args) do
-    {%DoubleDown.Contract.Dispatch.Defer{fun: fn -> apply(module, operation, args) end}, state}
+    {Defer.new(fn -> apply(module, operation, args) end), state}
   end
 
   # -- Error messages --

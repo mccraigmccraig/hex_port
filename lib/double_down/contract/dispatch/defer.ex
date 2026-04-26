@@ -16,4 +16,8 @@ defmodule DoubleDown.Contract.Dispatch.Defer do
   defstruct [:fun]
 
   @type t :: %__MODULE__{fun: (-> term())}
+
+  @doc "Create a new Defer marker. Validates that `fun` is a 0-arity function."
+  @spec new((-> term())) :: t()
+  def new(fun) when is_function(fun, 0), do: %__MODULE__{fun: fun}
 end

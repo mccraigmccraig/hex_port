@@ -29,6 +29,7 @@ defmodule DoubleDown.Contract.Dispatch do
   `call_config/4` if the config is not available at compile time.
   """
 
+  alias DoubleDown.Contract.Dispatch.Defer
   alias DoubleDown.Contract.Dispatch.HandlerMeta
   alias DoubleDown.Contract.Dispatch.Keys
   alias DoubleDown.Double.CanonicalHandlerState
@@ -296,14 +297,13 @@ defmodule DoubleDown.Contract.Dispatch do
             exception ->
               stacktrace = __STACKTRACE__
 
-              {%DoubleDown.Contract.Dispatch.Defer{fun: fn -> reraise exception, stacktrace end},
-               meta}
+              {Defer.new(fn -> reraise exception, stacktrace end), meta}
           catch
             :throw, value ->
-              {%DoubleDown.Contract.Dispatch.Defer{fun: fn -> throw(value) end}, meta}
+              {Defer.new(fn -> throw(value) end), meta}
 
             :exit, reason ->
-              {%DoubleDown.Contract.Dispatch.Defer{fun: fn -> exit(reason) end}, meta}
+              {Defer.new(fn -> exit(reason) end), meta}
           end
         end
       )
