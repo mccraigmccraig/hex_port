@@ -516,7 +516,7 @@ internally. The low-level handler APIs are still available but
 there's probably never a need to use them directly:
 
 - `set_handler(contract, module)` — register a module handler
-- `set_fn_handler(contract, fn contract, op, args -> result end)` — register
+- `set_fun_handler(contract, fn contract, op, args -> result end)` — register
   a 3-arity function handler
 - `set_stateful_handler(contract, fn contract, op, args, state -> {result, state} end, init)` —
   register a 4-arity stateful handler

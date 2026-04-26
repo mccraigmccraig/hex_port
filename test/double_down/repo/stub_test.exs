@@ -113,7 +113,7 @@ defmodule DoubleDown.Repo.StubTest do
 
   describe "write operations" do
     setup do
-      DoubleDown.Testing.set_fn_handler(Repo, Repo.Stub.new())
+      DoubleDown.Testing.set_fun_handler(Repo, Repo.Stub.new())
       :ok
     end
 
@@ -234,7 +234,7 @@ defmodule DoubleDown.Repo.StubTest do
 
   describe "read operations raise without fallback" do
     setup do
-      DoubleDown.Testing.set_fn_handler(Repo, Repo.Stub.new())
+      DoubleDown.Testing.set_fun_handler(Repo, Repo.Stub.new())
       :ok
     end
 
@@ -329,7 +329,7 @@ defmodule DoubleDown.Repo.StubTest do
           end
         )
 
-      DoubleDown.Testing.set_fn_handler(Repo, handler)
+      DoubleDown.Testing.set_fun_handler(Repo, handler)
 
       assert ^alice = TestRepo.get(User, 1)
       assert nil == TestRepo.get(User, 999)
@@ -341,7 +341,7 @@ defmodule DoubleDown.Repo.StubTest do
       handler =
         Repo.Stub.new(fallback_fn: fn _contract, :get!, [User, 1] -> alice end)
 
-      DoubleDown.Testing.set_fn_handler(Repo, handler)
+      DoubleDown.Testing.set_fun_handler(Repo, handler)
       assert ^alice = TestRepo.get!(User, 1)
     end
 
@@ -351,7 +351,7 @@ defmodule DoubleDown.Repo.StubTest do
       handler =
         Repo.Stub.new(fallback_fn: fn _contract, :get_by, [User, [name: "Alice"]] -> alice end)
 
-      DoubleDown.Testing.set_fn_handler(Repo, handler)
+      DoubleDown.Testing.set_fun_handler(Repo, handler)
       assert ^alice = TestRepo.get_by(User, name: "Alice")
     end
 
@@ -361,7 +361,7 @@ defmodule DoubleDown.Repo.StubTest do
       handler =
         Repo.Stub.new(fallback_fn: fn _contract, :all, [User] -> users end)
 
-      DoubleDown.Testing.set_fn_handler(Repo, handler)
+      DoubleDown.Testing.set_fun_handler(Repo, handler)
       assert ^users = TestRepo.all(User)
     end
 
@@ -369,7 +369,7 @@ defmodule DoubleDown.Repo.StubTest do
       handler =
         Repo.Stub.new(fallback_fn: fn _contract, :exists?, [User] -> true end)
 
-      DoubleDown.Testing.set_fn_handler(Repo, handler)
+      DoubleDown.Testing.set_fun_handler(Repo, handler)
       assert TestRepo.exists?(User) == true
     end
 
@@ -377,7 +377,7 @@ defmodule DoubleDown.Repo.StubTest do
       handler =
         Repo.Stub.new(fallback_fn: fn _contract, :aggregate, [User, :count, :id] -> 42 end)
 
-      DoubleDown.Testing.set_fn_handler(Repo, handler)
+      DoubleDown.Testing.set_fun_handler(Repo, handler)
       assert 42 = TestRepo.aggregate(User, :count, :id)
     end
 
@@ -385,7 +385,7 @@ defmodule DoubleDown.Repo.StubTest do
       handler =
         Repo.Stub.new(fallback_fn: fn _contract, :get, [User, 1] -> nil end)
 
-      DoubleDown.Testing.set_fn_handler(Repo, handler)
+      DoubleDown.Testing.set_fun_handler(Repo, handler)
 
       assert_raise ArgumentError, ~r/Repo.Stub cannot service :get/, fn ->
         TestRepo.get(User, 999)
@@ -399,7 +399,7 @@ defmodule DoubleDown.Repo.StubTest do
 
   describe "transact" do
     setup do
-      DoubleDown.Testing.set_fn_handler(Repo, Repo.Stub.new())
+      DoubleDown.Testing.set_fun_handler(Repo, Repo.Stub.new())
       :ok
     end
 
@@ -524,7 +524,7 @@ defmodule DoubleDown.Repo.StubTest do
 
   describe "dispatch logging" do
     test "logs write operations" do
-      DoubleDown.Testing.set_fn_handler(Repo, Repo.Stub.new())
+      DoubleDown.Testing.set_fun_handler(Repo, Repo.Stub.new())
       DoubleDown.Testing.enable_log(Repo)
       cs = User.changeset(%{name: "Alice"})
 
@@ -538,7 +538,7 @@ defmodule DoubleDown.Repo.StubTest do
     test "logs fallback-dispatched operations" do
       alice = %User{id: 1, name: "Alice"}
 
-      DoubleDown.Testing.set_fn_handler(
+      DoubleDown.Testing.set_fun_handler(
         Repo,
         Repo.Stub.new(fallback_fn: fn _contract, :get, [User, 1] -> alice end)
       )
@@ -553,7 +553,7 @@ defmodule DoubleDown.Repo.StubTest do
     end
 
     test "1-arity transact logs inner facade calls made from the transaction function" do
-      DoubleDown.Testing.set_fn_handler(Repo, Repo.Stub.new())
+      DoubleDown.Testing.set_fun_handler(Repo, Repo.Stub.new())
       DoubleDown.Testing.enable_log(Repo)
 
       cs = User.changeset(%{name: "Alice"})
@@ -622,7 +622,7 @@ defmodule DoubleDown.Repo.StubTest do
 
   describe "nested transact" do
     setup do
-      DoubleDown.Testing.set_fn_handler(Repo, Repo.Stub.new())
+      DoubleDown.Testing.set_fun_handler(Repo, Repo.Stub.new())
       :ok
     end
 
@@ -704,7 +704,7 @@ defmodule DoubleDown.Repo.StubTest do
 
   describe "rollback" do
     setup do
-      DoubleDown.Testing.set_fn_handler(Repo, Repo.Stub.new())
+      DoubleDown.Testing.set_fun_handler(Repo, Repo.Stub.new())
       :ok
     end
 
@@ -861,7 +861,7 @@ defmodule DoubleDown.Repo.StubTest do
 
   describe "transaction (alias for transact)" do
     setup do
-      DoubleDown.Testing.set_fn_handler(Repo, Repo.Stub.new())
+      DoubleDown.Testing.set_fun_handler(Repo, Repo.Stub.new())
       :ok
     end
 

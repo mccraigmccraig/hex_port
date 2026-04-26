@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Breaking: harmonised `:fn`/`:fun` naming.** The shorthand for
+  "function" is now consistently `:fun` everywhere:
+  - `Defer.fn` → `Defer.fun` (struct field)
+  - `HandlerMeta.Fn` → `HandlerMeta.Fun` (module name)
+  - `set_fn_handler` → `set_fun_handler` (public API)
+  - `{:fn, fun}` → `{:fun, fun}` (CanonicalHandlerState fallback tag)
+
+  Avoids visual collision with the `fn` keyword and makes the codebase
+  consistent — struct fields, module names, tagged union tags, and
+  function names all use `:fun`.
+
 ## [0.51.0]
 
 ### Added

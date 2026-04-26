@@ -19,7 +19,7 @@ defmodule DoubleDown.TestDispatchTest do
       mod = DoubleDown.Test.ConfigOnlyPort
 
       # Set a test handler — it should be ignored because test_dispatch? is false
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, :greet, [name] ->
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [name] ->
         "test-handler: #{name}"
       end)
 
@@ -83,7 +83,7 @@ defmodule DoubleDown.TestDispatchTest do
 
       mod = DoubleDown.Test.TestDispatchTrue
 
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, :greet, [name] ->
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [name] ->
         "test-dispatch-true: #{name}"
       end)
 
@@ -106,7 +106,7 @@ defmodule DoubleDown.TestDispatchTest do
 
       mod = DoubleDown.Test.TestDispatchFnTrue
 
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, :greet, [name] ->
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [name] ->
         "fn-true: #{name}"
       end)
 
@@ -126,7 +126,7 @@ defmodule DoubleDown.TestDispatchTest do
       mod = DoubleDown.Test.TestDispatchFnFalse
 
       # Set test handler — should be ignored
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, :greet, [name] ->
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [name] ->
         "fn-false-handler: #{name}"
       end)
 
@@ -153,7 +153,7 @@ defmodule DoubleDown.TestDispatchTest do
 
       mod = DoubleDown.Test.DefaultDispatch
 
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, :greet, [name] ->
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [name] ->
         "default: #{name}"
       end)
 
@@ -181,7 +181,7 @@ defmodule DoubleDown.TestDispatchTest do
       on_exit(fn -> Application.delete_env(:double_down_combined, mod) end)
 
       # Set test handler — should be ignored
-      DoubleDown.Testing.set_fn_handler(mod, fn _contract, :greet, [name] ->
+      DoubleDown.Testing.set_fun_handler(mod, fn _contract, :greet, [name] ->
         "should-not-see: #{name}"
       end)
 
@@ -199,7 +199,7 @@ defmodule DoubleDown.TestDispatchTest do
 
       mod = DoubleDown.Test.CombinedTestDispatch
 
-      DoubleDown.Testing.set_fn_handler(mod, fn _contract, :greet, [name] ->
+      DoubleDown.Testing.set_fun_handler(mod, fn _contract, :greet, [name] ->
         "combined-test: #{name}"
       end)
 
@@ -346,7 +346,7 @@ defmodule DoubleDown.TestDispatchTest do
       mod = DoubleDown.Test.BothDispatchPort
 
       # Test handler should take priority even though static_dispatch is true
-      DoubleDown.Testing.set_fn_handler(DoubleDown.Test.Greeter, fn _contract, :greet, [name] ->
+      DoubleDown.Testing.set_fun_handler(DoubleDown.Test.Greeter, fn _contract, :greet, [name] ->
         "test-handler: #{name}"
       end)
 
@@ -371,7 +371,7 @@ defmodule DoubleDown.TestDispatchTest do
 
       # Ownership server is still alive — reset and reinstall works
       DoubleDown.Testing.reset()
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, :greet, [name] -> "Hello #{name}" end)
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [name] -> "Hello #{name}" end)
       assert "Hello Bob" = Greeter.Port.greet("Bob")
     end
 
@@ -387,7 +387,7 @@ defmodule DoubleDown.TestDispatchTest do
 
       # Ownership server is still alive — reset and reinstall works
       DoubleDown.Testing.reset()
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, :greet, [name] -> "Hello #{name}" end)
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [name] -> "Hello #{name}" end)
       assert "Hello Bob" = Greeter.Port.greet("Bob")
     end
 
@@ -403,7 +403,7 @@ defmodule DoubleDown.TestDispatchTest do
 
       # Ownership server is still alive — reset and reinstall works
       DoubleDown.Testing.reset()
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, :greet, [name] -> "Hello #{name}" end)
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [name] -> "Hello #{name}" end)
       assert "Hello Bob" = Greeter.Port.greet("Bob")
     end
   end

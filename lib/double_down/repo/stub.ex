@@ -61,7 +61,7 @@ if Code.ensure_loaded?(Ecto) do
     Create a new Test handler function.
 
     Returns a 3-arity function `(contract, operation, args) -> result` suitable for
-    use with `DoubleDown.Double.stub/2` or `DoubleDown.Testing.set_fn_handler/2`.
+    use with `DoubleDown.Double.stub/2` or `DoubleDown.Testing.set_fun_handler/2`.
 
     ## Arguments
 
@@ -332,28 +332,28 @@ if Code.ensure_loaded?(Ecto) do
     # -----------------------------------------------------------------
 
     defp dispatch(_contract, :transact, [fun, _opts], _fallback_fn) when is_function(fun, 0) do
-      %DoubleDown.Contract.Dispatch.Defer{fn: fn -> run_in_transaction(fun) end}
+      %DoubleDown.Contract.Dispatch.Defer{fun: fn -> run_in_transaction(fun) end}
     end
 
     defp dispatch(_contract, :transact, [%Ecto.Multi{} = multi, opts], _fallback_fn) do
       repo_facade = Keyword.get(opts, DoubleDown.Repo.Facade)
 
       %DoubleDown.Contract.Dispatch.Defer{
-        fn: fn ->
+        fun: fn ->
           run_in_transaction(fn -> DoubleDown.Repo.Impl.MultiStepper.run(multi, repo_facade) end)
         end
       }
     end
 
     defp dispatch(_contract, :transaction, [fun, _opts], _fallback_fn) when is_function(fun, 0) do
-      %DoubleDown.Contract.Dispatch.Defer{fn: fn -> run_in_transaction(fun) end}
+      %DoubleDown.Contract.Dispatch.Defer{fun: fn -> run_in_transaction(fun) end}
     end
 
     defp dispatch(_contract, :transaction, [%Ecto.Multi{} = multi, opts], _fallback_fn) do
       repo_facade = Keyword.get(opts, DoubleDown.Repo.Facade)
 
       %DoubleDown.Contract.Dispatch.Defer{
-        fn: fn ->
+        fun: fn ->
           run_in_transaction(fn -> DoubleDown.Repo.Impl.MultiStepper.run(multi, repo_facade) end)
         end
       }
@@ -363,7 +363,7 @@ if Code.ensure_loaded?(Ecto) do
 
     defp dispatch(_contract, :rollback, [value], _fallback_fn) do
       %DoubleDown.Contract.Dispatch.Defer{
-        fn: fn ->
+        fun: fn ->
           if Process.get(@transaction_key, false) do
             throw({:rollback, value})
           else
@@ -376,7 +376,7 @@ if Code.ensure_loaded?(Ecto) do
 
     defp dispatch(_contract, :in_transaction?, [], _fallback_fn) do
       %DoubleDown.Contract.Dispatch.Defer{
-        fn: fn -> Process.get(@transaction_key, false) end
+        fun: fn -> Process.get(@transaction_key, false) end
       }
     end
 

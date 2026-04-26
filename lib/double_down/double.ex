@@ -57,7 +57,7 @@ defmodule DoubleDown.Double do
   ### Function fallback (stub)
 
   A stateless 3-arity `fn contract, operation, args -> result end` — canned
-  responses, same signature as `set_fn_handler`:
+  responses, same signature as `set_fun_handler`:
 
       MyContract
       |> DoubleDown.Double.expect(:get, fn [id] -> %Thing{id: id} end)
@@ -156,7 +156,7 @@ defmodule DoubleDown.Double do
   ## Relationship to existing APIs
 
   This is a higher-level convenience built on `set_stateful_handler`.
-  It does not replace `set_fn_handler` or `set_stateful_handler` —
+  It does not replace `set_fun_handler` or `set_stateful_handler` —
   those remain for cases that don't fit the expect/stub pattern.
 
   ## Known limitations
@@ -315,7 +315,7 @@ defmodule DoubleDown.Double do
   When the function is 3-arity `fn contract, operation, args -> result end`,
   it acts as a fallback for any operation on the contract that has
   no per-operation expect or stub. This is the same signature as
-  `set_fn_handler`, so existing handler functions can be reused:
+  `set_fun_handler`, so existing handler functions can be reused:
 
       DoubleDown.Double.stub(MyContract, fn _contract, operation, args ->
         case {operation, args} do
@@ -351,7 +351,7 @@ defmodule DoubleDown.Double do
     ensure_handler_installed(contract)
 
     update_handler_state(contract, fn state ->
-      %{state | fallback: {:fn, fun}}
+      %{state | fallback: {:fun, fun}}
     end)
 
     contract
@@ -423,7 +423,7 @@ defmodule DoubleDown.Double do
     ensure_handler_installed(contract)
 
     update_handler_state(contract, fn state ->
-      %{state | fallback: {:fn, handler_fn}}
+      %{state | fallback: {:fun, handler_fn}}
     end)
 
     contract
@@ -940,9 +940,9 @@ defmodule DoubleDown.Double do
     case state.fallback do
       nil ->
         msg = unexpected_call_message(state.contract, state, operation, args)
-        {%DoubleDown.Contract.Dispatch.Defer{fn: fn -> raise msg end}, state}
+        {%DoubleDown.Contract.Dispatch.Defer{fun: fn -> raise msg end}, state}
 
-      {:fn, fallback_fn} ->
+      {:fun, fallback_fn} ->
         invoke_fn_fallback(fallback_fn, state, operation, args)
 
       {:stateful, fallback_fn} ->
@@ -963,7 +963,7 @@ defmodule DoubleDown.Double do
     # the moduledoc.
     FunctionClauseError ->
       msg = unexpected_call_message(state.contract, state, operation, args)
-      {%DoubleDown.Contract.Dispatch.Defer{fn: fn -> reraise msg, __STACKTRACE__ end}, state}
+      {%DoubleDown.Contract.Dispatch.Defer{fun: fn -> reraise msg, __STACKTRACE__ end}, state}
   end
 
   defp invoke_stateful_fallback(fallback_fn, state, operation, args, all_states) do
@@ -991,7 +991,7 @@ defmodule DoubleDown.Double do
     # in the moduledoc.
     FunctionClauseError ->
       msg = unexpected_call_message(state.contract, state, operation, args)
-      {%DoubleDown.Contract.Dispatch.Defer{fn: fn -> reraise msg, __STACKTRACE__ end}, state}
+      {%DoubleDown.Contract.Dispatch.Defer{fun: fn -> reraise msg, __STACKTRACE__ end}, state}
   end
 
   # Module fallback: defer the apply to the calling process via %Defer{}.
@@ -1001,7 +1001,7 @@ defmodule DoubleDown.Double do
   # checkout, process dictionary, etc.). %Defer{} moves the apply outside
   # the lock, same mechanism transact uses.
   defp invoke_module_fallback(module, state, operation, args) do
-    {%DoubleDown.Contract.Dispatch.Defer{fn: fn -> apply(module, operation, args) end}, state}
+    {%DoubleDown.Contract.Dispatch.Defer{fun: fn -> apply(module, operation, args) end}, state}
   end
 
   defp unexpected_call_message(contract, %CanonicalHandlerState{expects: expects}, operation, args) do

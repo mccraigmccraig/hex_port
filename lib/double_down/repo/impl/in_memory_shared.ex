@@ -131,7 +131,7 @@ if Code.ensure_loaded?(Ecto) do
              |> Enum.filter(&is_integer/1)
            end) do
         {:error, {:no_autogenerate, message}} ->
-          {%DoubleDown.Contract.Dispatch.Defer{fn: fn -> raise ArgumentError, message end}, store}
+          {%DoubleDown.Contract.Dispatch.Defer{fun: fn -> raise ArgumentError, message end}, store}
 
         {id, record} ->
           record = Ecto.put_meta(record, state: :loaded)
@@ -273,7 +273,7 @@ if Code.ensure_loaded?(Ecto) do
           failed_struct = Enum.at(structs, failed_index)
 
           {%DoubleDown.Contract.Dispatch.Defer{
-             fn: fn ->
+             fun: fn ->
                raise RuntimeError,
                      "could not reload #{inspect(failed_struct)}, maybe it doesn't exist or was deleted"
              end
@@ -288,7 +288,7 @@ if Code.ensure_loaded?(Ecto) do
       case get_record(store, schema, id) do
         nil ->
           {%DoubleDown.Contract.Dispatch.Defer{
-             fn: fn ->
+             fun: fn ->
                raise RuntimeError,
                      "could not reload #{inspect(struct)}, maybe it doesn't exist or was deleted"
              end
@@ -332,7 +332,7 @@ if Code.ensure_loaded?(Ecto) do
 
     defp bang_raise(action, %Ecto.Changeset{} = changeset, store) do
       {%DoubleDown.Contract.Dispatch.Defer{
-         fn: fn ->
+         fun: fn ->
            raise Ecto.InvalidChangesetError, action: action, changeset: changeset
          end
        }, store}
@@ -347,7 +347,7 @@ if Code.ensure_loaded?(Ecto) do
       snapshot = store
 
       {%DoubleDown.Contract.Dispatch.Defer{
-         fn: fn -> run_in_transaction(fun, contract, snapshot) end
+         fun: fn -> run_in_transaction(fun, contract, snapshot) end
        }, store}
     end
 
@@ -356,7 +356,7 @@ if Code.ensure_loaded?(Ecto) do
       snapshot = store
 
       {%DoubleDown.Contract.Dispatch.Defer{
-         fn: fn ->
+         fun: fn ->
            run_in_transaction(
              fn -> DoubleDown.Repo.Impl.MultiStepper.run(multi, repo_facade) end,
              contract,
@@ -371,14 +371,14 @@ if Code.ensure_loaded?(Ecto) do
     @doc false
     def dispatch_in_transaction?(store) do
       {%DoubleDown.Contract.Dispatch.Defer{
-         fn: fn -> Process.get(@transaction_key, false) end
+         fun: fn -> Process.get(@transaction_key, false) end
        }, store}
     end
 
     @doc false
     def dispatch_rollback([value], store) do
       {%DoubleDown.Contract.Dispatch.Defer{
-         fn: fn ->
+         fun: fn ->
            if Process.get(@transaction_key, false) do
              throw({:rollback, value})
            else
@@ -465,7 +465,7 @@ if Code.ensure_loaded?(Ecto) do
             exception ->
               stacktrace = __STACKTRACE__
 
-              {%DoubleDown.Contract.Dispatch.Defer{fn: fn -> reraise exception, stacktrace end},
+              {%DoubleDown.Contract.Dispatch.Defer{fun: fn -> reraise exception, stacktrace end},
                store}
           end
       end
@@ -473,20 +473,20 @@ if Code.ensure_loaded?(Ecto) do
 
     @doc false
     def defer_raise(message, store) do
-      {%DoubleDown.Contract.Dispatch.Defer{fn: fn -> raise ArgumentError, message end}, store}
+      {%DoubleDown.Contract.Dispatch.Defer{fun: fn -> raise ArgumentError, message end}, store}
     end
 
     @doc false
     def defer_raise_no_results(queryable, store) do
       {%DoubleDown.Contract.Dispatch.Defer{
-         fn: fn -> raise Ecto.NoResultsError, queryable: queryable end
+         fun: fn -> raise Ecto.NoResultsError, queryable: queryable end
        }, store}
     end
 
     @doc false
     def defer_raise_multiple_results(queryable, count, store) do
       {%DoubleDown.Contract.Dispatch.Defer{
-         fn: fn -> raise Ecto.MultipleResultsError, queryable: queryable, count: count end
+         fun: fn -> raise Ecto.MultipleResultsError, queryable: queryable, count: count end
        }, store}
     end
 

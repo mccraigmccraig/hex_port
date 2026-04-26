@@ -304,7 +304,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
       cs = User.changeset(%{}) |> Ecto.Changeset.add_error(:name, "required")
       cs = %{cs | valid?: false}
 
-      {%DoubleDown.Contract.Dispatch.Defer{fn: raise_fn}, _} =
+      {%DoubleDown.Contract.Dispatch.Defer{fun: raise_fn}, _} =
         InMemory.dispatch(DoubleDown.Repo, :insert!, [cs], store)
 
       assert_raise Ecto.InvalidChangesetError, fn -> raise_fn.() end
@@ -324,7 +324,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
       cs = User.changeset(%{}) |> Ecto.Changeset.add_error(:name, "required")
       cs = %{cs | valid?: false}
 
-      {%DoubleDown.Contract.Dispatch.Defer{fn: raise_fn}, _} =
+      {%DoubleDown.Contract.Dispatch.Defer{fun: raise_fn}, _} =
         InMemory.dispatch(DoubleDown.Repo, :update!, [cs], store)
 
       assert_raise Ecto.InvalidChangesetError, fn -> raise_fn.() end
@@ -347,7 +347,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
 
       cs = %{cs | valid?: false}
 
-      {%DoubleDown.Contract.Dispatch.Defer{fn: raise_fn}, _} =
+      {%DoubleDown.Contract.Dispatch.Defer{fun: raise_fn}, _} =
         InMemory.dispatch(DoubleDown.Repo, :delete!, [cs], store)
 
       assert_raise Ecto.InvalidChangesetError, fn -> raise_fn.() end
@@ -476,7 +476,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
     test "raises when absent" do
       store = InMemory.new()
 
-      {%DoubleDown.Contract.Dispatch.Defer{fn: raise_fn}, _} =
+      {%DoubleDown.Contract.Dispatch.Defer{fun: raise_fn}, _} =
         InMemory.dispatch(DoubleDown.Repo, :get!, [User, 999], store)
 
       assert_raise Ecto.NoResultsError, fn -> raise_fn.() end
@@ -536,7 +536,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
     test "raises when no match" do
       store = InMemory.new()
 
-      {%DoubleDown.Contract.Dispatch.Defer{fn: raise_fn}, _} =
+      {%DoubleDown.Contract.Dispatch.Defer{fun: raise_fn}, _} =
         InMemory.dispatch(DoubleDown.Repo, :get_by!, [User, [name: "Nobody"]], store)
 
       assert_raise Ecto.NoResultsError, fn -> raise_fn.() end
@@ -549,7 +549,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
           %User{id: 2, name: "Alice"}
         ])
 
-      {%DoubleDown.Contract.Dispatch.Defer{fn: raise_fn}, _} =
+      {%DoubleDown.Contract.Dispatch.Defer{fun: raise_fn}, _} =
         InMemory.dispatch(DoubleDown.Repo, :get_by!, [User, [name: "Alice"]], store)
 
       assert_raise Ecto.MultipleResultsError, fn -> raise_fn.() end
@@ -755,7 +755,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
     test "raises when multiple records" do
       store = InMemory.new([%User{id: 1, name: "Alice"}, %User{id: 2, name: "Bob"}])
 
-      {%DoubleDown.Contract.Dispatch.Defer{fn: raise_fn}, _} =
+      {%DoubleDown.Contract.Dispatch.Defer{fun: raise_fn}, _} =
         InMemory.dispatch(DoubleDown.Repo, :one, [User], store)
 
       assert_raise Ecto.MultipleResultsError, fn -> raise_fn.() end
@@ -772,7 +772,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
     test "raises when no records" do
       store = InMemory.new()
 
-      {%DoubleDown.Contract.Dispatch.Defer{fn: raise_fn}, _} =
+      {%DoubleDown.Contract.Dispatch.Defer{fun: raise_fn}, _} =
         InMemory.dispatch(DoubleDown.Repo, :one!, [User], store)
 
       assert_raise Ecto.NoResultsError, fn -> raise_fn.() end
@@ -781,7 +781,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
     test "raises when multiple records" do
       store = InMemory.new([%User{id: 1, name: "Alice"}, %User{id: 2, name: "Bob"}])
 
-      {%DoubleDown.Contract.Dispatch.Defer{fn: raise_fn}, _} =
+      {%DoubleDown.Contract.Dispatch.Defer{fun: raise_fn}, _} =
         InMemory.dispatch(DoubleDown.Repo, :one!, [User], store)
 
       assert_raise Ecto.MultipleResultsError, fn -> raise_fn.() end
@@ -942,7 +942,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
       store = InMemory.new()
       entries = [%{name: "Alice"}]
 
-      {%DoubleDown.Contract.Dispatch.Defer{fn: raise_fn}, _} =
+      {%DoubleDown.Contract.Dispatch.Defer{fun: raise_fn}, _} =
         InMemory.dispatch(DoubleDown.Repo, :insert_all, ["users", entries, []], store)
 
       assert_raise ArgumentError, ~r/does not support binary table name/, fn -> raise_fn.() end
@@ -985,7 +985,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
     test "non-set updates fall to fallback" do
       store = InMemory.new()
 
-      {%DoubleDown.Contract.Dispatch.Defer{fn: raise_fn}, _} =
+      {%DoubleDown.Contract.Dispatch.Defer{fun: raise_fn}, _} =
         InMemory.dispatch(DoubleDown.Repo, :update_all, [User, [inc: [age: 1]]], store)
 
       assert_raise ArgumentError, ~r/cannot service/, fn -> raise_fn.() end
@@ -1013,7 +1013,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
       query = Ecto.Query.from(u in User)
       store = InMemory.new()
 
-      {%DoubleDown.Contract.Dispatch.Defer{fn: raise_fn}, _} =
+      {%DoubleDown.Contract.Dispatch.Defer{fun: raise_fn}, _} =
         InMemory.dispatch(DoubleDown.Repo, :all, [query], store)
 
       assert_raise ArgumentError, ~r/cannot service/, fn -> raise_fn.() end
@@ -1570,7 +1570,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
     test "raises helpful error when no fallback" do
       store = InMemory.new()
 
-      {%DoubleDown.Contract.Dispatch.Defer{fn: raise_fn}, _} =
+      {%DoubleDown.Contract.Dispatch.Defer{fun: raise_fn}, _} =
         InMemory.dispatch(DoubleDown.Repo, :query, ["SELECT 1"], store)
 
       assert_raise ArgumentError, ~r/cannot service :query/, fn -> raise_fn.() end
@@ -1590,7 +1590,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
     test "raises helpful error when no fallback" do
       store = InMemory.new()
 
-      {%DoubleDown.Contract.Dispatch.Defer{fn: raise_fn}, _} =
+      {%DoubleDown.Contract.Dispatch.Defer{fun: raise_fn}, _} =
         InMemory.dispatch(DoubleDown.Repo, :query!, ["SELECT 1"], store)
 
       assert_raise ArgumentError, ~r/cannot service :query!/, fn -> raise_fn.() end
@@ -1614,7 +1614,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
     test "unrecognised operation raises helpful error when no fallback" do
       store = InMemory.new()
 
-      {%DoubleDown.Contract.Dispatch.Defer{fn: raise_fn}, _} =
+      {%DoubleDown.Contract.Dispatch.Defer{fun: raise_fn}, _} =
         InMemory.dispatch(DoubleDown.Repo, :some_future_op, [42], store)
 
       assert_raise ArgumentError, ~r/cannot service :some_future_op/, fn -> raise_fn.() end
@@ -1643,7 +1643,7 @@ defmodule DoubleDown.Repo.InMemoryTest do
     test "raises helpful error when no fallback" do
       store = InMemory.new()
 
-      {%DoubleDown.Contract.Dispatch.Defer{fn: raise_fn}, _} =
+      {%DoubleDown.Contract.Dispatch.Defer{fun: raise_fn}, _} =
         InMemory.dispatch(DoubleDown.Repo, :stream, [User], store)
 
       assert_raise ArgumentError, ~r/cannot service :stream/, fn -> raise_fn.() end

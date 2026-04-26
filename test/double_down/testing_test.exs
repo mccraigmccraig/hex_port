@@ -17,16 +17,16 @@ defmodule DoubleDown.TestingTest do
     end
   end
 
-  describe "set_fn_handler/2" do
+  describe "set_fun_handler/2" do
     test "returns :ok" do
       assert :ok =
-               DoubleDown.Testing.set_fn_handler(Greeter, fn
+               DoubleDown.Testing.set_fun_handler(Greeter, fn
                  _contract, :greet, [name] -> "fn: #{name}"
                end)
     end
 
     test "registered fn handler is used by dispatch" do
-      DoubleDown.Testing.set_fn_handler(Greeter, fn
+      DoubleDown.Testing.set_fun_handler(Greeter, fn
         _contract, :greet, [name] -> "fn: #{name}"
       end)
 
@@ -35,7 +35,7 @@ defmodule DoubleDown.TestingTest do
 
     test "rejects non-arity-3 function" do
       assert_raise FunctionClauseError, fn ->
-        DoubleDown.Testing.set_fn_handler(Greeter, fn _ -> :bad end)
+        DoubleDown.Testing.set_fun_handler(Greeter, fn _ -> :bad end)
       end
     end
   end
@@ -88,19 +88,19 @@ defmodule DoubleDown.TestingTest do
 
   describe "handler overwrite protection" do
     test "raises when setting fn handler over existing fn handler" do
-      DoubleDown.Testing.set_fn_handler(Greeter, fn
+      DoubleDown.Testing.set_fun_handler(Greeter, fn
         _contract, :greet, [name] -> "first: #{name}"
       end)
 
       assert_raise ArgumentError, ~r/A handler is already installed/, fn ->
-        DoubleDown.Testing.set_fn_handler(Greeter, fn
+        DoubleDown.Testing.set_fun_handler(Greeter, fn
           _contract, :greet, [name] -> "second: #{name}"
         end)
       end
     end
 
     test "raises when setting module handler over existing fn handler" do
-      DoubleDown.Testing.set_fn_handler(Greeter, fn
+      DoubleDown.Testing.set_fun_handler(Greeter, fn
         _contract, :greet, [name] -> "fn: #{name}"
       end)
 
@@ -125,7 +125,7 @@ defmodule DoubleDown.TestingTest do
     end
 
     test "reset then reinstall works" do
-      DoubleDown.Testing.set_fn_handler(Greeter, fn
+      DoubleDown.Testing.set_fun_handler(Greeter, fn
         _contract, :greet, [name] -> "first: #{name}"
       end)
 
@@ -133,7 +133,7 @@ defmodule DoubleDown.TestingTest do
 
       DoubleDown.Testing.reset()
 
-      DoubleDown.Testing.set_fn_handler(Greeter, fn
+      DoubleDown.Testing.set_fun_handler(Greeter, fn
         _contract, :greet, [name] -> "second: #{name}"
       end)
 
@@ -145,12 +145,12 @@ defmodule DoubleDown.TestingTest do
 
   describe "reset/0" do
     test "returns :ok" do
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, :greet, [_] -> "x" end)
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [_] -> "x" end)
       assert :ok = DoubleDown.Testing.reset()
     end
 
     test "clears handlers so dispatch falls through to config" do
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, :greet, [_] -> "test" end)
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [_] -> "test" end)
       assert "test" = Greeter.Port.greet("X")
 
       DoubleDown.Testing.reset()
@@ -162,7 +162,7 @@ defmodule DoubleDown.TestingTest do
     end
 
     test "clears log" do
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, :greet, [name] -> name end)
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [name] -> name end)
       DoubleDown.Testing.enable_log(Greeter)
       Greeter.Port.greet("X")
       assert length(DoubleDown.Testing.get_log(Greeter)) == 1
@@ -210,7 +210,7 @@ defmodule DoubleDown.TestingTest do
       # Enable log first, then set handler
       DoubleDown.Testing.enable_log(Greeter)
 
-      DoubleDown.Testing.set_fn_handler(Greeter, fn
+      DoubleDown.Testing.set_fun_handler(Greeter, fn
         _contract, :greet, [name] -> "hi #{name}"
       end)
 
@@ -231,7 +231,7 @@ defmodule DoubleDown.TestingTest do
     end
 
     test "returns entries in dispatch order" do
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, operation, args ->
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, operation, args ->
         case {operation, args} do
           {:greet, [name]} -> "hi #{name}"
           {:fetch_greeting, [name]} -> {:ok, "hi #{name}"}
@@ -255,7 +255,7 @@ defmodule DoubleDown.TestingTest do
     end
 
     test "log entries include result" do
-      DoubleDown.Testing.set_fn_handler(Greeter, fn
+      DoubleDown.Testing.set_fun_handler(Greeter, fn
         _contract, :greet, [name] -> "result: #{name}"
       end)
 
@@ -267,7 +267,7 @@ defmodule DoubleDown.TestingTest do
     end
 
     test "logs are per-contract" do
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, :greet, [n] -> n end)
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [n] -> n end)
 
       DoubleDown.Testing.set_stateful_handler(
         Counter,
@@ -294,7 +294,7 @@ defmodule DoubleDown.TestingTest do
 
   describe "async isolation" do
     test "handlers are isolated per process" do
-      DoubleDown.Testing.set_fn_handler(Greeter, fn
+      DoubleDown.Testing.set_fun_handler(Greeter, fn
         _contract, :greet, [name] -> "parent: #{name}"
       end)
 
@@ -319,7 +319,7 @@ defmodule DoubleDown.TestingTest do
     end
 
     test "different processes can have different handlers for the same contract" do
-      DoubleDown.Testing.set_fn_handler(Greeter, fn
+      DoubleDown.Testing.set_fun_handler(Greeter, fn
         _contract, :greet, [name] -> "process-1: #{name}"
       end)
 
@@ -327,7 +327,7 @@ defmodule DoubleDown.TestingTest do
       test_pid = self()
 
       spawn(fn ->
-        DoubleDown.Testing.set_fn_handler(Greeter, fn
+        DoubleDown.Testing.set_fun_handler(Greeter, fn
           _contract, :greet, [name] -> "process-2: #{name}"
         end)
 
@@ -341,14 +341,14 @@ defmodule DoubleDown.TestingTest do
     end
 
     test "logs are isolated per process" do
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, :greet, [n] -> n end)
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [n] -> n end)
       DoubleDown.Testing.enable_log(Greeter)
       Greeter.Port.greet("parent")
 
       test_pid = self()
 
       spawn(fn ->
-        DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, :greet, [n] -> n end)
+        DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [n] -> n end)
         DoubleDown.Testing.enable_log(Greeter)
         Greeter.Port.greet("child")
         send(test_pid, {:child_log, DoubleDown.Testing.get_log(Greeter)})
@@ -368,7 +368,7 @@ defmodule DoubleDown.TestingTest do
 
   describe "allow/3" do
     test "returns :ok for valid allow" do
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, :greet, [n] -> n end)
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [n] -> n end)
 
       task = Task.async(fn -> receive do: (:go -> Greeter.Port.greet("x")) end)
 
@@ -379,7 +379,7 @@ defmodule DoubleDown.TestingTest do
     end
 
     test "allowed process shares handler with owner" do
-      DoubleDown.Testing.set_fn_handler(Greeter, fn
+      DoubleDown.Testing.set_fun_handler(Greeter, fn
         _contract, :greet, [name] -> "shared: #{name}"
       end)
 
@@ -418,7 +418,7 @@ defmodule DoubleDown.TestingTest do
     end
 
     test "allowed process logs are visible to owner" do
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, :greet, [n] -> n end)
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [n] -> n end)
       DoubleDown.Testing.enable_log(Greeter)
 
       Greeter.Port.greet("parent")
@@ -442,7 +442,7 @@ defmodule DoubleDown.TestingTest do
     end
 
     test "allow with lazy pid function" do
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, :greet, [n] -> "lazy: #{n}" end)
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [n] -> "lazy: #{n}" end)
 
       # Use a lazy function that returns the pid
       {:ok, agent} = Agent.start_link(fn -> nil end)
@@ -465,7 +465,7 @@ defmodule DoubleDown.TestingTest do
 
   describe "multiple contracts" do
     test "can register handlers for multiple contracts independently" do
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, :greet, [n] -> "greet: #{n}" end)
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [n] -> "greet: #{n}" end)
 
       DoubleDown.Testing.set_stateful_handler(
         Counter,
@@ -478,7 +478,7 @@ defmodule DoubleDown.TestingTest do
     end
 
     test "resetting clears all contracts for the current process" do
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, :greet, [_] -> "x" end)
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [_] -> "x" end)
 
       DoubleDown.Testing.set_stateful_handler(
         Counter,
@@ -511,12 +511,12 @@ defmodule DoubleDown.TestingGlobalModeTest do
 
   describe "set_mode_to_global/0" do
     test "returns :ok" do
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, :greet, [n] -> n end)
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [n] -> n end)
       assert :ok = DoubleDown.Testing.set_mode_to_global()
     end
 
     test "makes handlers accessible to spawned processes without allow" do
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, :greet, [name] -> "global: #{name}" end)
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [name] -> "global: #{name}" end)
       DoubleDown.Testing.set_mode_to_global()
 
       # Spawn a process that has no $callers link and no allow — only global mode makes this work
@@ -529,7 +529,7 @@ defmodule DoubleDown.TestingGlobalModeTest do
     end
 
     test "makes handlers accessible to named GenServer processes" do
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, :greet, [name] -> "global: #{name}" end)
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [name] -> "global: #{name}" end)
       DoubleDown.Testing.set_mode_to_global()
 
       {:ok, agent} = Agent.start_link(fn -> nil end)
@@ -565,7 +565,7 @@ defmodule DoubleDown.TestingGlobalModeTest do
 
     test "handlers set after set_mode_to_global are also visible" do
       DoubleDown.Testing.set_mode_to_global()
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, :greet, [name] -> "late: #{name}" end)
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [name] -> "late: #{name}" end)
 
       task = Task.async(fn -> Greeter.Port.greet("after") end)
       assert "late: after" = Task.await(task)
@@ -575,7 +575,7 @@ defmodule DoubleDown.TestingGlobalModeTest do
   describe "set_mode_from_context/1" do
     test "sets global mode when async is false" do
       DoubleDown.Testing.set_mode_from_context(%{async: false})
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, :greet, [name] -> "ctx: #{name}" end)
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [name] -> "ctx: #{name}" end)
 
       # Bare spawn (no $callers) — only works in global mode
       task = Task.async(fn -> Greeter.Port.greet("from_task") end)
@@ -586,7 +586,7 @@ defmodule DoubleDown.TestingGlobalModeTest do
       # First go global so we can prove it switches back
       DoubleDown.Testing.set_mode_to_global()
       DoubleDown.Testing.set_mode_from_context(%{async: true})
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, :greet, [name] -> "priv: #{name}" end)
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [name] -> "priv: #{name}" end)
 
       # Bare spawn — should NOT see the handler in private mode
       ref = make_ref()
@@ -608,7 +608,7 @@ defmodule DoubleDown.TestingGlobalModeTest do
 
     test "defaults to global mode when async key is absent" do
       DoubleDown.Testing.set_mode_from_context(%{})
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, :greet, [name] -> "default: #{name}" end)
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [name] -> "default: #{name}" end)
 
       task = Task.async(fn -> Greeter.Port.greet("from_task") end)
       assert "default: from_task" = Task.await(task)
@@ -617,7 +617,7 @@ defmodule DoubleDown.TestingGlobalModeTest do
 
   describe "set_mode_to_private/0" do
     test "restores per-process isolation after global mode" do
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, :greet, [name] -> "global: #{name}" end)
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [name] -> "global: #{name}" end)
       DoubleDown.Testing.set_mode_to_global()
 
       # Global mode works — use bare spawn (no $callers) to prove it's global, not $callers

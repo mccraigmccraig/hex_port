@@ -8,7 +8,7 @@ defmodule DoubleDown.LogTest do
   # Helper: set up a handler and enable logging for a contract,
   # then run the given function which dispatches calls.
   defp with_logged_calls(contract, handler_fn, dispatch_fn) do
-    DoubleDown.Testing.set_fn_handler(contract, handler_fn)
+    DoubleDown.Testing.set_fun_handler(contract, handler_fn)
     DoubleDown.Testing.enable_log(contract)
     dispatch_fn.()
   end
@@ -349,7 +349,7 @@ defmodule DoubleDown.LogTest do
 
   describe "integration" do
     test "full pipeline: set handler, enable log, dispatch, match, verify" do
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, operation, args ->
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, operation, args ->
         case {operation, args} do
           {:greet, [name]} -> "Hi, #{name}!"
           {:fetch_greeting, [name]} -> {:ok, "Hello, #{name}!"}
@@ -368,7 +368,7 @@ defmodule DoubleDown.LogTest do
     end
 
     test "multi-contract verification" do
-      DoubleDown.Testing.set_fn_handler(Greeter, fn _contract, :greet, [name] -> "Hi, #{name}!" end)
+      DoubleDown.Testing.set_fun_handler(Greeter, fn _contract, :greet, [name] -> "Hi, #{name}!" end)
       DoubleDown.Testing.enable_log(Greeter)
 
       DoubleDown.Testing.set_stateful_handler(

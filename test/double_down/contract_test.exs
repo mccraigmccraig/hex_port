@@ -58,7 +58,7 @@ defmodule DoubleDown.ContractTest do
     end
 
     test "Port facade dispatches through DoubleDown.Contract.Dispatch" do
-      DoubleDown.Testing.set_fn_handler(DoubleDown.Test.Greeter, fn
+      DoubleDown.Testing.set_fun_handler(DoubleDown.Test.Greeter, fn
         _contract, :greet, [name] -> "Dispatched: #{name}"
       end)
 
@@ -66,7 +66,7 @@ defmodule DoubleDown.ContractTest do
     end
 
     test "Port facade passes all arguments" do
-      DoubleDown.Testing.set_fn_handler(DoubleDown.Test.MultiParam, fn
+      DoubleDown.Testing.set_fun_handler(DoubleDown.Test.MultiParam, fn
         _contract, :find, [tenant, type, id] -> {:ok, %{tenant: tenant, type: type, id: id}}
       end)
 
@@ -75,7 +75,7 @@ defmodule DoubleDown.ContractTest do
     end
 
     test "zero-arg Port functions work" do
-      DoubleDown.Testing.set_fn_handler(DoubleDown.Test.ZeroArg, fn _contract, operation, args ->
+      DoubleDown.Testing.set_fun_handler(DoubleDown.Test.ZeroArg, fn _contract, operation, args ->
         case {operation, args} do
           {:health_check, []} -> :ok
           {:get_version, []} -> {:ok, "1.0.0"}
@@ -115,7 +115,7 @@ defmodule DoubleDown.ContractTest do
     test "Port stores @double_down_contract module attribute" do
       # The contract module reference is captured and used by dispatch
       # We verify this indirectly — dispatch resolves using it.
-      DoubleDown.Testing.set_fn_handler(DoubleDown.Test.Greeter, fn
+      DoubleDown.Testing.set_fun_handler(DoubleDown.Test.Greeter, fn
         _contract, :greet, [name] -> "via-contract: #{name}"
       end)
 
@@ -349,7 +349,7 @@ defmodule DoubleDown.ContractTest do
 
       mod = DoubleDown.Test.CombinedDispatch
 
-      DoubleDown.Testing.set_fn_handler(mod, fn
+      DoubleDown.Testing.set_fun_handler(mod, fn
         _contract, :greet, ["Alice"] -> "Hello, Alice!"
       end)
 
@@ -445,7 +445,7 @@ defmodule DoubleDown.ContractTest do
     end
 
     test "Port facade with aliased types dispatches correctly" do
-      DoubleDown.Testing.set_fn_handler(DoubleDown.Test.AliasedTypes, fn _contract, operation, args ->
+      DoubleDown.Testing.set_fun_handler(DoubleDown.Test.AliasedTypes, fn _contract, operation, args ->
         case {operation, args} do
           {:get_widget, [id]} -> {:ok, %DoubleDown.Test.Deep.Nested.Widget{id: id, label: "test"}}
           {:list_widgets, [_filter]} -> []

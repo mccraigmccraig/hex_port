@@ -69,7 +69,7 @@ defmodule DoubleDown.ContractFacade do
 
       # test/my_test.exs
       setup do
-        DoubleDown.Testing.set_fn_handler(MyApp.Todos, fn _contract, operation, args ->
+        DoubleDown.Testing.set_fun_handler(MyApp.Todos, fn _contract, operation, args ->
           case {operation, args} do
             {:get_todo, [id]} -> {:ok, %Todo{id: id}}
             {:list_todos, []} -> []

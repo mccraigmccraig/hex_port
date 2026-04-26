@@ -47,7 +47,7 @@ defmodule DoubleDown.BehaviourFacadeTest do
 
   describe "fn handler dispatch" do
     test "dispatches to a function handler" do
-      DoubleDown.Testing.set_fn_handler(VanillaBehaviour, fn _contract, operation, args ->
+      DoubleDown.Testing.set_fun_handler(VanillaBehaviour, fn _contract, operation, args ->
         case {operation, args} do
           {:get_item, [id]} -> {:ok, %{id: id}}
           {:list_items, []} -> [%{id: "test"}]
@@ -61,7 +61,7 @@ defmodule DoubleDown.BehaviourFacadeTest do
     end
 
     test "dispatches zero-arg callbacks via fn handler" do
-      DoubleDown.Testing.set_fn_handler(ZeroArgBehaviour, fn _contract, operation, args ->
+      DoubleDown.Testing.set_fun_handler(ZeroArgBehaviour, fn _contract, operation, args ->
         case {operation, args} do
           {:ping, []} -> :pong
           {:health_check, []} -> {:ok, %{status: :healthy}}
@@ -73,7 +73,7 @@ defmodule DoubleDown.BehaviourFacadeTest do
     end
 
     test "dispatches bare-type callbacks via fn handler" do
-      DoubleDown.Testing.set_fn_handler(BareTypesBehaviour, fn _contract, :fetch, [key, _opts] ->
+      DoubleDown.Testing.set_fun_handler(BareTypesBehaviour, fn _contract, :fetch, [key, _opts] ->
         {:ok, key}
       end)
 
@@ -81,7 +81,7 @@ defmodule DoubleDown.BehaviourFacadeTest do
     end
 
     test "dispatches when-clause callbacks via fn handler" do
-      DoubleDown.Testing.set_fn_handler(WhenClauseBehaviour, fn _contract, :transform, [input] ->
+      DoubleDown.Testing.set_fun_handler(WhenClauseBehaviour, fn _contract, :transform, [input] ->
         String.upcase(input)
       end)
 

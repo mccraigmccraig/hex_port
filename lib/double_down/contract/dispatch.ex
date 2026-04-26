@@ -154,7 +154,7 @@ defmodule DoubleDown.Contract.Dispatch do
       owner_pid ->
         case NimbleOwnership.get_owned(Keys.ownership_server(), owner_pid) do
           %{^contract => %HandlerMeta.Module{} = meta} -> {:ok, owner_pid, meta}
-          %{^contract => %HandlerMeta.Fn{} = meta} -> {:ok, owner_pid, meta}
+          %{^contract => %HandlerMeta.Fun{} = meta} -> {:ok, owner_pid, meta}
           %{^contract => %HandlerMeta.Stateful{} = meta} -> {:ok, owner_pid, meta}
           %{^contract => other} -> raise_invalid_handler_meta(contract, other)
           _ -> :none
@@ -166,7 +166,7 @@ defmodule DoubleDown.Contract.Dispatch do
     raise ArgumentError, """
     Invalid handler meta stored for #{inspect(contract)}.
 
-    Expected a %HandlerMeta.Module{}, %HandlerMeta.Fn{}, or \
+    Expected a %HandlerMeta.Module{}, %HandlerMeta.Fun{}, or \
     %HandlerMeta.Stateful{} struct, got: #{inspect(value)}
 
     This indicates a bug — handler meta should only be set via \
@@ -220,14 +220,14 @@ defmodule DoubleDown.Contract.Dispatch do
   @doc false
   def invoke_handler(%HandlerMeta.Module{impl: impl}, _owner_pid, _contract, operation, args) do
     case apply(impl, operation, args) do
-      %DoubleDown.Contract.Dispatch.Defer{fn: deferred_fn} -> deferred_fn.()
+      %DoubleDown.Contract.Dispatch.Defer{fun: deferred_fn} -> deferred_fn.()
       result -> result
     end
   end
 
-  def invoke_handler(%HandlerMeta.Fn{fun: fun}, _owner_pid, contract, operation, args) do
+  def invoke_handler(%HandlerMeta.Fun{fun: fun}, _owner_pid, contract, operation, args) do
     case fun.(contract, operation, args) do
-      %DoubleDown.Contract.Dispatch.Defer{fn: deferred_fn} -> deferred_fn.()
+      %DoubleDown.Contract.Dispatch.Defer{fun: deferred_fn} -> deferred_fn.()
       result -> result
     end
   end
@@ -246,7 +246,7 @@ defmodule DoubleDown.Contract.Dispatch do
     # under the contract key. get_and_update on that key gives us
     # atomic read-modify-write of the entire meta (including state).
     #
-    # If the handler returns %DoubleDown.Contract.Dispatch.Defer{fn: deferred_fn}, we skip
+    # If the handler returns %DoubleDown.Contract.Dispatch.Defer{fun: deferred_fn}, we skip
     # the state update and call deferred_fn outside the lock. This supports
     # operations like `transact` whose body re-enters the dispatch system
     # (which would otherwise deadlock on the NimbleOwnership GenServer).
@@ -296,20 +296,20 @@ defmodule DoubleDown.Contract.Dispatch do
             exception ->
               stacktrace = __STACKTRACE__
 
-              {%DoubleDown.Contract.Dispatch.Defer{fn: fn -> reraise exception, stacktrace end},
+              {%DoubleDown.Contract.Dispatch.Defer{fun: fn -> reraise exception, stacktrace end},
                meta}
           catch
             :throw, value ->
-              {%DoubleDown.Contract.Dispatch.Defer{fn: fn -> throw(value) end}, meta}
+              {%DoubleDown.Contract.Dispatch.Defer{fun: fn -> throw(value) end}, meta}
 
             :exit, reason ->
-              {%DoubleDown.Contract.Dispatch.Defer{fn: fn -> exit(reason) end}, meta}
+              {%DoubleDown.Contract.Dispatch.Defer{fun: fn -> exit(reason) end}, meta}
           end
         end
       )
 
     case result do
-      %DoubleDown.Contract.Dispatch.Defer{fn: deferred_fn} -> deferred_fn.()
+      %DoubleDown.Contract.Dispatch.Defer{fun: deferred_fn} -> deferred_fn.()
       result -> result
     end
   end
@@ -422,7 +422,7 @@ defmodule DoubleDown.Contract.Dispatch do
       Or the lower-level DoubleDown.Testing API:
 
           DoubleDown.Testing.set_handler(#{inspect(contract)}, MyImpl)
-          DoubleDown.Testing.set_fn_handler(#{inspect(contract)}, fn _contract, operation, args -> ... end)
+          DoubleDown.Testing.set_fun_handler(#{inspect(contract)}, fn _contract, operation, args -> ... end)
           DoubleDown.Testing.set_stateful_handler(#{inspect(contract)}, handler_fn, initial_state)
       """
     else
