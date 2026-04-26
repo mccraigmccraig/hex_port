@@ -1452,10 +1452,13 @@ defmodule DoubleDown.Repo.InMemoryTest do
           :double_down,
           DoubleDown.Repo,
           :transaction,
-          [fn ->
-            {:ok, _} = TestRepo.insert(User.changeset(%{name: "Inside"}))
-            {:error, :aborted}
-          end, []]
+          [
+            fn ->
+              {:ok, _} = TestRepo.insert(User.changeset(%{name: "Inside"}))
+              {:error, :aborted}
+            end,
+            []
+          ]
         )
 
       assert {:error, :aborted} = result
