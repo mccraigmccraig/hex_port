@@ -32,10 +32,14 @@ defmodule DoubleDown.Double.CanonicalHandlerState do
     fallback_state: nil
   ]
 
+  @type stateful_fun ::
+          (module(), atom(), [term()], term() -> {term(), term()})
+          | (module(), atom(), [term()], term(), map() -> {term(), term()})
+
   @type fallback ::
           nil
           | {:stateless, (module(), atom(), [term()] -> term())}
-          | {:stateful, (... -> {term(), term()})}
+          | {:stateful, stateful_fun()}
           | {:module, module()}
 
   @type t :: %__MODULE__{
