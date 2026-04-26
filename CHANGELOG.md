@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.52.3]
+
+### Fixed
+
+- **Transaction bare return values now wrapped in `{:ok, result}`.**
+  `Ecto.Repo.transaction(fn -> x end)` returns `{:ok, x}` for
+  non-tagged returns. `InMemoryShared` and `Repo.Stub`
+  `run_in_transaction` now wrap bare values instead of relying on
+  facade-level wrapping (which `DynamicFacade` doesn't provide).
+
 ## [0.52.2]
 
 ### Fixed
@@ -1602,6 +1612,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `DoubleDown.Testing` with NimbleOwnership, `Repo.Test` stateless
   adapter, CI setup, Credo, Dialyzer.
 
+[0.52.3]: https://github.com/mccraigmccraig/double_down/compare/v0.52.2...v0.52.3
 [0.52.2]: https://github.com/mccraigmccraig/double_down/compare/v0.52.1...v0.52.2
 [0.52.1]: https://github.com/mccraigmccraig/double_down/compare/v0.52.0...v0.52.1
 [0.52.0]: https://github.com/mccraigmccraig/double_down/compare/v0.51.0...v0.52.0
