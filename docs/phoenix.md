@@ -251,6 +251,103 @@ test "POST /orders calls create_order exactly once", %{conn: conn} do
 end
 ```
 
+## Advanced scenarios
+
+### Context fallback that reads Repo InMemory state
+
+When a context module's stubbed function needs to return data
+consistent with what's been inserted into the InMemory Repo (e.g.
+via ExMachina factories), use a 5-arity stateful fallback with
+cross-contract state access. The `all_states` snapshot includes
+the Repo's InMemory store:
+
+```elixir
+setup do
+  # InMemory Repo for writes
+  DoubleDown.Double.fallback(MyApp.Repo, DoubleDown.Repo.InMemory)
+
+  # Context fallback that reads the Repo's in-memory store
+  DoubleDown.Double.fallback(
+    MyApp.Orders,
+    fn _contract, operation, args, _state, all_states ->
+      repo_state = Map.get(all_states, MyApp.Repo, %{})
+      orders = repo_state |> Map.get(Order, %{}) |> Map.values()
+
+      result =
+        case {operation, args} do
+          {:list_active_orders, [user_id]} ->
+            Enum.filter(orders, &(&1.user_id == user_id and &1.status == :active))
+
+          {:count_orders, [user_id]} ->
+            orders |> Enum.count(&(&1.user_id == user_id))
+
+          {:get_order!, [id]} ->
+            Enum.find(orders, &(&1.id == id)) || raise Ecto.NoResultsError
+        end
+
+      {result, _state}
+    end,
+    %{}
+  )
+
+  :ok
+end
+
+test "GET /orders returns factory-inserted orders", %{conn: conn} do
+  user = insert(:user)
+  insert(:order, user_id: user.id, status: :active)
+  insert(:order, user_id: user.id, status: :cancelled)
+
+  # The context fallback reads from the Repo InMemory store
+  # and filters — no Ecto.Query needed
+  conn = get(conn, "/orders?user_id=#{user.id}&status=active")
+
+  assert json_response(conn, 200)["data"] |> length() == 1
+end
+```
+
+The 5-arity handler receives `all_states` as a read-only snapshot
+of every contract's state. See
+[Cross-contract state access](testing.md#cross-contract-state-access)
+for details.
+
+### Context fallback that calls Repo via Defer
+
+When a context fallback needs to *write* to the Repo (not just read
+its state), use `Defer` to break out of the NimbleOwnership lock
+and make re-entrant Repo calls:
+
+```elixir
+DoubleDown.Double.fallback(
+  MyApp.Orders,
+  fn
+    _contract, :create_order, [params], state ->
+      {DoubleDown.Contract.Dispatch.Defer.new(fn ->
+        # Runs outside the lock — safe to call Repo
+        changeset = Order.changeset(%Order{}, params)
+        {:ok, order} = MyApp.Repo.insert(changeset)
+
+        # Can also read back from Repo
+        count = MyApp.Repo.aggregate(Order, :count)
+        {:ok, order, count}
+      end), state}
+
+    _contract, :list_orders, [user_id], state ->
+      {DoubleDown.Contract.Dispatch.Defer.new(fn ->
+        # Read all orders from InMemory via Repo
+        MyApp.Repo.all(Order)
+        |> Enum.filter(&(&1.user_id == user_id))
+      end), state}
+  end,
+  %{}
+)
+```
+
+The Defer thunk runs after the context's state update is committed.
+Its return value is what the caller receives. See
+[Re-entrant dispatch via Defer](testing.md#re-entrant-dispatch-via-defer)
+for details.
+
 ## When to use UnitConnCase vs ConnCase
 
 | Aspect | `ConnCase` (DB) | `UnitConnCase` (DoubleDown) |
