@@ -55,6 +55,52 @@ This generates dispatch functions (`MyApp.Repo.insert/1`,
 `MyApp.Repo.get/2`, etc.) that dispatch to the configured
 implementation.
 
+## Alternative: DynamicFacade (no facade module needed)
+
+If your Ecto Repo module has custom functions beyond the standard
+`Ecto.Repo` API, or you don't want to introduce a facade module,
+use `DoubleDown.DynamicFacade` instead. It replaces the module's
+bytecode with a dispatch shim at test time — no facade, no config:
+
+```elixir
+# test/test_helper.exs
+DoubleDown.DynamicFacade.setup(MyApp.EctoRepo)
+{:ok, _} = DoubleDown.Testing.start()
+ExUnit.start()
+```
+
+Then in tests, use the Double API directly on your Ecto Repo module:
+
+```elixir
+setup do
+  DoubleDown.Double.fallback(MyApp.EctoRepo, DoubleDown.Repo.InMemory)
+  :ok
+end
+
+test "insert then get" do
+  {:ok, user} = MyApp.EctoRepo.insert(User.changeset(%{name: "Alice"}))
+  assert %User{name: "Alice"} = MyApp.EctoRepo.get(User, user.id)
+end
+```
+
+This approach is particularly useful when:
+
+- Your Repo module has **custom functions** (e.g. `soft_delete/1`,
+  `with_tenant/2`) that aren't in the `DoubleDown.Repo` contract —
+  DynamicFacade intercepts *all* public functions, not just contract
+  operations
+- You're **adopting DoubleDown incrementally** and don't want to
+  introduce a wrapper module yet
+- You want `expect`/`stub`/`fake` on **any function** your Repo
+  exports, not just the standard Ecto operations
+
+Tests that don't install a handler get the original Repo's behaviour
+automatically — zero impact on unrelated tests. `async: true` works
+via NimbleOwnership's per-process isolation, same as the ContractFacade
+approach.
+
+See [Dynamic Facades](dynamic.md) for full documentation.
+
 ## Production — zero-cost passthrough
 
 There is no production "implementation" to write — just point the
