@@ -1357,10 +1357,10 @@ defmodule DoubleDown.DoubleTest do
         fn
           _contract, :increment, [n], count ->
             {Defer.new(fn ->
-              # Call Greeter from inside the Counter fake — re-entrant dispatch
-              greeting = Greeter.Port.greet("from_counter")
-              {greeting, n}
-            end), count + n}
+               # Call Greeter from inside the Counter fake — re-entrant dispatch
+               greeting = Greeter.Port.greet("from_counter")
+               {greeting, n}
+             end), count + n}
 
           _contract, :get_count, [], count ->
             {count, count}
@@ -1395,9 +1395,9 @@ defmodule DoubleDown.DoubleTest do
           _contract, :increment, [n], count ->
             # Update state and defer a call that reads the updated state
             {Defer.new(fn ->
-              # This re-enters Counter — should see the updated state
-              Counter.Port.get_count()
-            end), count + n}
+               # This re-enters Counter — should see the updated state
+               Counter.Port.get_count()
+             end), count + n}
 
           _contract, :get_count, [], count ->
             {count, count}
@@ -1420,10 +1420,10 @@ defmodule DoubleDown.DoubleTest do
         fn
           _contract, :increment, [n], count ->
             {Defer.new(fn ->
-              g1 = Greeter.Port.greet("first")
-              g2 = Greeter.Port.greet("second")
-              {g1, g2, n}
-            end), count + n}
+               g1 = Greeter.Port.greet("first")
+               g2 = Greeter.Port.greet("second")
+               {g1, g2, n}
+             end), count + n}
 
           _contract, :get_count, [], count ->
             {count, count}
