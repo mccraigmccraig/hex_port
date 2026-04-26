@@ -339,13 +339,17 @@ if Code.ensure_loaded?(Ecto) do
     # -------------------------------------------------------------------
 
     @doc false
-    def dispatch_transact([fun, _opts], store, contract) when is_function(fun, 0) do
+    def dispatch_transact(args, store, contract) do
+      do_dispatch_transact(normalise_transact_args(args, contract), store, contract)
+    end
+
+    defp do_dispatch_transact([fun, _opts], store, contract) when is_function(fun, 0) do
       snapshot = store
 
       {Defer.new(fn -> run_in_transaction(fun, contract, snapshot) end), store}
     end
 
-    def dispatch_transact([%Ecto.Multi{} = multi, opts], store, contract) do
+    defp do_dispatch_transact([%Ecto.Multi{} = multi, opts], store, contract) do
       repo_facade = Keyword.get(opts, DoubleDown.Repo.Facade)
       snapshot = store
 
@@ -356,6 +360,33 @@ if Code.ensure_loaded?(Ecto) do
            snapshot
          )
        end), store}
+    end
+
+    # Normalise transaction args for DynamicFacade compatibility.
+    # ContractFacade's pre_dispatch handles these transforms, but
+    # DynamicFacade bypasses pre_dispatch entirely.
+    defp normalise_transact_args([fun], contract) when is_function(fun, 1) do
+      [fn -> fun.(contract) end, []]
+    end
+
+    defp normalise_transact_args([fun], _contract) when is_function(fun, 0) do
+      [fun, []]
+    end
+
+    defp normalise_transact_args([%Ecto.Multi{} = multi], _contract) do
+      [multi, []]
+    end
+
+    defp normalise_transact_args([fun, opts], contract) when is_function(fun, 1) and is_list(opts) do
+      [fn -> fun.(contract) end, opts]
+    end
+
+    defp normalise_transact_args([fun, opts], _contract) when is_function(fun, 0) and is_list(opts) do
+      [fun, opts]
+    end
+
+    defp normalise_transact_args([%Ecto.Multi{} = multi, opts], _contract) when is_list(opts) do
+      [multi, opts]
     end
 
     @transaction_key DoubleDown.Repo.InTransaction

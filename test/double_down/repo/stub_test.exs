@@ -1112,4 +1112,63 @@ defmodule DoubleDown.Repo.StubTest do
       assert [%User{name: "Alice"}] = Enum.to_list(stream)
     end
   end
+
+  # -------------------------------------------------------------------
+  # Transaction args normalisation (DynamicFacade compatibility)
+  # -------------------------------------------------------------------
+
+  describe "transaction args normalisation" do
+    setup do
+      DoubleDown.Double.fallback(Repo, Repo.Stub.new())
+      :ok
+    end
+
+    test "0-arity fn without opts" do
+      result =
+        DoubleDown.Contract.Dispatch.call(
+          :double_down,
+          Repo,
+          :transaction,
+          [fn -> {:ok, :zero_arity} end]
+        )
+
+      assert {:ok, :zero_arity} = result
+    end
+
+    test "1-arity fn without opts" do
+      result =
+        DoubleDown.Contract.Dispatch.call(
+          :double_down,
+          Repo,
+          :transaction,
+          [fn _repo -> {:ok, :one_arity} end]
+        )
+
+      assert {:ok, :one_arity} = result
+    end
+
+    test "0-arity fn with opts" do
+      result =
+        DoubleDown.Contract.Dispatch.call(
+          :double_down,
+          Repo,
+          :transaction,
+          [fn -> {:ok, :with_opts} end, []]
+        )
+
+      assert {:ok, :with_opts} = result
+    end
+
+    test "transact also normalises" do
+      result =
+        DoubleDown.Contract.Dispatch.call(
+          :double_down,
+          Repo,
+          :transact,
+          [fn -> {:ok, :transact} end]
+        )
+
+      assert {:ok, :transact} = result
+    end
+  end
 end

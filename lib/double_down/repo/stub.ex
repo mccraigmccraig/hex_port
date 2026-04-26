@@ -332,33 +332,19 @@ if Code.ensure_loaded?(Ecto) do
     # -----------------------------------------------------------------
     # Transaction Operations
     #
-    # The facade's pre_dispatch wraps 1-arity fns into 0-arity thunks,
-    # so implementations always receive a 0-arity fn or an Ecto.Multi.
+    # Transaction operations.
+    #
+    # With ContractFacade, pre_dispatch wraps 1-arity fns into 0-arity
+    # thunks and always provides opts. With DynamicFacade, raw args
+    # arrive — may be [fun/1], [fun/0], [fun/0, opts], etc.
+    # Normalise before dispatching.
     # -----------------------------------------------------------------
 
-    defp dispatch(_contract, :transact, [fun, _opts], _fallback_fn) when is_function(fun, 0) do
-      Defer.new(fn -> run_in_transaction(fun) end)
-    end
+    defp dispatch(contract, :transact, args, fallback_fn),
+      do: do_dispatch_transact(contract, normalise_transact_args(args, contract), fallback_fn)
 
-    defp dispatch(_contract, :transact, [%Ecto.Multi{} = multi, opts], _fallback_fn) do
-      repo_facade = Keyword.get(opts, DoubleDown.Repo.Facade)
-
-      Defer.new(fn ->
-        run_in_transaction(fn -> DoubleDown.Repo.Impl.MultiStepper.run(multi, repo_facade) end)
-      end)
-    end
-
-    defp dispatch(_contract, :transaction, [fun, _opts], _fallback_fn) when is_function(fun, 0) do
-      Defer.new(fn -> run_in_transaction(fun) end)
-    end
-
-    defp dispatch(_contract, :transaction, [%Ecto.Multi{} = multi, opts], _fallback_fn) do
-      repo_facade = Keyword.get(opts, DoubleDown.Repo.Facade)
-
-      Defer.new(fn ->
-        run_in_transaction(fn -> DoubleDown.Repo.Impl.MultiStepper.run(multi, repo_facade) end)
-      end)
-    end
+    defp dispatch(contract, :transaction, args, fallback_fn),
+      do: do_dispatch_transact(contract, normalise_transact_args(args, contract), fallback_fn)
 
     @transaction_key DoubleDown.Repo.InTransaction
 
@@ -376,6 +362,38 @@ if Code.ensure_loaded?(Ecto) do
     defp dispatch(_contract, :in_transaction?, [], _fallback_fn) do
       Defer.new(fn -> Process.get(@transaction_key, false) end)
     end
+
+    # -- Transaction helpers (after all dispatch clauses) --
+
+    defp do_dispatch_transact(_contract, [fun, _opts], _fallback_fn) when is_function(fun, 0) do
+      Defer.new(fn -> run_in_transaction(fun) end)
+    end
+
+    defp do_dispatch_transact(_contract, [%Ecto.Multi{} = multi, opts], _fallback_fn) do
+      repo_facade = Keyword.get(opts, DoubleDown.Repo.Facade)
+
+      Defer.new(fn ->
+        run_in_transaction(fn -> DoubleDown.Repo.Impl.MultiStepper.run(multi, repo_facade) end)
+      end)
+    end
+
+    defp normalise_transact_args([fun], contract) when is_function(fun, 1),
+      do: [fn -> fun.(contract) end, []]
+
+    defp normalise_transact_args([fun], _contract) when is_function(fun, 0),
+      do: [fun, []]
+
+    defp normalise_transact_args([%Ecto.Multi{} = multi], _contract),
+      do: [multi, []]
+
+    defp normalise_transact_args([fun, opts], contract) when is_function(fun, 1) and is_list(opts),
+      do: [fn -> fun.(contract) end, opts]
+
+    defp normalise_transact_args([fun, opts], _contract) when is_function(fun, 0) and is_list(opts),
+      do: [fun, opts]
+
+    defp normalise_transact_args([%Ecto.Multi{} = multi, opts], _contract) when is_list(opts),
+      do: [multi, opts]
 
     defp run_in_transaction(fun) do
       prev = Process.get(@transaction_key, false)

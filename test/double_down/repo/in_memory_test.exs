@@ -1322,6 +1322,99 @@ defmodule DoubleDown.Repo.InMemoryTest do
   end
 
   # -------------------------------------------------------------------
+  # Transaction args normalisation (DynamicFacade compatibility)
+  #
+  # When dispatched via DynamicFacade (not ContractFacade), transaction
+  # args bypass pre_dispatch — 1-arity fns aren't wrapped and opts may
+  # be missing. These tests verify the normalisation handles all variants.
+  # -------------------------------------------------------------------
+
+  describe "transaction args normalisation" do
+    setup do
+      DoubleDown.Double.fallback(DoubleDown.Repo, InMemory)
+      :ok
+    end
+
+    test "0-arity fn without opts" do
+      # Simulates DynamicFacade: Repo.transaction(fn -> :ok end)
+      # dispatched as :transaction with args [fn/0]
+      result =
+        DoubleDown.Contract.Dispatch.call(
+          :double_down,
+          DoubleDown.Repo,
+          :transaction,
+          [fn -> {:ok, :zero_arity} end]
+        )
+
+      assert {:ok, :zero_arity} = result
+    end
+
+    test "1-arity fn without opts" do
+      # Simulates DynamicFacade: Repo.transaction(fn repo -> repo.insert(...) end)
+      # dispatched as :transaction with args [fn/1].
+      # The 1-arity fn receives the contract module — in DynamicFacade
+      # scenarios, the contract IS the facade module (e.g. Backend.Repo).
+      # Here we use DoubleDown.Test.Repo since that's the facade.
+      alias DoubleDown.Test.Repo, as: TestRepo
+
+      result =
+        DoubleDown.Contract.Dispatch.call(
+          :double_down,
+          DoubleDown.Repo,
+          :transaction,
+          [fn _repo ->
+            {:ok, _} = TestRepo.insert(User.changeset(%{name: "Alice"}))
+            {:ok, :inserted}
+          end]
+        )
+
+      assert {:ok, :inserted} = result
+      assert [%User{name: "Alice"}] = TestRepo.all(User)
+    end
+
+    test "1-arity fn with opts" do
+      alias DoubleDown.Test.Repo, as: TestRepo
+
+      result =
+        DoubleDown.Contract.Dispatch.call(
+          :double_down,
+          DoubleDown.Repo,
+          :transaction,
+          [fn _repo ->
+            {:ok, _} = TestRepo.insert(User.changeset(%{name: "Bob"}))
+            {:ok, :inserted_with_opts}
+          end, [timeout: 5000]]
+        )
+
+      assert {:ok, :inserted_with_opts} = result
+    end
+
+    test "0-arity fn with opts (normal ContractFacade path)" do
+      result =
+        DoubleDown.Contract.Dispatch.call(
+          :double_down,
+          DoubleDown.Repo,
+          :transaction,
+          [fn -> {:ok, :with_opts} end, []]
+        )
+
+      assert {:ok, :with_opts} = result
+    end
+
+    test "transact operation also normalises" do
+      result =
+        DoubleDown.Contract.Dispatch.call(
+          :double_down,
+          DoubleDown.Repo,
+          :transact,
+          [fn -> {:ok, :transact_zero} end]
+        )
+
+      assert {:ok, :transact_zero} = result
+    end
+  end
+
+  # -------------------------------------------------------------------
   # in_transaction?
   # -------------------------------------------------------------------
 
