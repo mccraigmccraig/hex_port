@@ -68,6 +68,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   setup-time API (expect/stub/fake/fallback/verify). Dispatch code
   runs inside the NimbleOwnership GenServer — a separate concern.
 
+- **`Defer.new/1` constructor.** Validates fun is 0-arity. 25 bare
+  `%Defer{}` constructions replaced across dispatch, stub, and
+  in-memory modules.
+
+- **`Passthrough.new/0` constructor.** Bare construction in
+  `Double.passthrough` replaced.
+
+- **`HandlerMeta.Stateful.put_state/2`.** Direct state replacement
+  (complements the existing `update_state/2` which takes a function).
+  3 bare `%{meta | state:}` mutations in `Contract.Dispatch` replaced.
+
+- **All dot access on `CanonicalHandlerState` replaced** with
+  pattern-match destructuring in function heads. ~15 `state.field`
+  accesses in `Double.Dispatch` eliminated. 1 bare
+  `%{state | fallback_state:}` mutation in `Contract.Dispatch`
+  replaced with `put_fallback_state/2`.
+
+- **`StatelessHandler` callback spec uses `Types.stateless_fun()`**
+  for both the `fallback_fn` parameter and return type, replacing
+  inline function type definitions.
+
 ## [0.51.0]
 
 ### Added
