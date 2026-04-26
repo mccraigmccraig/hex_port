@@ -359,6 +359,51 @@ effects. In practice, the combination of stateful responders
 (2-arity expects/stubs that read and write fake state directly) and
 conditional passthrough covers most scenarios where you'd want this.
 
+### Re-entrant dispatch via Defer
+
+Stateful fake functions run inside `NimbleOwnership.get_and_update`,
+which holds a lock on the NimbleOwnership GenServer. If a fake
+calls another contract's facade directly (e.g. `Repo.insert(...)`)
+this would deadlock — the second call needs the same GenServer.
+
+The solution is `DoubleDown.Contract.Dispatch.Defer`. Return a
+`Defer.new(fn -> ... end)` from the fake, and the deferred
+function runs *after* the lock is released:
+
+```elixir
+DoubleDown.Double.fallback(
+  MyApp.Todos,
+  fn
+    _contract, :create_todo, [params], state ->
+      # Update our own state, then defer the Repo call
+      new_state = Map.put(state, :last_params, params)
+
+      {DoubleDown.Contract.Dispatch.Defer.new(fn ->
+        # This runs outside the lock — safe to call Repo
+        {:ok, record} = DoubleDown.Repo.insert(Todo.changeset(params))
+        {:ok, record}
+      end), new_state}
+
+    _contract, :get_count, [], state ->
+      {map_size(state), state}
+  end,
+  %{}
+)
+```
+
+Key properties:
+- The state update (`new_state`) is applied atomically *before*
+  the deferred function runs
+- The deferred function's return value is what the caller receives
+- The deferred function can call any contract, including the same
+  one (re-entrant) — each call is its own atomic operation
+- NimbleOwnership's per-process isolation ensures no other test
+  can interleave
+
+This is the same mechanism that `transact` uses internally to
+avoid deadlocks when the transaction body calls back into the
+dispatch system.
+
 ### Cross-contract state access
 
 By default, each contract's stateful handler can only see its own
