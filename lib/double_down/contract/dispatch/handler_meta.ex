@@ -65,7 +65,13 @@ defmodule DoubleDown.Contract.Dispatch.HandlerMeta do
       %__MODULE__{fun: fun, state: state}
     end
 
-    @doc "Update the state within a Stateful handler meta."
+    @doc "Replace the state within a Stateful handler meta."
+    @spec put_state(t(), term()) :: t()
+    def put_state(%__MODULE__{} = meta, new_state) do
+      %{meta | state: new_state}
+    end
+
+    @doc "Update the state within a Stateful handler meta via a function."
     @spec update_state(t(), (term() -> term())) :: t()
     def update_state(%__MODULE__{state: state} = meta, update_fn)
         when is_function(update_fn, 1) do

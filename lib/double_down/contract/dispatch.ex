@@ -137,7 +137,7 @@ defmodule DoubleDown.Contract.Dispatch do
               snapshot
           end
 
-        {:ok, %{meta | state: new_state}}
+        {:ok, HandlerMeta.Stateful.put_state(meta, new_state)}
       end
     )
 
@@ -287,11 +287,11 @@ defmodule DoubleDown.Contract.Dispatch do
             case handler_result do
               {%DoubleDown.Contract.Dispatch.Defer{} = defer, new_state} ->
                 validate_not_global_state!(new_state)
-                {defer, %{meta | state: new_state}}
+                {defer, HandlerMeta.Stateful.put_state(meta, new_state)}
 
               {result, new_state} ->
                 validate_not_global_state!(new_state)
-                {result, %{meta | state: new_state}}
+                {result, HandlerMeta.Stateful.put_state(meta, new_state)}
             end
           rescue
             exception ->
