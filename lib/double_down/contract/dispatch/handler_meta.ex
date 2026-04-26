@@ -31,7 +31,7 @@ defmodule DoubleDown.Contract.Dispatch.HandlerMeta do
     defstruct [:fun]
 
     @type t :: %__MODULE__{
-            fun: (module(), atom(), [term()] -> term())
+            fun: DoubleDown.Contract.Dispatch.Types.stateless_fun()
           }
   end
 
@@ -46,12 +46,8 @@ defmodule DoubleDown.Contract.Dispatch.HandlerMeta do
     @enforce_keys [:fun, :state]
     defstruct [:fun, :state]
 
-    @type stateful_fun ::
-            (module(), atom(), [term()], term() -> {term(), term()})
-            | (module(), atom(), [term()], term(), map() -> {term(), term()})
-
     @type t :: %__MODULE__{
-            fun: stateful_fun(),
+            fun: DoubleDown.Contract.Dispatch.Types.stateful_fun(),
             state: term()
           }
   end

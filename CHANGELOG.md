@@ -40,6 +40,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   modules, module implementations, stateful functions, and stateless
   functions. Fallback types are mutually exclusive.
 
+- **`DoubleDown.Contract.Dispatch.Types` module.** Shared type
+  definitions (`stateless_fun`, `stateful_fun`) used by `HandlerMeta`
+  and `CanonicalHandlerState`. Stateful handler function type now
+  spelled out as a union of 4-arity and 5-arity signatures instead
+  of the opaque `(... -> {term(), term()})`.
+
 ## [0.51.0]
 
 ### Added
